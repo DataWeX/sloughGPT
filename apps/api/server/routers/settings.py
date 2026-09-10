@@ -150,6 +150,16 @@ class SettingsRouter:
         self.router.add_api_route(
             "/training/runs", self.filter_training_runs, methods=["GET"],
         )
+        # Bulk operations (MUST be before /{run_id} routes to avoid path conflicts)
+        self.router.add_api_route(
+            "/training/runs/bulk/delete", self.bulk_delete_runs, methods=["POST"],
+        )
+        self.router.add_api_route(
+            "/training/runs/bulk/tag", self.bulk_add_tag, methods=["POST"],
+        )
+        self.router.add_api_route(
+            "/training/runs/bulk/bookmark", self.bulk_bookmark, methods=["POST"],
+        )
         self.router.add_api_route(
             "/training/runs/{run_id}", self.get_training_run, methods=["GET"],
         )
@@ -191,17 +201,6 @@ class SettingsRouter:
         # Training run duplicate
         self.router.add_api_route(
             "/training/runs/{run_id}/duplicate", self.duplicate_training_run, methods=["POST"],
-        )
-
-        # Bulk operations
-        self.router.add_api_route(
-            "/training/runs/bulk/delete", self.bulk_delete_runs, methods=["POST"],
-        )
-        self.router.add_api_route(
-            "/training/runs/bulk/tag", self.bulk_add_tag, methods=["POST"],
-        )
-        self.router.add_api_route(
-            "/training/runs/bulk/bookmark", self.bulk_bookmark, methods=["POST"],
         )
 
     # ── Handlers ────────────────────────────────────────────────────
