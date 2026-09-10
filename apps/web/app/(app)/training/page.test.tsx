@@ -22,9 +22,9 @@ vi.mock('@sloughgpt/strui', () => {
     Select: ({ value, onValueChange, disabled, children }: any) => (
       <select value={value} disabled={disabled} onChange={(e) => onValueChange?.(e.target.value)}>{children}</select>
     ),
-    SelectTrigger: ({ children }: any) => <>{children}</>,
+    SelectTrigger: ({ children }: any) => <div>{children}</div>,
     SelectValue: () => null,
-    SelectContent: ({ children }: any) => <>{children}</>,
+    SelectContent: ({ children }: any) => <div>{children}</div>,
     SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
     Dialog: ({ children }: any) => <div data-testid="dialog">{children}</div>,
     DialogContent: ({ children }: any) => <div data-testid="dialog-content">{children}</div>,
