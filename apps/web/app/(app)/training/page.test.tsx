@@ -128,6 +128,10 @@ describe('TrainingPage', () => {
   it('shows welcome banner for first-time users with no jobs or checkpoints', async () => {
     render(<Page />)
     await waitFor(() => { expect(screen.getByText('Welcome to training')).toBeTruthy() })
+    expect(screen.getByText('1. Choose data')).toBeTruthy()
+    expect(screen.getByText('2. Configure')).toBeTruthy()
+    expect(screen.getByText('3. Train')).toBeTruthy()
+    expect(screen.getByText('4. Results')).toBeTruthy()
     const buttons = screen.getAllByText('Start training')
     expect(buttons.length).toBeGreaterThanOrEqual(1)
   })

@@ -184,7 +184,16 @@ export default function TrainingPage() {
                 Pick a dataset or paste training text, configure parameters, and run your first training job.
                 Your trained models and checkpoints will appear here.
               </p>
-              <Button size="sm" className="mt-3" onClick={() => form.setInputMode('dataset')}>
+              <div className="flex items-center justify-center gap-4 mt-4 text-[11px] text-muted-foreground">
+                <span>1. Choose data</span>
+                <span className="text-border">→</span>
+                <span>2. Configure</span>
+                <span className="text-border">→</span>
+                <span>3. Train</span>
+                <span className="text-border">→</span>
+                <span>4. Results</span>
+              </div>
+              <Button size="sm" className="mt-4" onClick={() => form.setInputMode('dataset')}>
                 Start training
               </Button>
             </CardContent>
