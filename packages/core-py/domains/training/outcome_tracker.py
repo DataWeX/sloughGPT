@@ -222,6 +222,51 @@ class TrainingOutcomeTracker:
             f.write(json.dumps(new_run.to_dict()) + "\n")
         return new_run
 
+    def bulk_delete(self, run_ids: List[str]) -> int:
+        """Delete multiple training runs. Returns count of deleted runs."""
+        outcomes = self.load_outcomes()
+        ids_set = set(run_ids)
+        filtered = [o for o in outcomes if o.run_id not in ids_set]
+        deleted_count = len(outcomes) - len(filtered)
+        if deleted_count > 0:
+            self.history_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.history_path, "w") as f:
+                for o in filtered:
+                    f.write(json.dumps(o.to_dict()) + "\n")
+        return deleted_count
+
+    def bulk_add_tag(self, run_ids: List[str], tag: str) -> int:
+        """Add a tag to multiple training runs. Returns count of updated runs."""
+        outcomes = self.load_outcomes()
+        ids_set = set(run_ids)
+        updated_count = 0
+        for o in outcomes:
+            if o.run_id in ids_set and tag not in o.tags:
+                o.tags.append(tag)
+                updated_count += 1
+        if updated_count > 0:
+            self.history_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.history_path, "w") as f:
+                for o in outcomes:
+                    f.write(json.dumps(o.to_dict()) + "\n")
+        return updated_count
+
+    def bulk_bookmark(self, run_ids: List[str], bookmarked: bool = True) -> int:
+        """Set bookmark status on multiple training runs. Returns count of updated runs."""
+        outcomes = self.load_outcomes()
+        ids_set = set(run_ids)
+        updated_count = 0
+        for o in outcomes:
+            if o.run_id in ids_set and o.bookmarked != bookmarked:
+                o.bookmarked = bookmarked
+                updated_count += 1
+        if updated_count > 0:
+            self.history_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.history_path, "w") as f:
+                for o in outcomes:
+                    f.write(json.dumps(o.to_dict()) + "\n")
+        return updated_count
+
     def get_stats(self) -> Dict[str, Any]:
         """Get summary statistics of all outcomes."""
         outcomes = self.load_outcomes()
