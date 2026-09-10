@@ -967,6 +967,40 @@ class SloughGPTClient:
         response = self._request("GET", f"/settings/training/runs/{run_id}/export?format={format}")
         return response.json()
 
+    def toggle_bookmark(self, run_id: str) -> Dict[str, Any]:
+        """Toggle bookmark status on a training run."""
+        response = self._request("POST", f"/settings/training/runs/{run_id}/bookmark")
+        return response.json()
+
+    def get_bookmarked_runs(self) -> Dict[str, Any]:
+        """Get all bookmarked training runs."""
+        response = self._request("GET", "/settings/training/bookmarks")
+        return response.json()
+
+    def duplicate_training_run(self, run_id: str, new_run_id: str = "") -> Dict[str, Any]:
+        """Duplicate a training run with a new ID."""
+        params = f"?new_run_id={new_run_id}" if new_run_id else ""
+        response = self._request("POST", f"/settings/training/runs/{run_id}/duplicate{params}")
+        return response.json()
+
+    def bulk_delete_runs(self, run_ids: List[str]) -> Dict[str, Any]:
+        """Delete multiple training runs."""
+        ids_str = ",".join(run_ids)
+        response = self._request("POST", f"/settings/training/runs/bulk/delete?run_ids={ids_str}")
+        return response.json()
+
+    def bulk_add_tag(self, run_ids: List[str], tag: str) -> Dict[str, Any]:
+        """Add a tag to multiple training runs."""
+        ids_str = ",".join(run_ids)
+        response = self._request("POST", f"/settings/training/runs/bulk/tag?run_ids={ids_str}&tag={tag}")
+        return response.json()
+
+    def bulk_bookmark(self, run_ids: List[str], bookmarked: bool = True) -> Dict[str, Any]:
+        """Set bookmark status on multiple training runs."""
+        ids_str = ",".join(run_ids)
+        response = self._request("POST", f"/settings/training/runs/bulk/bookmark?run_ids={ids_str}&bookmarked={str(bookmarked).lower()}")
+        return response.json()
+
     # ============ VQA ============
 
     def ask_question(self, image_path: str, question: str) -> Dict[str, Any]:

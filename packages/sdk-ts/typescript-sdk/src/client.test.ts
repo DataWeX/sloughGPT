@@ -1053,4 +1053,87 @@ describe('SloughGPTClient', () => {
       expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/run-1/export?format=json');
     });
   });
+
+  describe('toggleBookmark()', () => {
+    it('calls POST /settings/training/runs/:runId/bookmark', async () => {
+      const mockData = { run_id: 'run-1', bookmarked: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.toggleBookmark('run-1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/run-1/bookmark');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('getBookmarkedRuns()', () => {
+    it('calls GET /settings/training/bookmarks', async () => {
+      const mockData = { runs: [], count: 0 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getBookmarkedRuns();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/bookmarks');
+    });
+  });
+
+  describe('duplicateTrainingRun()', () => {
+    it('calls POST /settings/training/runs/:runId/duplicate', async () => {
+      const mockData = { run_id: 'new-run', model: 'gpt2' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.duplicateTrainingRun('run-1', 'new-run');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/run-1/duplicate?new_run_id=new-run');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('bulkDeleteRuns()', () => {
+    it('calls POST /settings/training/runs/bulk/delete', async () => {
+      const mockData = { deleted_count: 2, requested: 2 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.bulkDeleteRuns(['run-1', 'run-2']);
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/bulk/delete');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('bulkAddTag()', () => {
+    it('calls POST /settings/training/runs/bulk/tag', async () => {
+      const mockData = { updated_count: 2, tag: 'best' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.bulkAddTag(['run-1', 'run-2'], 'best');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/bulk/tag');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('bulkBookmark()', () => {
+    it('calls POST /settings/training/runs/bulk/bookmark', async () => {
+      const mockData = { updated_count: 2, bookmarked: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.bulkBookmark(['run-1', 'run-2'], true);
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/bulk/bookmark');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
 });

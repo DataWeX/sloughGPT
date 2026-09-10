@@ -545,13 +545,20 @@ def get_context_core() -> ContextCore:
                     PersonalityManager, MemoryManager,
                     StyleManager, TaskManager, ConsciousnessManager,
                 )
+                cm = ConsciousnessManager()
                 _context_core = ContextCore(
                     personality_manager=PersonalityManager(),
                     memory_manager=MemoryManager(),
                     style_manager=StyleManager(),
                     task_manager=TaskManager(),
-                    consciousness_manager=ConsciousnessManager(),
+                    consciousness_manager=cm,
                 )
+                # Connect consciousness engine to the manager
+                try:
+                    from domains.consciousness import get_consciousness
+                    cm.set_engine(get_consciousness())
+                except Exception:
+                    pass  # Consciousness optional — degrade gracefully
                 # Auto-select vector store from env vars
                 import os
                 vs_provider = os.environ.get("MAN_VECTOR_STORE", "")

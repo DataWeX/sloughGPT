@@ -755,6 +755,14 @@ class ConsciousnessManager:
             return ""
 
         level = self._engine.config.level
+
+        # Process the input so qualia/episodes/beliefs are fresh
+        if input_text:
+            try:
+                self._engine.process(input_text, response="", level=level)
+            except Exception:
+                pass  # Consciousness processing is best-effort
+
         status = self._engine.get_status()
         qualia = status.get("current_qualia", {})
 

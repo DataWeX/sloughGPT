@@ -664,3 +664,301 @@ class TestPauseResume:
         assert mgr.resume("model-cycle") is True
         assert mgr.get_progress("model-cycle")["status"] == "queued"
         assert mgr.is_paused("model-cycle") is False
+
+
+class TestVerify:
+    def test_verify_valid_model(self, tmp_path):
+        """Verify returns valid when all files match."""
+        import hashlib
+        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+
+        class VerifyBackend(DownloadBackend):
+            def __init__(self, cache_dir, files):
+                self._cache_dir = cache_dir
+                self._files = files
+
+            def is_cached(self, resource_id, deep_check=False):
+                return True
+
+            def get_cache_dir(self, resource_id):
+                return str(self._cache_dir)
+
+            def estimate_total(self, resource_id):
+                return sum(f.size for f in self._files)
+
+            def list_files(self, resource_id):
+                return self._files
+
+            def download(self, resource_id, on_progress, on_file_complete):
+                return {"status": "complete"}
+
+            def cleanup(self, resource_id):
+                return True
+
+            def list_incomplete(self):
+                return []
+
+        # Create cache dir with valid file
+        cache = tmp_path / "cache"
+        cache.mkdir()
+        data = b"hello world"
+        sha = hashlib.sha256(data).hexdigest()
+        (cache / "model.bin").write_bytes(data)
+
+        files = [FileEstimate(path="model.bin", size=len(data), checksum=sha)]
+        backend = VerifyBackend(cache, files)
+        dm.set_backend(backend)
+        try:
+            mgr = dm.get_download_manager()
+            result = mgr.verify("model")
+            assert result["valid"] is True
+            assert result["files_checked"] == 1
+            assert result["files_valid"] == 1
+            assert result["errors"] == []
+        finally:
+            dm.reset_backend()
+
+    def test_verify_missing_file(self, tmp_path):
+        """Verify returns invalid when file is missing."""
+        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+
+        class VerifyBackend(DownloadBackend):
+            def __init__(self, cache_dir, files):
+                self._cache_dir = cache_dir
+                self._files = files
+
+            def is_cached(self, resource_id, deep_check=False):
+                return False
+
+            def get_cache_dir(self, resource_id):
+                return str(self._cache_dir)
+
+            def estimate_total(self, resource_id):
+                return 0
+
+            def list_files(self, resource_id):
+                return self._files
+
+            def download(self, resource_id, on_progress, on_file_complete):
+                return {"status": "complete"}
+
+            def cleanup(self, resource_id):
+                return True
+
+            def list_incomplete(self):
+                return []
+
+        cache = tmp_path / "cache"
+        cache.mkdir()
+        files = [FileEstimate(path="missing.bin", size=100, checksum="abc")]
+        backend = VerifyBackend(cache, files)
+        dm.set_backend(backend)
+        try:
+            mgr = dm.get_download_manager()
+            result = mgr.verify("model")
+            assert result["valid"] is False
+            assert result["files_checked"] == 1
+            assert result["files_valid"] == 0
+            assert len(result["errors"]) == 1
+            assert "Missing" in result["errors"][0]
+        finally:
+            dm.reset_backend()
+
+    def test_verify_size_mismatch(self, tmp_path):
+        """Verify returns invalid when file size doesn't match."""
+        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+
+        class VerifyBackend(DownloadBackend):
+            def __init__(self, cache_dir, files):
+                self._cache_dir = cache_dir
+                self._files = files
+
+            def is_cached(self, resource_id, deep_check=False):
+                return True
+
+            def get_cache_dir(self, resource_id):
+                return str(self._cache_dir)
+
+            def estimate_total(self, resource_id):
+                return 0
+
+            def list_files(self, resource_id):
+                return self._files
+
+            def download(self, resource_id, on_progress, on_file_complete):
+                return {"status": "complete"}
+
+            def cleanup(self, resource_id):
+                return True
+
+            def list_incomplete(self):
+                return []
+
+        cache = tmp_path / "cache"
+        cache.mkdir()
+        (cache / "model.bin").write_bytes(b"short")
+        files = [FileEstimate(path="model.bin", size=999)]  # Wrong size
+        backend = VerifyBackend(cache, files)
+        dm.set_backend(backend)
+        try:
+            mgr = dm.get_download_manager()
+            result = mgr.verify("model")
+            assert result["valid"] is False
+            assert "Size mismatch" in result["errors"][0]
+        finally:
+            dm.reset_backend()
+
+    def test_verify_checksum_mismatch(self, tmp_path):
+        """Verify returns invalid when checksum doesn't match."""
+        import hashlib
+        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+
+        class VerifyBackend(DownloadBackend):
+            def __init__(self, cache_dir, files):
+                self._cache_dir = cache_dir
+                self._files = files
+
+            def is_cached(self, resource_id, deep_check=False):
+                return True
+
+            def get_cache_dir(self, resource_id):
+                return str(self._cache_dir)
+
+            def estimate_total(self, resource_id):
+                return 0
+
+            def list_files(self, resource_id):
+                return self._files
+
+            def download(self, resource_id, on_progress, on_file_complete):
+                return {"status": "complete"}
+
+            def cleanup(self, resource_id):
+                return True
+
+            def list_incomplete(self):
+                return []
+
+        cache = tmp_path / "cache"
+        cache.mkdir()
+        (cache / "model.bin").write_bytes(b"data")
+        files = [FileEstimate(path="model.bin", size=4, checksum="wrong_checksum")]
+        backend = VerifyBackend(cache, files)
+        dm.set_backend(backend)
+        try:
+            mgr = dm.get_download_manager()
+            result = mgr.verify("model")
+            assert result["valid"] is False
+            assert "Checksum mismatch" in result["errors"][0]
+        finally:
+            dm.reset_backend()
+
+    def test_verify_empty_files_list(self):
+        """Verify returns invalid when no files found."""
+        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+
+        class EmptyBackend(DownloadBackend):
+            def is_cached(self, resource_id, deep_check=False):
+                return True
+
+            def get_cache_dir(self, resource_id):
+                return "/tmp"
+
+            def estimate_total(self, resource_id):
+                return 0
+
+            def list_files(self, resource_id):
+                return []
+
+            def download(self, resource_id, on_progress, on_file_complete):
+                return {"status": "complete"}
+
+            def cleanup(self, resource_id):
+                return True
+
+            def list_incomplete(self):
+                return []
+
+        dm.set_backend(EmptyBackend())
+        try:
+            mgr = dm.get_download_manager()
+            result = mgr.verify("model")
+            assert result["valid"] is False
+            assert result["files_checked"] == 0
+        finally:
+            dm.reset_backend()
+
+
+class TestDownloadStats:
+    def test_initial_stats(self):
+        """Initial stats are all zeros."""
+        mgr = dm.DownloadManager()
+        stats = mgr.get_stats()
+        assert stats["total_downloads"] == 0
+        assert stats["completed_downloads"] == 0
+        assert stats["failed_downloads"] == 0
+        assert stats["cancelled_downloads"] == 0
+        assert stats["total_bytes_downloaded"] == 0
+        assert stats["total_download_time"] == 0
+
+    def test_record_complete(self):
+        """Recording complete download updates stats."""
+        mgr = dm.DownloadManager()
+        mgr._record_download_complete("model1", 1000, 2.0, 500.0)
+        stats = mgr.get_stats()
+        assert stats["total_downloads"] == 1
+        assert stats["completed_downloads"] == 1
+        assert stats["total_bytes_downloaded"] == 1000
+        assert stats["total_download_time"] == 2.0
+
+    def test_record_failed(self):
+        """Recording failed download updates stats."""
+        mgr = dm.DownloadManager()
+        mgr._record_download_failed("model1")
+        stats = mgr.get_stats()
+        assert stats["total_downloads"] == 1
+        assert stats["failed_downloads"] == 1
+
+    def test_record_cancelled(self):
+        """Recording cancelled download updates stats."""
+        mgr = dm.DownloadManager()
+        mgr._record_download_cancelled("model1")
+        stats = mgr.get_stats()
+        assert stats["total_downloads"] == 1
+        assert stats["cancelled_downloads"] == 1
+
+    def test_average_speed(self):
+        """Average speed is computed correctly."""
+        mgr = dm.DownloadManager()
+        mgr._record_download_complete("m1", 1000, 2.0, 500.0)
+        stats = mgr.get_stats()
+        assert stats["average_speed_mb_per_sec"] == round(1000 / 2.0 / (1024 * 1024), 2)
+
+    def test_peak_speed(self):
+        """Peak speed tracks the highest speed seen."""
+        mgr = dm.DownloadManager()
+        mgr._record_download_complete("m1", 1000, 2.0, 500.0)
+        mgr._record_download_complete("m2", 1000, 2.0, 1000.0)
+        stats = mgr.get_stats()
+        assert stats["peak_speed_mb_per_sec"] == round(1000.0 / (1024 * 1024), 2)
+
+    def test_multiple_downloads(self):
+        """Multiple downloads accumulate stats."""
+        mgr = dm.DownloadManager()
+        mgr._record_download_complete("m1", 1000, 1.0, 1000.0)
+        mgr._record_download_complete("m2", 2000, 2.0, 1000.0)
+        mgr._record_download_failed("m3")
+        stats = mgr.get_stats()
+        assert stats["total_downloads"] == 3
+        assert stats["completed_downloads"] == 2
+        assert stats["failed_downloads"] == 1
+        assert stats["total_bytes_downloaded"] == 3000
+        assert stats["total_download_time"] == 3.0
+
+    def test_stats_to_dict(self):
+        """Stats to_dict returns correct structure."""
+        mgr = dm.DownloadManager()
+        stats = mgr.get_stats()
+        assert "total_downloads" in stats
+        assert "average_speed_mb_per_sec" in stats
+        assert "peak_speed_mb_per_sec" in stats

@@ -99,7 +99,7 @@ class DownloadBackend(ABC):
         """Hook called when a download is cancelled.  Override to update state."""
 
     def supports_compression(self, resource_id: str) -> bool:
-        """Whether the external server supports SGZ1 compression for this resource.
+        """Whether the external server supports LZ4 compression for this resource.
 
         When True, the download path should use ``CompressedDownloader``
         to fetch compressed data and decompress on-the-fly.
@@ -107,7 +107,7 @@ class DownloadBackend(ABC):
         return False
 
     def supports_compressed_serve(self) -> bool:
-        """Whether this backend can serve files with SGZ1 compression.
+        """Whether this backend can serve files with LZ4 compression.
 
         When True, ``serve_compressed()`` returns a StreamingResponse
         for use with the API server.
@@ -115,9 +115,52 @@ class DownloadBackend(ABC):
         return False
 
     def serve_compressed(self, resource_id: str, file_path: str) -> Optional[Dict]:
-        """Serve a cached file with on-the-fly SGZ1 compression.
+        """Serve a cached file with on-the-fly LZ4 compression.
 
         Returns dict with ``iterator``, ``headers``, ``size`` keys
         for use with Starlette/FastAPI StreamingResponse, or None
         if the file is not available or compression is not supported.
         """
+
+    def verify(self, resource_id: str) -> Dict[str, Any]:
+        """Verify integrity of a cached resource.
+
+        Checks that all expected files exist, have correct sizes,
+        and match checksums where available.
+
+        Returns dict with:
+            - valid: bool
+            - files_checked: int
+            - files_valid: int
+            - errors: list of error strings
+        """
+        cache_dir = self.get_cache_dir(resource_id)
+        files = self.list_files(resource_id)
+        errors = []
+        files_checked = 0
+        files_valid = 0
+
+        for f in files:
+            import os
+            fpath = os.path.join(cache_dir, f.path)
+            files_checked += 1
+            if not os.path.exists(fpath):
+                errors.append(f"Missing: {f.path}")
+                continue
+            if f.size > 0 and os.path.getsize(fpath) != f.size:
+                errors.append(f"Size mismatch: {f.path}")
+                continue
+            if f.checksum:
+                import hashlib
+                actual = hashlib.sha256(open(fpath, "rb").read()).hexdigest()
+                if actual != f.checksum:
+                    errors.append(f"Checksum mismatch: {f.path}")
+                    continue
+            files_valid += 1
+
+        return {
+            "valid": len(errors) == 0 and files_checked > 0,
+            "files_checked": files_checked,
+            "files_valid": files_valid,
+            "errors": errors,
+        }

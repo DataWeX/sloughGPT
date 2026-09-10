@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
+import { useConsciousnessStatus, getQualiaMood } from '@/hooks/useConsciousnessStatus'
 import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { useErrorStore } from '@/lib/error-store'
@@ -38,6 +39,7 @@ export function StatusBar() {
   const [now, setNow] = useState(Date.now())
   const [retrying, setRetrying] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const { status: consciousnessStatus } = useConsciousnessStatus()
 
   useEffect(() => {
     getUnseenCount().then(setUnseenCount).catch(() => setUnseenCount(0))
@@ -163,6 +165,14 @@ export function StatusBar() {
           {/* Soul archetype */}
           {soulName && archetypeLabel && (
             <span className="sl-badge sl-badge-primary">{archetypeLabel}</span>
+          )}
+
+          {/* Consciousness status */}
+          {consciousnessStatus && consciousnessStatus.enabled && (
+            <span className="sl-badge sl-badge-secondary" title={`Consciousness: ${consciousnessStatus.level}/3 | Mood: ${getQualiaMood(consciousnessStatus.current_qualia)}`}>
+              <span className="h-1 w-1 rounded-full bg-violet-400 animate-pulse" aria-hidden="true" />
+              {getQualiaMood(consciousnessStatus.current_qualia) || `L${consciousnessStatus.level}`}
+            </span>
           )}
 
           {/* Token rate or inference count */}

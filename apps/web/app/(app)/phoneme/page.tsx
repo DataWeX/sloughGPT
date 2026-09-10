@@ -10,7 +10,7 @@ import ComparisonCard from '@/components/phoneme/ComparisonCard'
 import PracticeCard from '@/components/phoneme/PracticeCard'
 import BatchCard from '@/components/phoneme/BatchCard'
 import DetectLanguageCard from '@/components/phoneme/DetectLanguageCard'
-import QuizCard from '@/components/phoneme/QuizCard'
+import FlashcardCard from '@/components/phoneme/FlashcardCard'
 import SynthesisCard from '@/components/phoneme/SynthesisCard'
 import HistoryCard from '@/components/phoneme/HistoryCard'
 import PhonemeReference from '@/components/phoneme/PhonemeReference'
@@ -25,7 +25,7 @@ const TABS = [
   { value: 'practice', label: 'Practice', shortcut: '4' },
   { value: 'batch', label: 'Batch', shortcut: '5' },
   { value: 'detect', label: 'Detect', shortcut: '6' },
-  { value: 'quiz', label: 'Quiz', shortcut: '7' },
+  { value: 'flashcards', label: 'Flashcards', shortcut: '7' },
   { value: 'synthesize', label: 'Synthesize', shortcut: '8' },
   { value: 'history', label: 'History', shortcut: '9' },
 ] as const
@@ -46,7 +46,7 @@ export default function PhonemePage() {
     onPractice: () => goToTab('practice'),
     onBatch: () => goToTab('batch'),
     onDetect: () => goToTab('detect'),
-    onQuiz: () => goToTab('quiz'),
+    onQuiz: () => goToTab('flashcards'),
     onSynthesize: () => goToTab('synthesize'),
     onHistory: () => goToTab('history'),
     onRandomWord: () => {
@@ -110,8 +110,8 @@ export default function PhonemePage() {
             <TabErrorBoundary tabName="Detect"><DetectLanguageCard /></TabErrorBoundary>
           </TabsContent>
 
-          <TabsContent value="quiz">
-            <TabErrorBoundary tabName="Quiz"><QuizCard /></TabErrorBoundary>
+          <TabsContent value="flashcards">
+            <TabErrorBoundary tabName="Flashcards"><FlashcardCard /></TabErrorBoundary>
           </TabsContent>
 
           <TabsContent value="synthesize">

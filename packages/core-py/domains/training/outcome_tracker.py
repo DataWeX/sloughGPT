@@ -56,6 +56,7 @@ class TrainingOutcome:
     # User annotations
     tags: List[str] = field(default_factory=list)
     notes: str = ""
+    bookmarked: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -186,6 +187,40 @@ class TrainingOutcomeTracker:
         for o in self.load_outcomes():
             tags.update(o.tags)
         return sorted(tags)
+
+    def toggle_bookmark(self, run_id: str) -> Optional[TrainingOutcome]:
+        """Toggle bookmark status on a training run."""
+        outcomes = self.load_outcomes()
+        target = next((o for o in outcomes if o.run_id == run_id), None)
+        if not target:
+            return None
+        target.bookmarked = not target.bookmarked
+        self.history_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.history_path, "w") as f:
+            for o in outcomes:
+                f.write(json.dumps(o.to_dict()) + "\n")
+        return target
+
+    def get_bookmarked(self) -> List[TrainingOutcome]:
+        """Get all bookmarked training runs."""
+        return [o for o in self.load_outcomes() if o.bookmarked]
+
+    def duplicate_run(self, run_id: str, new_run_id: str = "") -> Optional[TrainingOutcome]:
+        """Duplicate a training run with a new ID and timestamp."""
+        outcomes = self.load_outcomes()
+        source = next((o for o in outcomes if o.run_id == run_id), None)
+        if not source:
+            return None
+        # Create a copy
+        new_run = TrainingOutcome.from_dict(source.to_dict())
+        new_run.run_id = new_run_id or f"dup_{int(time.time() * 1000)}"
+        new_run.timestamp = time.time()
+        new_run.bookmarked = False  # Don't copy bookmark
+        new_run.quality_score = 0.0  # Reset quality score
+        # Append to history
+        with open(self.history_path, "a") as f:
+            f.write(json.dumps(new_run.to_dict()) + "\n")
+        return new_run
 
     def get_stats(self) -> Dict[str, Any]:
         """Get summary statistics of all outcomes."""

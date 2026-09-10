@@ -180,6 +180,30 @@ class SettingsRouter:
             "/training/runs/{run_id}/export", self.export_training_run, methods=["GET"],
         )
 
+        # Training run bookmarks
+        self.router.add_api_route(
+            "/training/runs/{run_id}/bookmark", self.toggle_bookmark, methods=["POST"],
+        )
+        self.router.add_api_route(
+            "/training/bookmarks", self.get_bookmarked_runs, methods=["GET"],
+        )
+
+        # Training run duplicate
+        self.router.add_api_route(
+            "/training/runs/{run_id}/duplicate", self.duplicate_training_run, methods=["POST"],
+        )
+
+        # Bulk operations
+        self.router.add_api_route(
+            "/training/runs/bulk/delete", self.bulk_delete_runs, methods=["POST"],
+        )
+        self.router.add_api_route(
+            "/training/runs/bulk/tag", self.bulk_add_tag, methods=["POST"],
+        )
+        self.router.add_api_route(
+            "/training/runs/bulk/bookmark", self.bulk_bookmark, methods=["POST"],
+        )
+
     # ── Handlers ────────────────────────────────────────────────────
 
     @endpoint("settings.get_all")
@@ -620,6 +644,92 @@ class SettingsRouter:
             import json
             content = json.dumps(run_dict, indent=2)
         return success_response(data={"run_id": run_id, "format": format, "content": content})
+
+    @endpoint("settings.toggle_bookmark")
+    async def toggle_bookmark(
+        self,
+        run_id: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Toggle bookmark status on a training run."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        run = tracker.toggle_bookmark(run_id)
+        if not run:
+            return success_response(data={"error": f"Run '{run_id}' not found"})
+        safe_audit_log("settings.toggle_bookmark", resource="training", detail=run_id)
+        return success_response(data=run.to_dict())
+
+    @endpoint("settings.get_bookmarked_runs")
+    async def get_bookmarked_runs(self) -> dict:
+        """Get all bookmarked training runs."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        runs = tracker.get_bookmarked()
+        return success_response(data={
+            "runs": [o.to_dict() for o in runs],
+            "count": len(runs),
+        })
+
+    @endpoint("settings.duplicate_training_run")
+    async def duplicate_training_run(
+        self,
+        run_id: str,
+        new_run_id: str = "",
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Duplicate a training run with a new ID."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        new_run = tracker.duplicate_run(run_id, new_run_id)
+        if not new_run:
+            return success_response(data={"error": f"Run '{run_id}' not found"})
+        safe_audit_log("settings.duplicate_run", resource="training", detail=f"{run_id} -> {new_run.run_id}")
+        return success_response(data=new_run.to_dict())
+
+    @endpoint("settings.bulk_delete_runs")
+    async def bulk_delete_runs(
+        self,
+        run_ids: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Delete multiple training runs. run_ids is a comma-separated list."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        ids = [x.strip() for x in run_ids.split(",") if x.strip()]
+        count = tracker.bulk_delete(ids)
+        safe_audit_log("settings.bulk_delete", resource="training", detail=f"{count} runs deleted")
+        return success_response(data={"deleted_count": count, "requested": len(ids)})
+
+    @endpoint("settings.bulk_add_tag")
+    async def bulk_add_tag(
+        self,
+        run_ids: str,
+        tag: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Add a tag to multiple training runs. run_ids is a comma-separated list."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        ids = [x.strip() for x in run_ids.split(",") if x.strip()]
+        count = tracker.bulk_add_tag(ids, tag)
+        safe_audit_log("settings.bulk_add_tag", resource="training", detail=f"{count} runs tagged '{tag}'")
+        return success_response(data={"updated_count": count, "tag": tag})
+
+    @endpoint("settings.bulk_bookmark")
+    async def bulk_bookmark(
+        self,
+        run_ids: str,
+        bookmarked: bool = True,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Set bookmark status on multiple training runs."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        ids = [x.strip() for x in run_ids.split(",") if x.strip()]
+        count = tracker.bulk_bookmark(ids, bookmarked)
+        safe_audit_log("settings.bulk_bookmark", resource="training", detail=f"{count} runs bookmark={bookmarked}")
+        return success_response(data={"updated_count": count, "bookmarked": bookmarked})
 
 
 router = SettingsRouter().router

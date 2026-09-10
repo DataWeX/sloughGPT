@@ -183,4 +183,32 @@ export const settingsController = {
   async exportTrainingRun(runId: string, format: string = 'json'): Promise<{ run_id: string; format: string; content: string }> {
     return apiGet(`/settings/training/runs/${runId}/export?format=${format}`)
   },
+
+  async toggleBookmark(runId: string): Promise<Record<string, unknown>> {
+    return apiPost(`/settings/training/runs/${runId}/bookmark`)
+  },
+
+  async getBookmarkedRuns(): Promise<{ runs: Array<Record<string, unknown>>; count: number }> {
+    return apiGet('/settings/training/bookmarks')
+  },
+
+  async duplicateTrainingRun(runId: string, newRunId: string = ''): Promise<Record<string, unknown>> {
+    const params = newRunId ? `?new_run_id=${encodeURIComponent(newRunId)}` : ''
+    return apiPost(`/settings/training/runs/${runId}/duplicate${params}`)
+  },
+
+  async bulkDeleteRuns(runIds: string[]): Promise<{ deleted_count: number; requested: number }> {
+    const ids = runIds.join(',')
+    return apiPost(`/settings/training/runs/bulk/delete?run_ids=${encodeURIComponent(ids)}`)
+  },
+
+  async bulkAddTag(runIds: string[], tag: string): Promise<{ updated_count: number; tag: string }> {
+    const ids = runIds.join(',')
+    return apiPost(`/settings/training/runs/bulk/tag?run_ids=${encodeURIComponent(ids)}&tag=${encodeURIComponent(tag)}`)
+  },
+
+  async bulkBookmark(runIds: string[], bookmarked: boolean = true): Promise<{ updated_count: number; bookmarked: boolean }> {
+    const ids = runIds.join(',')
+    return apiPost(`/settings/training/runs/bulk/bookmark?run_ids=${encodeURIComponent(ids)}&bookmarked=${bookmarked}`)
+  },
 }

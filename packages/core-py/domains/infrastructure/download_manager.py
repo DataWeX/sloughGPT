@@ -151,6 +151,31 @@ class DownloadProgress:
         }
 
 
+@dataclass
+class DownloadStats:
+    """Cumulative download statistics."""
+    total_downloads: int = 0
+    completed_downloads: int = 0
+    failed_downloads: int = 0
+    cancelled_downloads: int = 0
+    total_bytes_downloaded: int = 0
+    total_download_time: float = 0.0
+    average_speed: float = 0.0
+    peak_speed: float = 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "total_downloads": self.total_downloads,
+            "completed_downloads": self.completed_downloads,
+            "failed_downloads": self.failed_downloads,
+            "cancelled_downloads": self.cancelled_downloads,
+            "total_bytes_downloaded": self.total_bytes_downloaded,
+            "total_download_time": round(self.total_download_time, 2),
+            "average_speed_mb_per_sec": round(self.average_speed / (1024 * 1024), 2),
+            "peak_speed_mb_per_sec": round(self.peak_speed / (1024 * 1024), 2),
+        }
+
+
 # ---------------------------------------------------------------------------
 # DownloadManager — generic orchestration
 # ---------------------------------------------------------------------------
@@ -169,6 +194,7 @@ class DownloadManager:
         self._tasks: Dict[str, asyncio.Task] = {}
         self._cleanup_ttl = 300
         self._callbacks: Dict[str, list] = {}
+        self._stats = DownloadStats()
 
     def get_progress(self, model_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
@@ -241,6 +267,52 @@ class DownloadManager:
         with self._lock:
             entry = self._downloads.get(model_id)
             return entry is not None and entry.status == DownloadStatus.PAUSED
+
+    def verify(self, model_id: str) -> Dict[str, Any]:
+        """Verify integrity of a cached resource.
+
+        Checks that all expected files exist, have correct sizes,
+        and match checksums where available.
+
+        Returns dict with:
+            - valid: bool
+            - files_checked: int
+            - files_valid: int
+            - errors: list of error strings
+        """
+        backend = get_backend()
+        return backend.verify(model_id)
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cumulative download statistics."""
+        with self._lock:
+            return self._stats.to_dict()
+
+    def _record_download_complete(self, model_id: str, bytes_downloaded: int, elapsed: float, speed: float) -> None:
+        """Record statistics for a completed download."""
+        with self._lock:
+            self._stats.total_downloads += 1
+            self._stats.completed_downloads += 1
+            self._stats.total_bytes_downloaded += bytes_downloaded
+            self._stats.total_download_time += elapsed
+            if self._stats.total_download_time > 0:
+                self._stats.average_speed = (
+                    self._stats.total_bytes_downloaded / self._stats.total_download_time
+                )
+            if speed > self._stats.peak_speed:
+                self._stats.peak_speed = speed
+
+    def _record_download_failed(self, model_id: str) -> None:
+        """Record statistics for a failed download."""
+        with self._lock:
+            self._stats.total_downloads += 1
+            self._stats.failed_downloads += 1
+
+    def _record_download_cancelled(self, model_id: str) -> None:
+        """Record statistics for a cancelled download."""
+        with self._lock:
+            self._stats.total_downloads += 1
+            self._stats.cancelled_downloads += 1
 
     def _set_progress(self, model_id: str, **kwargs) -> None:
         with self._lock:
@@ -492,6 +564,13 @@ class DownloadManager:
         )
         self._notify_callbacks(model_id)
 
+        # Record statistics
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            bytes_downloaded = entry.bytes_downloaded if entry else 0
+            speed = entry.speed_bytes_per_sec if entry else 0
+        self._record_download_complete(model_id, bytes_downloaded, elapsed, speed)
+
         logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, cache_dir)
         return {
             "status": "complete",
@@ -614,11 +693,13 @@ class DownloadManager:
                     )
 
         if last_error is not None:
+            self._record_download_failed(model_id)
             return {"status": "failed", "model_id": model_id, "error": str(last_error)}
 
         with self._lock:
             entry = self._downloads.get(model_id)
             if entry and entry.status == DownloadStatus.CANCELLED:
+                self._record_download_cancelled(model_id)
                 return {"status": "cancelled", "model_id": model_id}
 
         elapsed = time.time() - start_time
@@ -630,6 +711,13 @@ class DownloadManager:
             percentage=100.0,
         )
         self._notify_callbacks(model_id)
+
+        # Record statistics
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            bytes_downloaded = entry.bytes_downloaded if entry else 0
+            speed = entry.speed_bytes_per_sec if entry else 0
+        self._record_download_complete(model_id, bytes_downloaded, elapsed, speed)
 
         try:
             from domains.infrastructure.event_buffer import get_event_buffer

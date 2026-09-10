@@ -1,5 +1,20 @@
 import { apiGet, apiPost } from './http-client'
 
+export const IPA_MAP: Record<string, string> = {
+  'AA': 'ɑː', 'AE': 'æ', 'AH': 'ʌ', 'AO': 'ɔː', 'AW': 'aʊ', 'AY': 'aɪ',
+  'B': 'b', 'CH': 'tʃ', 'D': 'd', 'DH': 'ð', 'EH': 'ɛ', 'ER': 'ɝː',
+  'EY': 'eɪ', 'F': 'f', 'G': 'ɡ', 'HH': 'h', 'IH': 'ɪ', 'IY': 'iː',
+  'JH': 'dʒ', 'K': 'k', 'L': 'l', 'M': 'm', 'N': 'n', 'NG': 'ŋ',
+  'OW': 'oʊ', 'OY': 'ɔɪ', 'P': 'p', 'R': 'ɹ', 'S': 's', 'SH': 'ʃ',
+  'T': 't', 'TH': 'θ', 'UH': 'ʊ', 'UW': 'uː', 'V': 'v', 'W': 'w',
+  'Y': 'j', 'Z': 'z', 'ZH': 'ʒ',
+  'BOS': '', 'EOS': '', 'PAD': '', 'SPACE': ' ', 'SILENCE': '',
+}
+
+export function toIPA(phonemes: string[]): string[] {
+  return phonemes.map(p => IPA_MAP[p] || p)
+}
+
 export interface PhonemeEncodeResult {
   text: string
   language: string

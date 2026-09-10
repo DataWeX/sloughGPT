@@ -996,6 +996,34 @@ export class SloughGPTClient {
     return this.request('GET', `/settings/training/runs/${runId}/export?format=${format}`);
   }
 
+  async toggleBookmark(runId: string): Promise<Record<string, unknown>> {
+    return this.request('POST', `/settings/training/runs/${runId}/bookmark`);
+  }
+
+  async getBookmarkedRuns(): Promise<{ runs: Array<Record<string, unknown>>; count: number }> {
+    return this.request('GET', '/settings/training/bookmarks');
+  }
+
+  async duplicateTrainingRun(runId: string, newRunId: string = ''): Promise<Record<string, unknown>> {
+    const params = newRunId ? `?new_run_id=${encodeURIComponent(newRunId)}` : '';
+    return this.request('POST', `/settings/training/runs/${runId}/duplicate${params}`);
+  }
+
+  async bulkDeleteRuns(runIds: string[]): Promise<{ deleted_count: number; requested: number }> {
+    const ids = runIds.join(',');
+    return this.request('POST', `/settings/training/runs/bulk/delete?run_ids=${encodeURIComponent(ids)}`);
+  }
+
+  async bulkAddTag(runIds: string[], tag: string): Promise<{ updated_count: number; tag: string }> {
+    const ids = runIds.join(',');
+    return this.request('POST', `/settings/training/runs/bulk/tag?run_ids=${encodeURIComponent(ids)}&tag=${encodeURIComponent(tag)}`);
+  }
+
+  async bulkBookmark(runIds: string[], bookmarked: boolean = true): Promise<{ updated_count: number; bookmarked: boolean }> {
+    const ids = runIds.join(',');
+    return this.request('POST', `/settings/training/runs/bulk/bookmark?run_ids=${encodeURIComponent(ids)}&bookmarked=${bookmarked}`);
+  }
+
   // ============ VQA ============
 
   async askQuestion(imageFile: File, question: string): Promise<{ answer: string; question: string; elapsed_ms: number }> {

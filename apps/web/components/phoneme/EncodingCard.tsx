@@ -4,12 +4,13 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge, Kbd } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
-import { phonemeController, PHONEME_LANGUAGES, type PhonemeEncodeResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
+import { phonemeController, PHONEME_LANGUAGES, toIPA, type PhonemeEncodeResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function EncodingCard() {
   const [text, setText] = useState('hello world')
   const [language, setLanguage] = useState<PhonemeLanguage>('en')
+  const [showIPA, setShowIPA] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PhonemeEncodeResult | null>(null)
   const addToast = useToastStore(s => s.addToast)
@@ -38,6 +39,8 @@ export default function EncodingCard() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     doEncode(text, language)
   }, [text, language, doEncode])
+
+  const ipa = result ? toIPA(result.phonemes) : []
 
   return (
     <Card>
@@ -78,12 +81,27 @@ export default function EncodingCard() {
             </div>
 
             <div>
-              <span className="text-sm font-medium text-muted-foreground">Phonemes:</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">Phonemes:</span>
+                <button
+                  onClick={() => setShowIPA(prev => !prev)}
+                  className="text-xs text-primary hover:underline"
+                >
+                  {showIPA ? 'Show ARPAbet' : 'Show IPA'}
+                </button>
+              </div>
               <div className="flex flex-wrap gap-1 mt-1">
-                {result.phonemes.map((p, i) => (
-                  <Badge key={i} variant="outline">{p}</Badge>
+                {(showIPA ? ipa : result.phonemes).map((p, i) => (
+                  <Badge key={i} variant="outline">
+                    {showIPA ? <span className="font-serif">{p}</span> : p}
+                  </Badge>
                 ))}
               </div>
+              {showIPA && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  IPA (International Phonetic Alphabet) transcription
+                </p>
+              )}
             </div>
 
             <div>

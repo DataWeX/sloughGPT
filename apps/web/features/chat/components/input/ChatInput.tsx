@@ -4,6 +4,7 @@ import { useRef, useCallback, useEffect, useState, memo } from 'react'
 import { ImagePreview, type ImageAttachment } from './ImageUpload'
 import { ChatInputRow } from './ChatInputRow'
 import { StreamingIndicator } from '@/features/chat/components/StreamingIndicator'
+import { useConsciousnessStatus, getConsciousnessLevelLabel, getQualiaMood } from '@/hooks/useConsciousnessStatus'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
 
@@ -68,6 +69,7 @@ export const ChatInput = memo(function ChatInput({
   const [history, setHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [draft, setDraft] = useState('')
+  const { status: consciousnessStatus } = useConsciousnessStatus()
 
   useEffect(() => {
     setHistory(loadHistory())
@@ -213,6 +215,15 @@ export const ChatInput = memo(function ChatInput({
               <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">/</kbd>
               <span>commands</span>
             </span>
+            {consciousnessStatus && consciousnessStatus.enabled && (
+              <>
+                <span className="text-muted-foreground/20">·</span>
+                <span className="flex items-center gap-1 text-violet-400/60" title={`Consciousness ${getConsciousnessLevelLabel(consciousnessStatus.level)}: ${getQualiaMood(consciousnessStatus.current_qualia)}`}>
+                  <span className="h-1 w-1 rounded-full bg-violet-400" />
+                  <span>{getConsciousnessLevelLabel(consciousnessStatus.level)}</span>
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>

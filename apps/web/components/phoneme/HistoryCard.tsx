@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/
 import { usePhonemeStore, type HistoryEntry } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
 import { PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 function HistoryRow({ entry }: { entry: HistoryEntry }) {
   const time = new Date(entry.timestamp).toLocaleTimeString()
@@ -28,6 +29,74 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
       </Badge>
       <Badge variant="outline" className="w-8 justify-center">{entry.language.toUpperCase()}</Badge>
     </div>
+  )
+}
+
+function ProgressChart({ history }: { history: HistoryEntry[] }) {
+  const chartData = useMemo(() => {
+    if (history.length < 2) return []
+    const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp)
+    return sorted.map((entry, i) => ({
+      index: i + 1,
+      score: Math.round(entry.score * 100),
+      word: entry.target,
+      time: new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }))
+  }, [history])
+
+  if (chartData.length < 2) return null
+
+  return (
+    <Collapsible>
+      <CollapsibleTrigger className="w-full">
+        <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer text-sm">
+          <span className="font-medium">Progress</span>
+          <span className="text-muted-foreground">{chartData.length} data points</span>
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="p-2 h-[200px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgb(var(--primary))" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="rgb(var(--primary))" stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
+              <XAxis
+                dataKey="index"
+                tick={{ fontSize: 10, fill: 'rgb(var(--muted-foreground))' }}
+                axisLine={{ stroke: 'rgb(var(--border))' }}
+              />
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 10, fill: 'rgb(var(--muted-foreground))' }}
+                axisLine={{ stroke: 'rgb(var(--border))' }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'rgb(var(--card))',
+                  border: '1px solid rgb(var(--border))',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.75rem',
+                }}
+                formatter={(value: number) => [`${value}%`, 'Score']}
+                labelFormatter={(label) => `#${label}`}
+              />
+              <Area
+                type="monotone"
+                dataKey="score"
+                stroke="rgb(var(--primary))"
+                strokeWidth={2}
+                fill="url(#scoreGradient)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -99,6 +168,81 @@ function HistoryStats({ history }: { history: HistoryEntry[] }) {
   )
 }
 
+function WordDifficulty({ history }: { history: HistoryEntry[] }) {
+  const wordStats = useMemo(() => {
+    if (history.length === 0) return null
+    const words: Record<string, { total: number; sum: number; lang: string }> = {}
+    for (const e of history) {
+      const key = `${e.language}:${e.target.toLowerCase()}`
+      if (!words[key]) words[key] = { total: 0, sum: 0, lang: e.language }
+      words[key].total++
+      words[key].sum += e.score
+    }
+    const ranked = Object.entries(words)
+      .map(([key, s]) => ({
+        word: key.split(':')[1],
+        lang: s.lang,
+        avg: s.sum / s.total,
+        attempts: s.total,
+      }))
+      .sort((a, b) => a.avg - b.avg)
+    return { hardest: ranked.slice(0, 5), easiest: ranked.slice(-5).reverse(), total: ranked.length }
+  }, [history])
+
+  if (!wordStats || wordStats.total === 0) return null
+
+  return (
+    <Collapsible>
+      <CollapsibleTrigger className="w-full">
+        <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer text-sm">
+          <span className="font-medium">Word Difficulty</span>
+          <span className="text-muted-foreground">{wordStats.total} unique words</span>
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2">
+          <div>
+            <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-destructive" />
+              Hardest
+            </p>
+            {wordStats.hardest.map((w, i) => (
+              <div key={i} className="flex items-center justify-between py-1 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{w.word}</span>
+                  <Badge variant="outline" className="text-xs">{w.lang.toUpperCase()}</Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="destructive" className="text-xs">{(w.avg * 100).toFixed(0)}%</Badge>
+                  <span className="text-xs text-muted-foreground">×{w.attempts}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-success" />
+              Easiest
+            </p>
+            {wordStats.easiest.map((w, i) => (
+              <div key={i} className="flex items-center justify-between py-1 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{w.word}</span>
+                  <Badge variant="outline" className="text-xs">{w.lang.toUpperCase()}</Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="text-xs">{(w.avg * 100).toFixed(0)}%</Badge>
+                  <span className="text-xs text-muted-foreground">×{w.attempts}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
 export default function HistoryCard() {
   const [filterLang, setFilterLang] = useState<string>('all')
   const history = usePhonemeStore(s => s.history)
@@ -122,8 +266,30 @@ export default function HistoryCard() {
     a.download = 'phoneme-history.json'
     a.click()
     URL.revokeObjectURL(url)
-    addToast('History exported', 'success')
+    addToast('History exported as JSON', 'success')
   }, [exportHistory, addToast])
+
+  const handleExportCSV = useCallback(() => {
+    const headers = ['Time', 'Target', 'Spoken', 'Score', 'Language', 'Target Phonemes', 'Spoken Phonemes']
+    const rows = history.map(e => [
+      new Date(e.timestamp).toISOString(),
+      e.target,
+      e.spoken,
+      (e.score * 100).toFixed(1),
+      e.language,
+      e.targetPhonemes.join(' '),
+      e.spokenPhonemes.join(' '),
+    ])
+    const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'phoneme-history.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+    addToast('History exported as CSV', 'success')
+  }, [history, addToast])
 
   const handleImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -153,6 +319,8 @@ export default function HistoryCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <HistoryStats history={history} />
+        <ProgressChart history={history} />
+        <WordDifficulty history={history} />
 
         <div className="flex flex-col sm:flex-row gap-2">
           <Select value={filterLang} onValueChange={setFilterLang}>
@@ -169,7 +337,11 @@ export default function HistoryCard() {
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={handleExport}>
               <IconDownload className="mr-2 h-4 w-4" />
-              Export
+              JSON
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleExportCSV}>
+              <IconDownload className="mr-2 h-4 w-4" />
+              CSV
             </Button>
             <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()}>
               <IconUpload className="mr-2 h-4 w-4" />

@@ -172,3 +172,51 @@ class TestExportTrainingRun:
         result = client.export_training_run("run-1", "json")
         client._mock_request.assert_called_once_with("GET", "/settings/training/runs/run-1/export?format=json")
         assert result["run_id"] == "run-1"
+
+
+class TestToggleBookmark:
+    def test_toggle_bookmark(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"run_id": "run-1", "bookmarked": True})
+        result = client.toggle_bookmark("run-1")
+        client._mock_request.assert_called_once_with("POST", "/settings/training/runs/run-1/bookmark")
+        assert result["run_id"] == "run-1"
+
+
+class TestGetBookmarkedRuns:
+    def test_get_bookmarked(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"runs": [], "count": 0})
+        result = client.get_bookmarked_runs()
+        client._mock_request.assert_called_once_with("GET", "/settings/training/bookmarks")
+        assert "runs" in result
+
+
+class TestDuplicateTrainingRun:
+    def test_duplicate_run(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"run_id": "new-run", "model": "gpt2"})
+        result = client.duplicate_training_run("run-1", "new-run")
+        client._mock_request.assert_called_once()
+        assert result["run_id"] == "new-run"
+
+
+class TestBulkDeleteRuns:
+    def test_bulk_delete(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"deleted_count": 2, "requested": 2})
+        result = client.bulk_delete_runs(["run-1", "run-2"])
+        client._mock_request.assert_called_once()
+        assert result["deleted_count"] == 2
+
+
+class TestBulkAddTag:
+    def test_bulk_add_tag(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"updated_count": 2, "tag": "best"})
+        result = client.bulk_add_tag(["run-1", "run-2"], "best")
+        client._mock_request.assert_called_once()
+        assert result["tag"] == "best"
+
+
+class TestBulkBookmark:
+    def test_bulk_bookmark(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"updated_count": 2, "bookmarked": True})
+        result = client.bulk_bookmark(["run-1", "run-2"], True)
+        client._mock_request.assert_called_once()
+        assert result["bookmarked"] is True

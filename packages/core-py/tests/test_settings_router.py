@@ -356,3 +356,70 @@ class TestExportTrainingRun:
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert "error" in data
+
+
+class TestBookmark:
+    def test_toggle_bookmark_run_not_found(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/training/runs/nonexistent/bookmark")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data
+
+    def test_get_bookmarked_runs(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/bookmarks")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "runs" in data
+        assert "count" in data
+        assert isinstance(data["runs"], list)
+
+
+class TestDuplicateTrainingRun:
+    def test_duplicate_run_not_found(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/training/runs/nonexistent/duplicate")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data
+
+    def test_duplicate_run_with_id(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/training/runs/nonexistent/duplicate?new_run_id=test-1")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data
+
+
+class TestBulkOperations:
+    def test_bulk_delete(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/training/runs/bulk/delete?run_ids=run-1,run-2")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "deleted_count" in data
+        assert "requested" in data
+
+    def test_bulk_add_tag(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/training/runs/bulk/tag?run_ids=run-1,run-2&tag=best")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "updated_count" in data
+        assert data["tag"] == "best"
+
+    def test_bulk_bookmark(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/training/runs/bulk/bookmark?run_ids=run-1,run-2&bookmarked=true")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "updated_count" in data
+        assert data["bookmarked"] is True

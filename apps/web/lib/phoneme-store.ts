@@ -15,6 +15,13 @@ export interface HistoryEntry {
   spokenPhonemes: string[]
 }
 
+export interface FlashcardSRS {
+  interval: number
+  ease: number
+  nextReview: number
+  reviews: number
+}
+
 interface PhonemeStore {
   history: HistoryEntry[]
   quizScore: number
@@ -22,6 +29,7 @@ interface PhonemeStore {
   quizStreak: number
   quizBestStreak: number
   randomWordTrigger: number
+  flashcardSRS: Record<string, FlashcardSRS>
   addToHistory: (entry: Omit<HistoryEntry, 'id' | 'timestamp'>) => void
   clearHistory: () => void
   exportHistory: () => string
@@ -29,9 +37,12 @@ interface PhonemeStore {
   incrementQuizScore: (correct: boolean) => void
   resetQuiz: () => void
   triggerRandomWord: () => void
+  updateFlashcardSRS: (cardKey: string, known: boolean) => void
+  resetFlashcardSRS: () => void
 }
 
 const STORAGE_KEY = 'sloughgpt-phoneme-history'
+const SRS_KEY = 'sloughgpt-phoneme-srs'
 
 function loadHistory(): HistoryEntry[] {
   if (typeof window === 'undefined') return []
@@ -52,6 +63,25 @@ function saveHistory(history: HistoryEntry[]) {
   }
 }
 
+function loadSRS(): Record<string, FlashcardSRS> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem(SRS_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveSRS(srs: Record<string, FlashcardSRS>) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(SRS_KEY, JSON.stringify(srs))
+  } catch {
+    // storage full or unavailable
+  }
+}
+
 const phonemeStore = createStore<PhonemeStore>((set, get) => ({
   history: loadHistory(),
   quizScore: 0,
@@ -59,6 +89,7 @@ const phonemeStore = createStore<PhonemeStore>((set, get) => ({
   quizStreak: 0,
   quizBestStreak: 0,
   randomWordTrigger: 0,
+  flashcardSRS: loadSRS(),
 
   addToHistory: (entry) => {
     const id = `hist_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
@@ -109,6 +140,39 @@ const phonemeStore = createStore<PhonemeStore>((set, get) => ({
 
   triggerRandomWord: () => {
     set(prev => ({ randomWordTrigger: prev.randomWordTrigger + 1 }))
+  },
+
+  updateFlashcardSRS: (cardKey: string, known: boolean) => {
+    set(prev => {
+      const srs = { ...prev.flashcardSRS }
+      const existing = srs[cardKey] || { interval: 0, ease: 2.5, nextReview: Date.now(), reviews: 0 }
+
+      if (known) {
+        const newInterval = Math.max(1, Math.ceil(existing.interval * existing.ease))
+        const newEase = Math.min(3.0, existing.ease + 0.1)
+        srs[cardKey] = {
+          interval: newInterval,
+          ease: newEase,
+          nextReview: Date.now() + newInterval * 86400000,
+          reviews: existing.reviews + 1,
+        }
+      } else {
+        srs[cardKey] = {
+          interval: 1,
+          ease: Math.max(1.3, existing.ease - 0.2),
+          nextReview: Date.now() + 86400000,
+          reviews: existing.reviews + 1,
+        }
+      }
+
+      saveSRS(srs)
+      return { flashcardSRS: srs }
+    })
+  },
+
+  resetFlashcardSRS: () => {
+    set({ flashcardSRS: {} })
+    saveSRS({})
   },
 }))
 
