@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES } from '@/lib/phoneme-controller'
@@ -20,23 +20,34 @@ export default function DetectLanguageCard() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ text: string; language: string; supported_languages: string[] } | null>(null)
   const addToast = useToastStore(s => s.addToast)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const handleDetect = useCallback(async () => {
-    if (!text.trim()) return
+  const doDetect = useCallback(async (t: string) => {
+    if (!t.trim()) { setResult(null); return }
     setLoading(true)
     try {
-      const res = await phonemeController.detectLanguage(text)
+      const res = await phonemeController.detectLanguage(t)
       setResult(res)
     } catch {
-      addToast('Detection failed', 'error')
+      // silent — debounce will retry
     } finally {
       setLoading(false)
     }
-  }, [text, addToast])
+  }, [])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => doDetect(text), 400)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [text, doDetect])
+
+  const handleDetect = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    doDetect(text)
+  }, [text, doDetect])
 
   const handleSample = useCallback((lang: string, word: string) => {
     setText(word)
-    setResult(null)
   }, [])
 
   const langLabel = (code: string) => PHONEME_LANGUAGES.find(l => l.value === code)?.label ?? code
@@ -47,7 +58,7 @@ export default function DetectLanguageCard() {
         <CardTitle>Detect Language</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <Input
             value={text}
             onChange={e => setText(e.target.value)}
@@ -62,7 +73,7 @@ export default function DetectLanguageCard() {
         </div>
 
         {result && (
-          <div className="p-4 rounded-lg bg-muted/50 space-y-3">
+          <div className="p-4 rounded-lg bg-muted/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="flex items-center gap-3">
               <span className="text-sm font-medium text-muted-foreground">Detected:</span>
               <Badge variant="default" className="text-base">{langLabel(result.language)}</Badge>

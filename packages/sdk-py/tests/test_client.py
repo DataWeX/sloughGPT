@@ -91,3 +91,84 @@ class TestApplyTrainingPreset:
         result = client.apply_training_preset("quick-finetune")
         client._mock_request.assert_called_once_with("POST", "/settings/training/presets/quick-finetune/apply")
         assert result["preset"] == "quick-finetune"
+
+
+class TestGetTrainingRun:
+    def test_get_run(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"run_id": "run-1", "model": "gpt2"})
+        result = client.get_training_run("run-1")
+        client._mock_request.assert_called_once_with("GET", "/settings/training/runs/run-1")
+        assert result["run_id"] == "run-1"
+
+
+class TestDeleteTrainingRun:
+    def test_delete_run(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"deleted": True, "run_id": "run-1"})
+        result = client.delete_training_run("run-1")
+        client._mock_request.assert_called_once_with("DELETE", "/settings/training/runs/run-1")
+        assert result["deleted"] is True
+
+
+class TestFilterTrainingRuns:
+    def test_filter_runs(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"runs": [], "count": 0})
+        result = client.filter_training_runs(model="gpt2", limit=10)
+        client._mock_request.assert_called_once()
+        assert "model=gpt2" in client._mock_request.call_args[0][1]
+        assert "limit=10" in client._mock_request.call_args[0][1]
+
+
+class TestClearTrainingHistory:
+    def test_clear_history(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"cleared": True, "removed_count": 5})
+        result = client.clear_training_history()
+        client._mock_request.assert_called_once_with("POST", "/settings/training/history/clear")
+        assert result["cleared"] is True
+
+
+class TestAddRunTag:
+    def test_add_tag(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"run_id": "run-1", "tags": ["best"]})
+        result = client.add_run_tag("run-1", "best")
+        client._mock_request.assert_called_once()
+        assert result["run_id"] == "run-1"
+
+
+class TestRemoveRunTag:
+    def test_remove_tag(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"run_id": "run-1", "tags": []})
+        result = client.remove_run_tag("run-1", "best")
+        client._mock_request.assert_called_once()
+        assert result["run_id"] == "run-1"
+
+
+class TestSetRunNotes:
+    def test_set_notes(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"run_id": "run-1", "notes": "test note"})
+        result = client.set_run_notes("run-1", "test note")
+        client._mock_request.assert_called_once()
+        assert result["notes"] == "test note"
+
+
+class TestGetAllTags:
+    def test_get_tags(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"tags": ["best", "production"]})
+        result = client.get_all_tags()
+        client._mock_request.assert_called_once_with("GET", "/settings/training/tags")
+        assert result["tags"] == ["best", "production"]
+
+
+class TestGetRunsByTag:
+    def test_get_runs_by_tag(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"runs": [], "count": 0, "tag": "best"})
+        result = client.get_runs_by_tag("best")
+        client._mock_request.assert_called_once_with("GET", "/settings/training/tags/best")
+        assert result["tag"] == "best"
+
+
+class TestExportTrainingRun:
+    def test_export_run(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"run_id": "run-1", "format": "json", "content": "{}"})
+        result = client.export_training_run("run-1", "json")
+        client._mock_request.assert_called_once_with("GET", "/settings/training/runs/run-1/export?format=json")
+        assert result["run_id"] == "run-1"

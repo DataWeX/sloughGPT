@@ -507,3 +507,160 @@ class TestDownloadWith:
         assert result["status"] == "complete"
         assert "http://server/model" in backend.compressed_calls
         assert "http://server/model" not in backend.download_calls
+
+
+class RetryBackend(FakeBackend):
+    """Backend that fails N times then succeeds."""
+
+    def __init__(self, fail_count: int = 2):
+        super().__init__()
+        self._fail_count = fail_count
+        self._attempts = 0
+
+    def download(self, resource_id, on_progress, on_file_complete):
+        self._attempts += 1
+        if self._attempts <= self._fail_count:
+            raise ConnectionError(f"Simulated failure #{self._attempts}")
+        return super().download(resource_id, on_progress, on_file_complete)
+
+
+class TestRetryLogic:
+    def test_retries_on_failure_then_succeeds(self):
+        """Download retries and succeeds after transient failures."""
+        backend = RetryBackend(fail_count=2)
+        dm.set_backend(backend)
+        try:
+            mgr = dm.get_download_manager()
+            result = asyncio.get_event_loop().run_until_complete(
+                mgr.download("model-retry", max_retries=3)
+            )
+            assert result["status"] == "complete"
+            assert backend._attempts == 3  # 2 failures + 1 success
+        finally:
+            dm.reset_backend()
+
+    def test_fails_after_all_retries_exhausted(self):
+        """Download fails when all retries are exhausted."""
+        backend = RetryBackend(fail_count=10)
+        dm.set_backend(backend)
+        try:
+            mgr = dm.get_download_manager()
+            result = asyncio.get_event_loop().run_until_complete(
+                mgr.download("model-fail", max_retries=2)
+            )
+            assert result["status"] == "failed"
+            assert "Simulated failure" in result["error"]
+            assert backend._attempts == 3  # max_retries + 1
+        finally:
+            dm.reset_backend()
+
+    def test_no_retry_on_success(self):
+        """Download doesn't retry when first attempt succeeds."""
+        backend = RetryBackend(fail_count=0)
+        dm.set_backend(backend)
+        try:
+            mgr = dm.get_download_manager()
+            result = asyncio.get_event_loop().run_until_complete(
+                mgr.download("model-ok", max_retries=3)
+            )
+            assert result["status"] == "complete"
+            assert backend._attempts == 1
+        finally:
+            dm.reset_backend()
+
+    def test_max_retries_zero_no_retry(self):
+        """With max_retries=0, no retry on failure."""
+        backend = RetryBackend(fail_count=1)
+        dm.set_backend(backend)
+        try:
+            mgr = dm.get_download_manager()
+            result = asyncio.get_event_loop().run_until_complete(
+                mgr.download("model-no-retry", max_retries=0)
+            )
+            assert result["status"] == "failed"
+            assert backend._attempts == 1
+        finally:
+            dm.reset_backend()
+
+
+class TestPauseResume:
+    def test_pause_downloading(self):
+        """Pause sets status to paused."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-pause", status=dm.DownloadStatus.DOWNLOADING)
+        assert mgr.pause("model-pause") is True
+        progress = mgr.get_progress("model-pause")
+        assert progress["status"] == "paused"
+
+    def test_pause_not_found(self):
+        """Pause returns False for unknown model."""
+        mgr = dm.DownloadManager()
+        assert mgr.pause("nonexistent") is False
+
+    def test_pause_complete_not_pausable(self):
+        """Cannot pause a completed download."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-done", status=dm.DownloadStatus.COMPLETE)
+        assert mgr.pause("model-done") is False
+
+    def test_pause_queued_not_pausable(self):
+        """Cannot pause a queued download (not yet downloading)."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-queued", status=dm.DownloadStatus.QUEUED)
+        assert mgr.pause("model-queued") is False
+
+    def test_pause_cancelled_not_pausable(self):
+        """Cannot pause a cancelled download."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-cancel", status=dm.DownloadStatus.CANCELLED)
+        assert mgr.pause("model-cancel") is False
+
+    def test_resume_paused(self):
+        """Resume sets status back to queued."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-resume", status=dm.DownloadStatus.PAUSED)
+        assert mgr.resume("model-resume") is True
+        progress = mgr.get_progress("model-resume")
+        assert progress["status"] == "queued"
+
+    def test_resume_not_found(self):
+        """Resume returns False for unknown model."""
+        mgr = dm.DownloadManager()
+        assert mgr.resume("nonexistent") is False
+
+    def test_resume_downloading_not_resumable(self):
+        """Cannot resume a downloading model."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-active", status=dm.DownloadStatus.DOWNLOADING)
+        assert mgr.resume("model-active") is False
+
+    def test_resume_complete_not_resumable(self):
+        """Cannot resume a completed model."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-done", status=dm.DownloadStatus.COMPLETE)
+        assert mgr.resume("model-done") is False
+
+    def test_is_downloading_includes_paused(self):
+        """is_downloading returns True for paused downloads."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-paused", status=dm.DownloadStatus.PAUSED)
+        assert mgr.is_downloading("model-paused") is True
+
+    def test_is_paused(self):
+        """is_paused returns correct state."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-paused", status=dm.DownloadStatus.PAUSED)
+        assert mgr.is_paused("model-paused") is True
+        mgr._set_progress("model-active", status=dm.DownloadStatus.DOWNLOADING)
+        assert mgr.is_paused("model-active") is False
+
+    def test_pause_resume_cycle(self):
+        """Full pause → resume cycle works."""
+        mgr = dm.DownloadManager()
+        mgr._set_progress("model-cycle", status=dm.DownloadStatus.DOWNLOADING)
+        assert mgr.pause("model-cycle") is True
+        assert mgr.get_progress("model-cycle")["status"] == "paused"
+        assert mgr.is_paused("model-cycle") is True
+        assert mgr.resume("model-cycle") is True
+        assert mgr.get_progress("model-cycle")["status"] == "queued"
+        assert mgr.is_paused("model-cycle") is False

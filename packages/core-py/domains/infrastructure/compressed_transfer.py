@@ -1,15 +1,15 @@
 """
-Streaming Compression — on-the-fly gzip compression/decompression for file transfers.
+Streaming LZ4 Compression — on-the-fly LZ4 compression/decompression for file transfers.
 
 Design goals:
   - Zero buffered copies: compress → stream → decompress → write (no temp files)
-  - Server-side: compress from disk, stream out (never store .gz on disk)
+  - Server-side: compress from disk, stream out (never store .lz4 on disk)
   - Client-side: receive compressed stream, decompress on-the-fly to disk
   - Integrity: SHA-256 checksum of uncompressed payload, verified after decompression
   - Resumable: byte-range support with compressed offset mapping
 
 Usage:
-    # Server: serve a file with streaming gzip compression
+    # Server: serve a file with streaming LZ4 compression
     from domains.infrastructure.compressed_transfer import CompressedFileServer
     server = CompressedFileServer()
     response = server.serve("/path/to/model.bin")  # returns StreamingResponse
@@ -17,8 +17,8 @@ Usage:
     # Client: download with on-the-fly decompression
     from domains.infrastructure.compressed_transfer import CompressedDownloader
     downloader = CompressedDownloader()
-    result = await downloader.download(
-        url="http://server/download/model.bin.gz",
+    result = downloader.download_from_url(
+        url="http://server/download/model.bin.lz4",
         dest="/local/model.bin",
         expected_sha256="abc123...",
     )
@@ -26,7 +26,6 @@ Usage:
 
 from __future__ import annotations
 
-import gzip
 import hashlib
 import io
 import logging
@@ -37,16 +36,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Generator
 
+import lz4.frame
+
 logger = logging.getLogger("slo.compressed_transfer")
 
 # ── Header format ──
-# The first 32 bytes of a compressed stream are a custom header:
-#   [0:4]   magic bytes: b"SGZ1" (sloughGPT gzip v1)
+# The first 44 bytes of a compressed stream are a custom header:
+#   [0:4]   magic bytes: b"SLZ4" (sloughGPT LZ4 v1)
 #   [4:12]  uncompressed size (uint64 big-endian)
 #   [12:44] SHA-256 of uncompressed content (32 bytes)
-#   [44:...] gzip-compressed payload
+#   [44:...] LZ4 frame-compressed payload
 
-MAGIC = b"SGZ1"
+MAGIC = b"SLZ4"
 HEADER_SIZE = 4 + 8 + 32  # 44 bytes
 CHUNK_SIZE = 65536  # 64 KB read chunks
 
@@ -89,21 +90,21 @@ def compress_stream(
     source: BinaryIO,
     dest: BinaryIO,
     *,
-    compresslevel: int = 6,
+    compression_level: int = 6,
     include_header: bool = True,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> CompressionResult:
-    """Compress a binary stream on-the-fly.
+    """Compress a binary stream on-the-fly using LZ4.
 
-    Reads from *source*, writes gzip-compressed data to *dest*.
-    If *include_header* is True, prepends the SGZ1 header with
+    Reads from *source*, writes LZ4-compressed data to *dest*.
+    If *include_header* is True, prepends the SLZ4 header with
     uncompressed size and SHA-256 for integrity verification.
 
     Args:
         source: Readable binary stream (e.g., open(path, "rb")).
         dest: Writable binary stream (e.g., response body, socket).
-        compresslevel: gzip compression level (1-9, default 6).
-        include_header: Whether to prepend SGZ1 header.
+        compression_level: LZ4 compression level (1-16, default 6).
+        include_header: Whether to prepend SLZ4 header.
         on_progress: Callback(bytes_read, total_bytes) if total known.
 
     Returns:
@@ -129,21 +130,19 @@ def compress_stream(
         header[0:4] = MAGIC
         dest.write(bytes(header))
 
-    # Compress and stream
+    # Compress using LZ4 frame
     buffer = io.BytesIO()
-    compressor = gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=compresslevel)
+    with lz4.frame.open(buffer, "wb", compression_level=compression_level) as f:
+        while True:
+            chunk = source.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            sha256.update(chunk)
+            uncompressed_size += len(chunk)
+            f.write(chunk)
+            if on_progress and total_size:
+                on_progress(uncompressed_size, total_size)
 
-    while True:
-        chunk = source.read(CHUNK_SIZE)
-        if not chunk:
-            break
-        sha256.update(chunk)
-        uncompressed_size += len(chunk)
-        compressor.write(chunk)
-        if on_progress and total_size:
-            on_progress(uncompressed_size, total_size)
-
-    compressor.close()
     compressed_data = buffer.getvalue()
     compressed_size = len(compressed_data)
 
@@ -178,15 +177,15 @@ def decompress_stream(
     verify_header: bool = True,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> CompressionResult:
-    """Decompress a gzip stream on-the-fly.
+    """Decompress an LZ4 stream on-the-fly.
 
-    Reads from *source* (optionally with SGZ1 header), writes
+    Reads from *source* (optionally with SLZ4 header), writes
     decompressed data to *dest*.
 
     Args:
-        source: Readable binary stream with gzip-compressed data.
+        source: Readable binary stream with LZ4-compressed data.
         dest: Writable binary stream for decompressed output.
-        verify_header: Whether to expect and verify SGZ1 header.
+        verify_header: Whether to expect and verify SLZ4 header.
         on_progress: Callback(bytes_written, expected_total) if header present.
 
     Returns:
@@ -207,21 +206,20 @@ def decompress_stream(
         expected_size = struct.unpack(">Q", header[4:12])[0]
         expected_sha256 = header[12:44].hex()
 
-    # Decompress
+    # Decompress using LZ4 frame
     sha256 = hashlib.sha256()
     uncompressed_size = 0
 
-    decompressor = gzip.GzipFile(fileobj=source, mode="rb")
-
-    while True:
-        chunk = decompressor.read(CHUNK_SIZE)
-        if not chunk:
-            break
-        sha256.update(chunk)
-        dest.write(chunk)
-        uncompressed_size += len(chunk)
-        if on_progress and expected_size:
-            on_progress(uncompressed_size, expected_size)
+    with lz4.frame.open(source, "rb") as f:
+        while True:
+            chunk = f.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            sha256.update(chunk)
+            dest.write(chunk)
+            uncompressed_size += len(chunk)
+            if on_progress and expected_size:
+                on_progress(uncompressed_size, expected_size)
 
     actual_sha256 = sha256.hexdigest()
 
@@ -244,16 +242,16 @@ def compress_file(
     source_path: str | Path,
     dest_path: str | Path,
     *,
-    compresslevel: int = 6,
+    compression_level: int = 6,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> CompressionResult:
-    """Compress a file on disk to a .sgz file with header."""
+    """Compress a file on disk to a .lz4 file with header."""
     source_path = Path(source_path)
     dest_path = Path(dest_path)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(source_path, "rb") as src, open(dest_path, "wb") as dst:
-        return compress_stream(src, dst, compresslevel=compresslevel, on_progress=on_progress)
+        return compress_stream(src, dst, compression_level=compression_level, on_progress=on_progress)
 
 
 def decompress_file(
@@ -263,7 +261,7 @@ def decompress_file(
     verify_header: bool = True,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> CompressionResult:
-    """Decompress a .sgz file to disk."""
+    """Decompress a .lz4 file to disk."""
     source_path = Path(source_path)
     dest_path = Path(dest_path)
     dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -272,16 +270,16 @@ def decompress_file(
         return decompress_stream(src, dst, verify_header=verify_header, on_progress=on_progress)
 
 
-def compress_bytes(data: bytes, compresslevel: int = 6) -> tuple[bytes, CompressionResult]:
+def compress_bytes(data: bytes, compression_level: int = 6) -> tuple[bytes, CompressionResult]:
     """Compress raw bytes in memory."""
     src = io.BytesIO(data)
     dst = io.BytesIO()
-    result = compress_stream(src, dst, compresslevel=compresslevel, include_header=False)
+    result = compress_stream(src, dst, compression_level=compression_level, include_header=False)
     return dst.getvalue(), result
 
 
 def decompress_bytes(data: bytes) -> tuple[bytes, CompressionResult]:
-    """Decompress raw gzip bytes in memory."""
+    """Decompress raw LZ4 bytes in memory."""
     src = io.BytesIO(data)
     dst = io.BytesIO()
     result = decompress_stream(src, dst, verify_header=False)
@@ -294,12 +292,12 @@ def decompress_bytes(data: bytes) -> tuple[bytes, CompressionResult]:
 def compressed_file_iterator(
     file_path: str | Path,
     *,
-    compresslevel: int = 6,
+    compression_level: int = 6,
     chunk_size: int = CHUNK_SIZE,
 ) -> Generator[bytes, None, None]:
-    """Yield gzip-compressed chunks from a file for streaming HTTP responses.
+    """Yield LZ4-compressed chunks from a file for streaming HTTP responses.
 
-    Yields the SGZ1 header first, then compressed chunks.
+    Yields the SLZ4 header first, then compressed chunks.
     Useful with Starlette/FastAPI StreamingResponse.
     """
     file_path = Path(file_path)
@@ -321,18 +319,16 @@ def compressed_file_iterator(
     header[12:44] = sha256.digest()
     yield bytes(header)
 
-    # Stream compressed chunks
+    # Stream compressed chunks using LZ4 frame
     buffer = io.BytesIO()
-    compressor = gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=compresslevel)
+    with lz4.frame.open(buffer, "wb", compression_level=compression_level) as f:
+        with open(file_path, "rb") as src:
+            while True:
+                chunk = src.read(chunk_size)
+                if not chunk:
+                    break
+                f.write(chunk)
 
-    with open(file_path, "rb") as f:
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            compressor.write(chunk)
-
-    compressor.close()
     compressed = buffer.getvalue()
 
     # Yield in chunks
@@ -344,7 +340,7 @@ def compressed_file_iterator(
 
 
 class CompressedDownloader:
-    """Download files with on-the-fly decompression.
+    """Download files with on-the-fly LZ4 decompression.
 
     Streams compressed data from the server, decompresses to disk,
     and verifies integrity. Never stores the compressed copy.
@@ -365,7 +361,7 @@ class CompressedDownloader:
         """Download a compressed file from a URL and decompress to disk.
 
         Args:
-            url: URL serving SGZ1-compressed data.
+            url: URL serving LZ4-compressed data.
             dest: Local path to write decompressed file.
             expected_sha256: Expected SHA-256 of uncompressed content.
             on_progress: Callback(bytes_written, expected_total).
@@ -381,7 +377,7 @@ class CompressedDownloader:
         start = time.monotonic()
 
         try:
-            req = urllib.request.Request(url, headers={"Accept-Encoding": "gzip"})
+            req = urllib.request.Request(url, headers={"Accept-Encoding": "lz4"})
             with urllib.request.urlopen(req, timeout=self._timeout) as response:
                 return self._decompress_response(
                     response,
@@ -448,11 +444,11 @@ class CompressedDownloader:
         """Decompress an HTTP response to disk."""
         start = time.monotonic()
 
-        # Check content type - if it's our SGZ1 format, decompress with header
+        # Check content type - if it's our LZ4 format, decompress with header
         content_type = response.headers.get("Content-Type", "")
         content_encoding = response.headers.get("Content-Encoding", "")
 
-        if content_type == "application/x-sgzs" or content_encoding == "gzip":
+        if content_type == "application/x-lz4" or content_encoding == "lz4":
             # Read all compressed data and decompress
             compressed_data = response.read()
             src = io.BytesIO(compressed_data)
@@ -495,13 +491,13 @@ class CompressedDownloader:
 
 
 class CompressedFileServer:
-    """Serve files with on-the-fly gzip compression.
+    """Serve files with on-the-fly LZ4 compression.
 
-    Never stores .gz files on disk — compresses directly from source.
+    Never stores .lz4 files on disk — compresses directly from source.
     """
 
-    def __init__(self, *, compresslevel: int = 6, chunk_size: int = CHUNK_SIZE):
-        self._compresslevel = compresslevel
+    def __init__(self, *, compression_level: int = 6, chunk_size: int = CHUNK_SIZE):
+        self._compression_level = compression_level
         self._chunk_size = chunk_size
 
     def serve(self, file_path: str | Path) -> dict[str, Any]:
@@ -518,15 +514,15 @@ class CompressedFileServer:
         return {
             "path": str(file_path),
             "size": file_size,
-            "content_type": "application/x-sgzs",
+            "content_type": "application/x-lz4",
             "headers": {
-                "Content-Type": "application/x-sgzs",
-                "Content-Encoding": "gzip",
+                "Content-Type": "application/x-lz4",
+                "Content-Encoding": "lz4",
                 "X-Uncompressed-Size": str(file_size),
                 "Cache-Control": "public, max-age=3600",
             },
             "iterator": compressed_file_iterator(
-                file_path, compresslevel=self._compresslevel, chunk_size=self._chunk_size
+                file_path, compression_level=self._compression_level, chunk_size=self._chunk_size
             ),
         }
 
@@ -567,9 +563,9 @@ class CompressedFileServer:
 
 
 def peek_compressed_header(source: BinaryIO) -> dict[str, Any] | None:
-    """Read SGZ1 header without decompressing.
+    """Read SLZ4 header without decompressing.
 
-    Returns dict with uncompressed_size, sha256, magic, or None if not SGZ1.
+    Returns dict with uncompressed_size, sha256, magic, or None if not SLZ4.
     """
     pos = source.tell() if hasattr(source, "tell") else 0
     try:

@@ -944,6 +944,58 @@ export class SloughGPTClient {
     return this.request('POST', `/settings/training/presets/${name}/apply`);
   }
 
+  async getTrainingRun(runId: string): Promise<Record<string, unknown>> {
+    return this.request('GET', `/settings/training/runs/${runId}`);
+  }
+
+  async deleteTrainingRun(runId: string): Promise<{ deleted: boolean; run_id: string }> {
+    return this.request('DELETE', `/settings/training/runs/${runId}`);
+  }
+
+  async filterTrainingRuns(params: {
+    model?: string;
+    method?: string;
+    converged?: boolean;
+    min_quality?: number;
+    limit?: number;
+  } = {}): Promise<{ runs: Array<Record<string, unknown>>; count: number }> {
+    const qs = new URLSearchParams();
+    if (params.model) qs.set('model', params.model);
+    if (params.method) qs.set('method', params.method);
+    if (params.converged !== undefined) qs.set('converged', String(params.converged));
+    if (params.min_quality !== undefined) qs.set('min_quality', String(params.min_quality));
+    if (params.limit) qs.set('limit', String(params.limit));
+    return this.request('GET', `/settings/training/runs?${qs.toString()}`);
+  }
+
+  async clearTrainingHistory(): Promise<{ cleared: boolean; removed_count: number }> {
+    return this.request('POST', '/settings/training/history/clear');
+  }
+
+  async addRunTag(runId: string, tag: string): Promise<Record<string, unknown>> {
+    return this.request('POST', `/settings/training/runs/${runId}/tags?tag=${encodeURIComponent(tag)}`);
+  }
+
+  async removeRunTag(runId: string, tag: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/settings/training/runs/${runId}/tags/${encodeURIComponent(tag)}`);
+  }
+
+  async setRunNotes(runId: string, notes: string): Promise<Record<string, unknown>> {
+    return this.request('PUT', `/settings/training/runs/${runId}/notes?notes=${encodeURIComponent(notes)}`);
+  }
+
+  async getAllTags(): Promise<{ tags: string[] }> {
+    return this.request('GET', '/settings/training/tags');
+  }
+
+  async getRunsByTag(tag: string): Promise<{ runs: Array<Record<string, unknown>>; count: number; tag: string }> {
+    return this.request('GET', `/settings/training/tags/${encodeURIComponent(tag)}`);
+  }
+
+  async exportTrainingRun(runId: string, format: string = 'json'): Promise<{ run_id: string; format: string; content: string }> {
+    return this.request('GET', `/settings/training/runs/${runId}/export?format=${format}`);
+  }
+
   // ============ VQA ============
 
   async askQuestion(imageFile: File, question: string): Promise<{ answer: string; question: string; elapsed_ms: number }> {

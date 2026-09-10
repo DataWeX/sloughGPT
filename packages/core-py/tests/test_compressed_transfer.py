@@ -314,10 +314,10 @@ class TestCompressedFileIterator:
 # ── Edge cases ────────────────────────────────────────────────────────────────
 
 class TestEdgeCases:
-    def test_corrupt_gzip_data(self):
-        corrupt = io.BytesIO(b"SGZ1" + b"\x00" * 40 + b"NOT_VALID_GZIP")
+    def test_corrupt_lz4_data(self):
+        corrupt = io.BytesIO(b"SLZ4" + b"\x00" * 40 + b"NOT_VALID_LZ4")
         decompressed = io.BytesIO()
-        with pytest.raises((ValueError, OSError)):
+        with pytest.raises((ValueError, OSError, RuntimeError)):
             decompress_stream(corrupt, decompressed, verify_header=True)
 
     def test_header_checksum_mismatch(self, tmp_path):

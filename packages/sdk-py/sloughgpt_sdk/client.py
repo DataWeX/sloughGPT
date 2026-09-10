@@ -900,6 +900,73 @@ class SloughGPTClient:
         response = self._request("POST", f"/settings/training/presets/{name}/apply")
         return response.json()
 
+    def get_training_run(self, run_id: str) -> Dict[str, Any]:
+        """Get a single training run by ID."""
+        response = self._request("GET", f"/settings/training/runs/{run_id}")
+        return response.json()
+
+    def delete_training_run(self, run_id: str) -> Dict[str, Any]:
+        """Delete a specific training run by ID."""
+        response = self._request("DELETE", f"/settings/training/runs/{run_id}")
+        return response.json()
+
+    def filter_training_runs(
+        self,
+        model: Optional[str] = None,
+        method: Optional[str] = None,
+        converged: Optional[bool] = None,
+        min_quality: Optional[float] = None,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """Filter training runs by model, method, convergence, or quality."""
+        params = {"limit": limit}
+        if model:
+            params["model"] = model
+        if method:
+            params["method"] = method
+        if converged is not None:
+            params["converged"] = str(converged).lower()
+        if min_quality is not None:
+            params["min_quality"] = min_quality
+        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        response = self._request("GET", f"/settings/training/runs?{qs}")
+        return response.json()
+
+    def clear_training_history(self) -> Dict[str, Any]:
+        """Clear all training history."""
+        response = self._request("POST", "/settings/training/history/clear")
+        return response.json()
+
+    def add_run_tag(self, run_id: str, tag: str) -> Dict[str, Any]:
+        """Add a tag to a training run."""
+        response = self._request("POST", f"/settings/training/runs/{run_id}/tags?tag={tag}")
+        return response.json()
+
+    def remove_run_tag(self, run_id: str, tag: str) -> Dict[str, Any]:
+        """Remove a tag from a training run."""
+        response = self._request("DELETE", f"/settings/training/runs/{run_id}/tags/{tag}")
+        return response.json()
+
+    def set_run_notes(self, run_id: str, notes: str) -> Dict[str, Any]:
+        """Set notes on a training run."""
+        response = self._request("PUT", f"/settings/training/runs/{run_id}/notes?notes={notes}")
+        return response.json()
+
+    def get_all_tags(self) -> Dict[str, Any]:
+        """Get all unique tags across all training runs."""
+        response = self._request("GET", "/settings/training/tags")
+        return response.json()
+
+    def get_runs_by_tag(self, tag: str) -> Dict[str, Any]:
+        """Get all training runs with a specific tag."""
+        response = self._request("GET", f"/settings/training/tags/{tag}")
+        return response.json()
+
+    def export_training_run(self, run_id: str, format: str = "json") -> Dict[str, Any]:
+        """Export a single training run as JSON or YAML."""
+        response = self._request("GET", f"/settings/training/runs/{run_id}/export?format={format}")
+        return response.json()
+
     # ============ VQA ============
 
     def ask_question(self, image_path: str, question: str) -> Dict[str, Any]:

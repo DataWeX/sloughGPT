@@ -918,4 +918,139 @@ describe('SloughGPTClient', () => {
       expect(mockFetch.mock.calls[0][1].method).toBe('POST');
     });
   });
+
+  describe('getTrainingRun()', () => {
+    it('calls GET /settings/training/runs/:runId', async () => {
+      const mockData = { run_id: 'run-1', model: 'gpt2', quality_score: 0.85 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getTrainingRun('run-1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/run-1');
+    });
+  });
+
+  describe('deleteTrainingRun()', () => {
+    it('calls DELETE /settings/training/runs/:runId', async () => {
+      const mockData = { deleted: true, run_id: 'run-1' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.deleteTrainingRun('run-1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/run-1');
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+  });
+
+  describe('filterTrainingRuns()', () => {
+    it('calls GET /settings/training/runs with params', async () => {
+      const mockData = { runs: [], count: 0 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.filterTrainingRuns({ model: 'gpt2', limit: 10 });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs?model=gpt2&limit=10');
+    });
+  });
+
+  describe('clearTrainingHistory()', () => {
+    it('calls POST /settings/training/history/clear', async () => {
+      const mockData = { cleared: true, removed_count: 5 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.clearTrainingHistory();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/history/clear');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('addRunTag()', () => {
+    it('calls POST /settings/training/runs/:runId/tags', async () => {
+      const mockData = { run_id: 'run-1', tags: ['best'] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.addRunTag('run-1', 'best');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/run-1/tags?tag=best');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('removeRunTag()', () => {
+    it('calls DELETE /settings/training/runs/:runId/tags/:tag', async () => {
+      const mockData = { run_id: 'run-1', tags: [] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.removeRunTag('run-1', 'best');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/run-1/tags/best');
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+  });
+
+  describe('setRunNotes()', () => {
+    it('calls PUT /settings/training/runs/:runId/notes', async () => {
+      const mockData = { run_id: 'run-1', notes: 'test note' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.setRunNotes('run-1', 'test note');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/run-1/notes?notes=test');
+      expect(mockFetch.mock.calls[0][1].method).toBe('PUT');
+    });
+  });
+
+  describe('getAllTags()', () => {
+    it('calls GET /settings/training/tags', async () => {
+      const mockData = { tags: ['best', 'production'] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getAllTags();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/tags');
+    });
+  });
+
+  describe('getRunsByTag()', () => {
+    it('calls GET /settings/training/tags/:tag', async () => {
+      const mockData = { runs: [], count: 0, tag: 'best' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getRunsByTag('best');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/tags/best');
+    });
+  });
+
+  describe('exportTrainingRun()', () => {
+    it('calls GET /settings/training/runs/:runId/export', async () => {
+      const mockData = { run_id: 'run-1', format: 'json', content: '{}' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.exportTrainingRun('run-1', 'json');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/runs/run-1/export?format=json');
+    });
+  });
 });

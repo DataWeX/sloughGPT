@@ -111,6 +111,7 @@ def list_incomplete_models() -> List[str]:
 class DownloadStatus(str, Enum):
     QUEUED = "queued"
     DOWNLOADING = "downloading"
+    PAUSED = "paused"
     COMPLETE = "complete"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -184,6 +185,7 @@ class DownloadManager:
             return entry is not None and entry.status in (
                 DownloadStatus.QUEUED,
                 DownloadStatus.DOWNLOADING,
+                DownloadStatus.PAUSED,
             )
 
     def is_cached(self, model_id: str) -> bool:
@@ -201,6 +203,44 @@ class DownloadManager:
                 get_backend().on_cancel(model_id)
                 return True
             return False
+
+    def pause(self, model_id: str) -> bool:
+        """Pause an in-progress download.
+
+        The download can later be resumed with ``resume()``.
+        Returns True if the download was paused, False if not found or not pausable.
+        """
+        paused = False
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            if entry and entry.status == DownloadStatus.DOWNLOADING:
+                entry.status = DownloadStatus.PAUSED
+                paused = True
+        if paused:
+            self._notify_callbacks(model_id)
+        return paused
+
+    def resume(self, model_id: str) -> bool:
+        """Resume a paused download.
+
+        Re-queues the download so it can continue from where it left off.
+        Returns True if the download was resumed, False if not found or not resumable.
+        """
+        resumed = False
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            if entry and entry.status == DownloadStatus.PAUSED:
+                entry.status = DownloadStatus.QUEUED
+                resumed = True
+        if resumed:
+            self._notify_callbacks(model_id)
+        return resumed
+
+    def is_paused(self, model_id: str) -> bool:
+        """Check if a download is paused."""
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            return entry is not None and entry.status == DownloadStatus.PAUSED
 
     def _set_progress(self, model_id: str, **kwargs) -> None:
         with self._lock:
@@ -232,10 +272,12 @@ class DownloadManager:
         self,
         model_id: str,
         total_bytes_hint: int = 0,
+        max_retries: int = 3,
     ) -> Dict[str, Any]:
         """Download a resource via the configured backend.
 
         Registers with CancelManager so downloads appear in /operations.
+        Retries up to ``max_retries`` times on failure with exponential backoff.
         """
         backend = get_backend()
 
@@ -267,7 +309,9 @@ class DownloadManager:
         )
         mgr.start(op_id)
 
-        task = asyncio.create_task(self._download_worker(model_id, total_est, cancel_event))
+        task = asyncio.create_task(
+            self._download_worker(model_id, total_est, cancel_event, max_retries)
+        )
         self._tasks[model_id] = task
 
         try:
@@ -461,8 +505,12 @@ class DownloadManager:
         model_id: str,
         total_bytes_hint: int,
         cancel_event: Optional[threading.Event] = None,
+        max_retries: int = 3,
     ):
-        """Run the backend download in a thread executor, updating progress."""
+        """Run the backend download in a thread executor, updating progress.
+
+        Retries up to ``max_retries`` times on failure with exponential backoff.
+        """
         with self._lock:
             entry = self._downloads.get(model_id)
             if entry and entry.status == DownloadStatus.CANCELLED:
@@ -513,23 +561,60 @@ class DownloadManager:
                     "model_id": mid, "file": fpath, "error": str(e),
                 })
 
-        def _do_download():
-            backend = get_backend()
+        last_error = None
+        for attempt in range(max_retries + 1):
+            # Check cancellation before each attempt
+            with self._lock:
+                entry = self._downloads.get(model_id)
+                if entry and entry.status == DownloadStatus.CANCELLED:
+                    return {"status": "cancelled", "model_id": model_id}
 
-            def _cancel_check():
-                if cancel_event and cancel_event.is_set():
-                    raise InterruptedError("Download cancelled")
+            def _do_download():
+                backend = get_backend()
 
-            def _progress_cb_inner(mid, downloaded, total, speed):
-                _cancel_check()
-                _progress_cb(mid, downloaded, total, speed)
+                def _cancel_check():
+                    if cancel_event and cancel_event.is_set():
+                        raise InterruptedError("Download cancelled")
 
-            if backend.supports_compression(model_id):
-                backend.download_compressed(model_id, _progress_cb_inner, _file_cb)
-            else:
-                backend.download(model_id, _progress_cb_inner, _file_cb)
+                def _progress_cb_inner(mid, downloaded, total, speed):
+                    _cancel_check()
+                    _progress_cb(mid, downloaded, total, speed)
 
-        await asyncio.to_thread(_do_download)
+                if backend.supports_compression(model_id):
+                    backend.download_compressed(model_id, _progress_cb_inner, _file_cb)
+                else:
+                    backend.download(model_id, _progress_cb_inner, _file_cb)
+
+            try:
+                await asyncio.to_thread(_do_download)
+                # Success — break out of retry loop
+                last_error = None
+                break
+            except InterruptedError:
+                return {"status": "cancelled", "model_id": model_id}
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    wait = 2 ** attempt  # exponential backoff: 1s, 2s, 4s
+                    logger.warning(
+                        "Download %s failed (attempt %d/%d): %s — retrying in %ds",
+                        model_id, attempt + 1, max_retries + 1, e, wait,
+                    )
+                    self._set_progress(
+                        model_id,
+                        status=DownloadStatus.DOWNLOADING,
+                        error=f"Retry {attempt + 1}/{max_retries}: {e}",
+                    )
+                    self._notify_callbacks(model_id)
+                    await asyncio.sleep(wait)
+                else:
+                    logger.error(
+                        "Download %s failed after %d attempts: %s",
+                        model_id, max_retries + 1, e,
+                    )
+
+        if last_error is not None:
+            return {"status": "failed", "model_id": model_id, "error": str(last_error)}
 
         with self._lock:
             entry = self._downloads.get(model_id)

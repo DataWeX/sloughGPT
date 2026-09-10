@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from './http-client'
+import { apiGet, apiPatch, apiPost, apiDelete } from './http-client'
 
 export interface GenerationSettings {
   temperature: number
@@ -138,5 +138,49 @@ export const settingsController = {
 
   async applyTrainingPreset(name: string): Promise<{ preset: string; applied: Record<string, unknown> }> {
     return apiPost(`/settings/training/presets/${name}/apply`)
+  },
+
+  async getTrainingRun(runId: string): Promise<Record<string, unknown>> {
+    return apiGet(`/settings/training/runs/${runId}`)
+  },
+
+  async deleteTrainingRun(runId: string): Promise<{ deleted: boolean; run_id: string }> {
+    return apiDelete(`/settings/training/runs/${runId}`)
+  },
+
+  async filterTrainingRuns(params: Record<string, string | number> = {}): Promise<{ runs: Array<Record<string, unknown>>; count: number }> {
+    const qs = new URLSearchParams()
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== '' && v !== undefined && v !== null) qs.set(k, String(v))
+    }
+    return apiGet(`/settings/training/runs?${qs.toString()}`)
+  },
+
+  async clearTrainingHistory(): Promise<{ cleared: boolean; removed_count: number }> {
+    return apiPost('/settings/training/history/clear')
+  },
+
+  async addRunTag(runId: string, tag: string): Promise<Record<string, unknown>> {
+    return apiPost(`/settings/training/runs/${runId}/tags?tag=${encodeURIComponent(tag)}`)
+  },
+
+  async removeRunTag(runId: string, tag: string): Promise<Record<string, unknown>> {
+    return apiDelete(`/settings/training/runs/${runId}/tags/${encodeURIComponent(tag)}`)
+  },
+
+  async setRunNotes(runId: string, notes: string): Promise<Record<string, unknown>> {
+    return apiPut(`/settings/training/runs/${runId}/notes?notes=${encodeURIComponent(notes)}`)
+  },
+
+  async getAllTags(): Promise<{ tags: string[] }> {
+    return apiGet('/settings/training/tags')
+  },
+
+  async getRunsByTag(tag: string): Promise<{ runs: Array<Record<string, unknown>>; count: number; tag: string }> {
+    return apiGet(`/settings/training/tags/${encodeURIComponent(tag)}`)
+  },
+
+  async exportTrainingRun(runId: string, format: string = 'json'): Promise<{ run_id: string; format: string; content: string }> {
+    return apiGet(`/settings/training/runs/${runId}/export?format=${format}`)
   },
 }

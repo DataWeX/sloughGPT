@@ -294,9 +294,11 @@ app.add_middleware(
 # heavy imports.
 from routers.dashboard import router as _dashboard_router
 from routers.health import router as _health_router
+from routers.consciousness import router as _consciousness_router
 from routers.status import router as _status_router
 
 app.include_router(_health_router)
+app.include_router(_consciousness_router)
 app.include_router(_status_router)
 app.include_router(_dashboard_router)
 # Health/status/dashboard routes are now registered pre-lifespan.

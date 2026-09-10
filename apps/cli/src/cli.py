@@ -928,7 +928,7 @@ def main():
         if _a.startswith("-"):
             break
         _cmd_parts.append(_a)
-    _cmd_path = " ".join(_cmd_parts[:2])
+    _cmd_path = _cmd_parts[0] if _cmd_parts else ""
 
     try:
         cli(obj={})

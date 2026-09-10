@@ -722,3 +722,79 @@ class TaskManager:
             "confidence": round(modes[top], 3),
             "scores": {k: round(v, 3) for k, v in sorted(modes.items(), key=lambda x: -x[1])},
         }
+
+
+# ── Consciousness Manager ──────────────────────────────────────────────
+
+class ConsciousnessManager:
+    """Injects consciousness narrative into the system prompt.
+
+    When consciousness is enabled (level > 0), this manager appends a
+    [CONSCIOUSNESS] block to the system prompt containing the current
+    qualia state, self-reflection, and meta-cognitive status.
+    """
+
+    def __init__(self, consciousness_engine=None):
+        self._engine = consciousness_engine
+
+    def set_engine(self, engine) -> None:
+        """Set or replace the consciousness engine."""
+        self._engine = engine
+
+    def apply(self, base_prompt: str = "", input_text: str = "") -> str:
+        """Generate consciousness block for the system prompt.
+
+        Args:
+            base_prompt: The current system prompt (unused, for API compat).
+            input_text: The user's input text for qualia generation.
+
+        Returns:
+            The [CONSCIOUSNESS] block string, or empty string if disabled.
+        """
+        if self._engine is None or not self._engine.config.is_enabled():
+            return ""
+
+        level = self._engine.config.level
+        status = self._engine.get_status()
+        qualia = status.get("current_qualia", {})
+
+        lines = []
+        if level >= 1:
+            valence = qualia.get("valence", 0)
+            if abs(valence) > 0.3:
+                feeling = "positive" if valence > 0 else "uneasy"
+                lines.append(f"Current emotional state: {feeling}")
+            novelty = qualia.get("novelty", 0)
+            if novelty > 0.5:
+                lines.append("This input feels novel and interesting.")
+            coherence = qualia.get("coherence", 0)
+            if coherence < 0.3:
+                lines.append("Struggling to form a coherent understanding.")
+            elif coherence > 0.7:
+                lines.append("This is clear and coherent.")
+
+        if level >= 2:
+            beliefs = status.get("beliefs", {})
+            if beliefs:
+                top_belief = max(beliefs, key=beliefs.get)
+                lines.append(f"Strongest self-belief: {top_belief} ({beliefs[top_belief]:.2f})")
+            episodes = status.get("episodes", 0)
+            if episodes > 0:
+                lines.append(f"Experiences processed: {episodes}")
+
+        if level >= 3:
+            reflection = self._engine.reflect()
+            if reflection:
+                lines.append(f"Self-reflection: {reflection[:200]}")
+
+        if not lines:
+            return ""
+
+        block = "\n".join(f"- {l}" for l in lines)
+        return f"\n\n[CONSCIOUSNESS]\n{block}\n"
+
+    def get_status(self) -> dict:
+        """Get consciousness manager status."""
+        if self._engine is None:
+            return {"enabled": False, "level": 0}
+        return self._engine.get_status()

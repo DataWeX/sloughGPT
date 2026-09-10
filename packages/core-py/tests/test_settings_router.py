@@ -248,3 +248,111 @@ class TestTrainingPresets:
         assert data["preset"] == "quick-finetune"
         assert "applied" in data
         assert "settings" in data
+
+
+class TestTrainingRunManagement:
+    def test_get_run_not_found(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/runs/nonexistent")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data
+
+    def test_delete_run_not_found(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.delete("/settings/training/runs/nonexistent")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["deleted"] is False
+
+    def test_filter_runs(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/runs")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "runs" in data
+        assert "count" in data
+        assert isinstance(data["runs"], list)
+
+    def test_filter_runs_by_model(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/runs?model=gpt2")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "runs" in data
+
+    def test_clear_history(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/training/history/clear")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["cleared"] is True
+        assert "removed_count" in data
+
+
+class TestTrainingRunTags:
+    def test_add_tag_run_not_found(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/training/runs/nonexistent/tags?tag=best")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data
+
+    def test_remove_tag_run_not_found(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.delete("/settings/training/runs/nonexistent/tags/best")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data
+
+    def test_set_notes_run_not_found(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.put("/settings/training/runs/nonexistent/notes?notes=test")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data
+
+    def test_get_all_tags(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/tags")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "tags" in data
+        assert isinstance(data["tags"], list)
+
+    def test_get_runs_by_tag(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/tags/best")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "runs" in data
+        assert "count" in data
+        assert data["tag"] == "best"
+
+
+class TestExportTrainingRun:
+    def test_export_run_not_found(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/runs/nonexistent/export")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data
+
+    def test_export_run_json(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/runs/nonexistent/export?format=json")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data

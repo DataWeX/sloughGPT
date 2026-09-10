@@ -93,4 +93,18 @@ describe('SystemStatusCard', () => {
     renderCard()
     expect(screen.getByText('—')).toBeDefined()
   })
+
+  it('shows Degraded when health_status is degraded', () => {
+    renderCard({ ...base, health_status: 'degraded', health_score: 65 })
+    expect(screen.getByText('Degraded')).toBeDefined()
+    expect(screen.queryByText('Healthy')).toBeNull()
+    expect(screen.queryByText('Error')).toBeNull()
+  })
+
+  it('shows Error when health_status is unhealthy', () => {
+    renderCard({ ...base, health_status: 'unhealthy', health_score: 30 })
+    expect(screen.getByText('Error')).toBeDefined()
+    expect(screen.queryByText('Healthy')).toBeNull()
+    expect(screen.queryByText('Degraded')).toBeNull()
+  })
 })

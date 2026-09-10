@@ -27,7 +27,14 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.learner import router  # noqa: E402
-from conftest import build_test_app
+
+# Import build_test_app from the core-py tests conftest directly
+import importlib.util as _iu
+_core_conftest = Path(__file__).resolve().parent / "conftest.py"
+_spec = _iu.spec_from_file_location("_core_conftest", _core_conftest)
+_mod = _iu.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+build_test_app = _mod.build_test_app
 
 # ---------------------------------------------------------------------------
 # Helpers

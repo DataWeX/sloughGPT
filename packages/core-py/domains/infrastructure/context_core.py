@@ -76,6 +76,7 @@ Be concise, accurate, and helpful."""
         memory_manager: Optional[Any] = None,
         style_manager: Optional[Any] = None,
         task_manager: Optional[Any] = None,
+        consciousness_manager: Optional[Any] = None,
     ):
         self.max_tokens = max_tokens
 
@@ -111,6 +112,7 @@ Be concise, accurate, and helpful."""
         self._memory = memory_manager
         self._style = style_manager
         self._task = task_manager
+        self._consciousness = consciousness_manager
 
     def set_managers(
         self,
@@ -118,6 +120,7 @@ Be concise, accurate, and helpful."""
         memory: Optional[Any] = None,
         style: Optional[Any] = None,
         task: Optional[Any] = None,
+        consciousness: Optional[Any] = None,
     ) -> None:
         """Inject context managers after construction."""
         if personality:
@@ -128,6 +131,8 @@ Be concise, accurate, and helpful."""
             self._style = style
         if task:
             self._task = task
+        if consciousness:
+            self._consciousness = consciousness
 
     def _apply_managers(self, query: str = "") -> Dict[str, Any]:
         """Build manager-generated context modifications.
@@ -147,6 +152,9 @@ Be concise, accurate, and helpful."""
 
         if self._task:
             mods["system_extra"] += self._task.apply(self.system_prompt)
+
+        if self._consciousness:
+            mods["system_extra"] += self._consciousness.apply(self.system_prompt, input_text=query)
 
         return mods
 
@@ -535,13 +543,14 @@ def get_context_core() -> ContextCore:
             if _context_core is None:
                 from domains.context.managers import (
                     PersonalityManager, MemoryManager,
-                    StyleManager, TaskManager,
+                    StyleManager, TaskManager, ConsciousnessManager,
                 )
                 _context_core = ContextCore(
                     personality_manager=PersonalityManager(),
                     memory_manager=MemoryManager(),
                     style_manager=StyleManager(),
                     task_manager=TaskManager(),
+                    consciousness_manager=ConsciousnessManager(),
                 )
                 # Auto-select vector store from env vars
                 import os

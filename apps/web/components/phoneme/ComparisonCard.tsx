@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
@@ -16,23 +16,35 @@ export default function ComparisonCard() {
   const [result1, setResult1] = useState<PhonemeEncodeResult | null>(null)
   const [result2, setResult2] = useState<PhonemeEncodeResult | null>(null)
   const addToast = useToastStore(s => s.addToast)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const handleCompare = useCallback(async () => {
-    if (!word1.trim() || !word2.trim()) return
+  const doCompare = useCallback(async (w1: string, w2: string, l: PhonemeLanguage) => {
+    if (!w1.trim() || !w2.trim()) { setResult1(null); setResult2(null); return }
     setLoading(true)
     try {
       const [r1, r2] = await Promise.all([
-        phonemeController.encode(word1, language),
-        phonemeController.encode(word2, language),
+        phonemeController.encode(w1, l),
+        phonemeController.encode(w2, l),
       ])
       setResult1(r1)
       setResult2(r2)
-    } catch (err) {
-      addToast('Comparison failed', 'error')
+    } catch {
+      // silent — debounce will retry
     } finally {
       setLoading(false)
     }
-  }, [word1, word2, language, addToast])
+  }, [])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => doCompare(word1, word2, language), 400)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [word1, word2, language, doCompare])
+
+  const handleCompare = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    doCompare(word1, word2, language)
+  }, [word1, word2, language, doCompare])
 
   const common = result1 && result2
     ? result1.phonemes.filter(p => result2.phonemes.includes(p))
@@ -48,7 +60,7 @@ export default function ComparisonCard() {
         <CardTitle>Compare Words</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <Input
             value={word1}
             onChange={e => setWord1(e.target.value)}
@@ -79,7 +91,7 @@ export default function ComparisonCard() {
         </div>
 
         {result1 && result2 && (
-          <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+          <div className="space-y-4 p-4 rounded-lg bg-muted/50 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="grid grid-cols-2 gap-6">
               <div>
                 <p className="text-sm font-medium">{word1}</p>

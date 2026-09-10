@@ -53,6 +53,10 @@ class TrainingOutcome:
     # Derived quality score (0-1, higher = better)
     quality_score: float = 0.0
 
+    # User annotations
+    tags: List[str] = field(default_factory=list)
+    notes: str = ""
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -119,6 +123,69 @@ class TrainingOutcomeTracker:
     def get_outcomes_for_model(self, model: str) -> List[TrainingOutcome]:
         """Get all outcomes for a specific model."""
         return [o for o in self.load_outcomes() if o.model == model]
+
+    def update_run(self, run_id: str, **kwargs) -> Optional[TrainingOutcome]:
+        """Update a training run's tags, notes, or other mutable fields."""
+        outcomes = self.load_outcomes()
+        target = None
+        for o in outcomes:
+            if o.run_id == run_id:
+                target = o
+                break
+        if not target:
+            return None
+        for key, value in kwargs.items():
+            if hasattr(target, key):
+                setattr(target, key, value)
+        # Rewrite history
+        self.history_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.history_path, "w") as f:
+            for o in outcomes:
+                f.write(json.dumps(o.to_dict()) + "\n")
+        return target
+
+    def add_tag(self, run_id: str, tag: str) -> Optional[TrainingOutcome]:
+        """Add a tag to a training run."""
+        outcomes = self.load_outcomes()
+        target = next((o for o in outcomes if o.run_id == run_id), None)
+        if not target:
+            return None
+        if tag not in target.tags:
+            target.tags.append(tag)
+            self.history_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.history_path, "w") as f:
+                for o in outcomes:
+                    f.write(json.dumps(o.to_dict()) + "\n")
+        return target
+
+    def remove_tag(self, run_id: str, tag: str) -> Optional[TrainingOutcome]:
+        """Remove a tag from a training run."""
+        outcomes = self.load_outcomes()
+        target = next((o for o in outcomes if o.run_id == run_id), None)
+        if not target:
+            return None
+        if tag in target.tags:
+            target.tags.remove(tag)
+            self.history_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.history_path, "w") as f:
+                for o in outcomes:
+                    f.write(json.dumps(o.to_dict()) + "\n")
+        return target
+
+    def set_notes(self, run_id: str, notes: str) -> Optional[TrainingOutcome]:
+        """Set notes on a training run."""
+        return self.update_run(run_id, notes=notes)
+
+    def get_outcomes_by_tag(self, tag: str) -> List[TrainingOutcome]:
+        """Get all outcomes with a specific tag."""
+        return [o for o in self.load_outcomes() if tag in o.tags]
+
+    def get_all_tags(self) -> List[str]:
+        """Get all unique tags across all runs."""
+        tags = set()
+        for o in self.load_outcomes():
+            tags.update(o.tags)
+        return sorted(tags)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get summary statistics of all outcomes."""

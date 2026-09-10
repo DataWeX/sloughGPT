@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge, Kbd } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
@@ -17,12 +17,13 @@ export default function ScoringCard() {
   const [result, setResult] = useState<PhonemeScoreResult | null>(null)
   const addToHistory = usePhonemeStore(s => s.addToHistory)
   const addToast = useToastStore(s => s.addToast)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const handleScore = useCallback(async () => {
-    if (!target.trim() || !spoken.trim()) return
+  const doScore = useCallback(async (t: string, s: string, l: PhonemeLanguage) => {
+    if (!t.trim() || !s.trim()) { setResult(null); return }
     setLoading(true)
     try {
-      const res = await phonemeController.score(target, spoken, language)
+      const res = await phonemeController.score(t, s, l)
       setResult(res)
       addToHistory({
         target: res.target,
@@ -32,12 +33,23 @@ export default function ScoringCard() {
         targetPhonemes: res.target_phonemes,
         spokenPhonemes: res.spoken_phonemes,
       })
-    } catch (err) {
-      addToast('Scoring failed', 'error')
+    } catch {
+      // silent — debounce will retry
     } finally {
       setLoading(false)
     }
-  }, [target, spoken, language, addToHistory, addToast])
+  }, [addToHistory])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => doScore(target, spoken, language), 400)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [target, spoken, language, doScore])
+
+  const handleScore = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    doScore(target, spoken, language)
+  }, [target, spoken, language, doScore])
 
   return (
     <Card>
@@ -45,7 +57,7 @@ export default function ScoringCard() {
         <CardTitle>Score Pronunciation</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <Input
             value={target}
             onChange={e => setTarget(e.target.value)}
@@ -77,7 +89,7 @@ export default function ScoringCard() {
         </div>
 
         {result && (
-          <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+          <div className="space-y-4 p-4 rounded-lg bg-muted/50 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <p className="text-2xl font-bold">{(result.score * 100).toFixed(0)}%</p>

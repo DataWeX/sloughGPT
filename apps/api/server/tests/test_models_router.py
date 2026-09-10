@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from routers.models import router as models_router, ModelsRouter
+from routers.models import router as models_router, ModelsRouter, _instance as _models_instance
 
 app = FastAPI()
 register_app_error_handler(app)
@@ -73,6 +73,7 @@ def mock_controller():
     }
 
     with patch("routers.models.get_models_controller", return_value=ctrl):
+        _models_instance._cache.clear()
         yield ctrl
 
 
@@ -546,7 +547,7 @@ class TestBackendManagement:
         data = _data(resp)
         assert "hf" in data
         assert "external" in data
-        assert data["hf"]["description"] == "HuggingFace Hub"
+        assert "HuggingFace Hub" in data["hf"]["description"]
 
     def test_get_active_backend(self):
         """Get active backend returns current backend type."""
@@ -572,3 +573,64 @@ class TestBackendManagement:
         """Switch to external backend returns 400 (requires server config)."""
         resp = client.post("/models/backends/active?backend_name=external")
         assert resp.status_code == 400
+
+
+# ── Backend discovery ────────────────────────────────────────────────────────
+
+class TestBackendDiscovery:
+    def test_list_backends_includes_all_types(self):
+        """List backends returns all backend types with capabilities."""
+        resp = client.get("/models/backends")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "hf" in data
+        assert "external" in data
+        assert "git" in data
+        assert "local" in data
+
+    def test_list_backends_has_capabilities(self):
+        """Each backend has capabilities."""
+        resp = client.get("/models/backends")
+        assert resp.status_code == 200
+        data = _data(resp)
+        for name, info in data.items():
+            assert "capabilities" in info
+            caps = info["capabilities"]
+            assert "compression" in caps
+            assert "cancel" in caps
+
+    def test_list_backends_active_flag(self):
+        """One backend is marked active."""
+        resp = client.get("/models/backends")
+        assert resp.status_code == 200
+        data = _data(resp)
+        active_count = sum(1 for info in data.values() if info.get("active"))
+        assert active_count == 1
+
+
+# ── Download history ─────────────────────────────────────────────────────────
+
+class TestDownloadHistory:
+    def test_download_history_empty(self):
+        """Download history returns empty list when no downloads."""
+        resp = client.get("/models/history")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "history" in data
+        assert isinstance(data["history"], list)
+
+    def test_download_history_has_limit(self):
+        """Download history respects limit parameter."""
+        resp = client.get("/models/history?limit=5")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert len(data["history"]) <= 5
+
+    def test_download_history_structure(self):
+        """Each history entry has expected fields."""
+        resp = client.get("/models/history")
+        assert resp.status_code == 200
+        data = _data(resp)
+        for entry in data["history"]:
+            assert "detail" in entry
+            assert "status" in entry

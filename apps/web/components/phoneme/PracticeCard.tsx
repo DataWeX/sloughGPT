@@ -63,6 +63,7 @@ export default function PracticeCard() {
   const [targetWord, setTargetWord] = useState('')
   const [attempt, setAttempt] = useState('')
   const [targetResult, setTargetResult] = useState<PhonemeEncodeResult | null>(null)
+  const [attemptResult, setAttemptResult] = useState<PhonemeEncodeResult | null>(null)
   const [scoreResult, setScoreResult] = useState<PhonemeScoreResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
@@ -70,12 +71,15 @@ export default function PracticeCard() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const attemptDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const addToHistory = usePhonemeStore(s => s.addToHistory)
+  const randomWordTrigger = usePhonemeStore(s => s.randomWordTrigger)
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
+      if (attemptDebounceRef.current) clearTimeout(attemptDebounceRef.current)
       if (mediaRecorderRef.current?.state === 'recording') {
         mediaRecorderRef.current.stop()
       }
@@ -92,12 +96,38 @@ export default function PracticeCard() {
     }
   }, [language])
 
+  const fetchAttempt = useCallback(async (word: string) => {
+    if (!word.trim()) { setAttemptResult(null); return }
+    try {
+      const res = await phonemeController.encode(word, language)
+      setAttemptResult(res)
+    } catch {
+      setAttemptResult(null)
+    }
+  }, [language])
+
   const handleWordChange = useCallback((word: string) => {
     setTargetWord(word)
     setScoreResult(null)
     setAttempt('')
+    setAttemptResult(null)
     fetchTarget(word)
   }, [fetchTarget])
+
+  useEffect(() => {
+    if (randomWordTrigger > 0) {
+      const words = PRACTICE_WORDS[language]
+      const word = words[Math.floor(Math.random() * words.length)]
+      handleWordChange(word)
+    }
+  }, [randomWordTrigger, language, handleWordChange])
+
+  const handleAttemptChange = useCallback((word: string) => {
+    setAttempt(word)
+    setScoreResult(null)
+    if (attemptDebounceRef.current) clearTimeout(attemptDebounceRef.current)
+    attemptDebounceRef.current = setTimeout(() => fetchAttempt(word), 300)
+  }, [fetchAttempt])
 
   const handleRandomWord = useCallback(() => {
     const words = PRACTICE_WORDS[language]
@@ -107,6 +137,7 @@ export default function PracticeCard() {
 
   const handleScore = useCallback(async () => {
     if (!targetWord.trim() || !attempt.trim()) return
+    if (attemptDebounceRef.current) clearTimeout(attemptDebounceRef.current)
     setLoading(true)
     try {
       const res = await phonemeController.score(targetWord, attempt, language)
@@ -173,7 +204,7 @@ export default function PracticeCard() {
           <CardTitle>Practice Mode</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Select value={language} onValueChange={v => setLanguage(v as PhonemeLanguage)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
@@ -198,7 +229,7 @@ export default function PracticeCard() {
           </div>
 
           {targetResult && (
-            <div className="p-3 rounded-lg bg-muted/50 space-y-2">
+            <div className="p-3 rounded-lg bg-muted/50 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Target:</span>
                 <span className="font-bold">{targetResult.text}</span>
@@ -231,10 +262,10 @@ export default function PracticeCard() {
           <CardTitle>Your Attempt</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Input
               value={attempt}
-              onChange={e => setAttempt(e.target.value)}
+              onChange={e => handleAttemptChange(e.target.value)}
               placeholder="Type how you would say it..."
               onKeyDown={e => e.key === 'Enter' && handleScore()}
               className="flex-1"
@@ -252,8 +283,19 @@ export default function PracticeCard() {
             </Button>
           </div>
 
+          {attemptResult && (
+            <div className="p-3 rounded-lg bg-muted/50 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+              <p className="text-sm font-medium text-muted-foreground">Your phonemes:</p>
+              <div className="flex flex-wrap gap-1">
+                {attemptResult.phonemes.map((p, i) => (
+                  <Badge key={i} variant="outline">{p}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           {scoreResult && (
-            <div className="p-4 rounded-lg bg-muted/50 space-y-3">
+            <div className="p-4 rounded-lg bg-muted/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
               <div className="flex items-center justify-between">
                 <span className="text-lg font-bold">{(scoreResult.score * 100).toFixed(0)}%</span>
                 <div className="flex gap-4 text-sm text-muted-foreground">

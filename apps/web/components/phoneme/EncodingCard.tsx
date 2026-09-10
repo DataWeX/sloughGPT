@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge, Kbd } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
@@ -13,19 +13,31 @@ export default function EncodingCard() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PhonemeEncodeResult | null>(null)
   const addToast = useToastStore(s => s.addToast)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const handleEncode = useCallback(async () => {
-    if (!text.trim()) return
+  const doEncode = useCallback(async (t: string, l: PhonemeLanguage) => {
+    if (!t.trim()) { setResult(null); return }
     setLoading(true)
     try {
-      const res = await phonemeController.encode(text, language)
+      const res = await phonemeController.encode(t, l)
       setResult(res)
-    } catch (err) {
-      addToast('Encoding failed', 'error')
+    } catch {
+      // silent — debounce will retry
     } finally {
       setLoading(false)
     }
-  }, [text, language, addToast])
+  }, [])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => doEncode(text, language), 300)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [text, language, doEncode])
+
+  const handleEncode = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    doEncode(text, language)
+  }, [text, language, doEncode])
 
   return (
     <Card>
@@ -33,7 +45,7 @@ export default function EncodingCard() {
         <CardTitle>Encode Text to Phonemes</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <Input
             value={text}
             onChange={e => setText(e.target.value)}
@@ -59,7 +71,7 @@ export default function EncodingCard() {
         </div>
 
         {result && (
-          <div className="space-y-3 p-4 rounded-lg bg-muted/50">
+          <div className="space-y-3 p-4 rounded-lg bg-muted/50 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground">Language:</span>
               <Badge variant="secondary">{result.language.toUpperCase()}</Badge>

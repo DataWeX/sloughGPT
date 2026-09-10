@@ -114,6 +114,12 @@ class ModelsRouter:
             path="/download/{model_id:path}/cancel", endpoint=self.cancel_download, methods=["POST"]
         )
         self.router.add_api_route(
+            path="/download/{model_id:path}/pause", endpoint=self.pause_download, methods=["POST"]
+        )
+        self.router.add_api_route(
+            path="/download/{model_id:path}/resume", endpoint=self.resume_download, methods=["POST"]
+        )
+        self.router.add_api_route(
             path="/download/{model_id:path}/verify", endpoint=self.verify_download, methods=["POST"]
         )
         self.router.add_api_route(
@@ -152,6 +158,11 @@ class ModelsRouter:
             path="/external/download",
             endpoint=self.download_external_model,
             methods=["POST"],
+        )
+        self.router.add_api_route(
+            path="/history",
+            endpoint=self.download_history,
+            methods=["GET"],
         )
         self.router.add_api_route(
             path="/backends",
@@ -727,6 +738,49 @@ class ModelsRouter:
         mgr = get_download_manager()
         mgr.cleanup_stale()
         return success_response(data=mgr.list_downloads())
+
+    @endpoint("models.download_history")
+    async def download_history(
+        self,
+        limit: int = 50,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict[str, Any]:
+        """Get download history (completed, failed, cancelled).
+
+        Args:
+            limit: Maximum number of entries to return (default 50).
+        """
+        from domains.infrastructure.event_buffer import get_event_buffer
+
+        event_buffer = get_event_buffer()
+        downloads = []
+
+        for event in event_buffer.recent(limit * 2):  # Get extra to filter
+            if event.get("category") == "DOWNLOAD":
+                detail = event.get("message", "")
+                entry = {
+                    "detail": detail,
+                    "timestamp": event.get("ts"),
+                }
+                # Parse status from detail
+                if "complete" in detail.lower():
+                    entry["status"] = "completed"
+                elif "failed" in detail.lower():
+                    entry["status"] = "failed"
+                elif "cancelled" in detail.lower():
+                    entry["status"] = "cancelled"
+                else:
+                    entry["status"] = "unknown"
+                downloads.append(entry)
+
+        # Sort by timestamp descending, limit results
+        downloads.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        downloads = downloads[:limit]
+
+        return success_response(data={
+            "history": downloads,
+            "total": len(downloads),
+        })
     @endpoint("models.cancel_download")
     async def cancel_download(
         self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
@@ -742,6 +796,38 @@ class ModelsRouter:
             return success_response(data={"model_id": model_id}, message="not_found")
         except Exception as e:
             classify_and_raise(e, source="models.download_cancel")
+
+    @endpoint("models.pause_download")
+    async def pause_download(
+        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict[str, Any]:
+        """Pause an in-progress download."""
+        try:
+            from domains.infrastructure.download_manager import get_download_manager
+
+            mgr = get_download_manager()
+            if mgr.pause(model_id):
+                safe_audit_log("model.pause", resource=model_id, detail="paused")
+                return success_response(data={"model_id": model_id}, message="paused")
+            return success_response(data={"model_id": model_id}, message="not_found")
+        except Exception as e:
+            classify_and_raise(e, source="models.download_pause")
+
+    @endpoint("models.resume_download")
+    async def resume_download(
+        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict[str, Any]:
+        """Resume a paused download."""
+        try:
+            from domains.infrastructure.download_manager import get_download_manager
+
+            mgr = get_download_manager()
+            if mgr.resume(model_id):
+                safe_audit_log("model.resume", resource=model_id, detail="resumed")
+                return success_response(data={"model_id": model_id}, message="resumed")
+            return success_response(data={"model_id": model_id}, message="not_found")
+        except Exception as e:
+            classify_and_raise(e, source="models.download_resume")
 
     @endpoint("models.verify_download")
     async def verify_download(
@@ -1060,31 +1146,87 @@ class ModelsRouter:
         self,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """List available download backends."""
+        """List available download backends with capabilities."""
         from domains.infrastructure.download_manager import get_backend
 
         backend = get_backend()
-        backends = {
-            "hf": {
-                "name": "hf",
-                "description": "HuggingFace Hub",
-                "active": isinstance(backend, type) and backend.__name__ == "HFDownloadBackend",
-            },
-            "external": {
-                "name": "external",
-                "description": "External HTTP servers",
-                "active": False,
+        backends = {}
+
+        # HuggingFace backend
+        hf_info = {
+            "name": "hf",
+            "description": "HuggingFace Hub (with SGZ1 compression)",
+            "capabilities": {
+                "compression": True,
+                "compressed_serve": True,
+                "cancel": True,
+                "progress": True,
             },
         }
+        try:
+            from domains.infrastructure.hf_hub import HFDownloadBackend
+            if isinstance(backend, HFDownloadBackend):
+                hf_info["active"] = True
+        except ImportError:
+            hf_info["available"] = False
+        backends["hf"] = hf_info
 
-        # Check if current backend is external
+        # External backend
+        ext_info = {
+            "name": "external",
+            "description": "External HTTP servers (with SGZ1 compression)",
+            "capabilities": {
+                "compression": True,
+                "compressed_serve": True,
+                "cancel": True,
+                "progress": True,
+            },
+        }
         try:
             from domains.infrastructure.external_download import ExternalDownloadBackend
             if isinstance(backend, ExternalDownloadBackend):
-                backends["hf"]["active"] = False
-                backends["external"]["active"] = True
+                ext_info["active"] = True
         except ImportError:
-            pass
+            ext_info["available"] = False
+        backends["external"] = ext_info
+
+        # Git backend
+        git_info = {
+            "name": "git",
+            "description": "Git repositories (GitHub, GitLab, etc.)",
+            "capabilities": {
+                "compression": False,
+                "compressed_serve": False,
+                "cancel": True,
+                "progress": False,
+            },
+        }
+        try:
+            from domains.infrastructure.git_download import GitBackend
+            if isinstance(backend, GitBackend):
+                git_info["active"] = True
+        except ImportError:
+            git_info["available"] = False
+        backends["git"] = git_info
+
+        # Local backend
+        local_info = {
+            "name": "local",
+            "description": "Local file copies",
+            "capabilities": {
+                "compression": False,
+                "compressed_serve": False,
+                "cancel": True,
+                "progress": True,
+            },
+        }
+        try:
+            from domains.infrastructure.local_download import LocalFileBackend
+            if isinstance(backend, LocalFileBackend):
+                local_info["active"] = True
+        except ImportError:
+            local_info["available"] = False
+        backends["local"] = local_info
 
         return success_response(data=backends)
 
@@ -1686,4 +1828,5 @@ class ModelsRouter:
 
         monitor = get_memory_pressure_monitor()
         return success_response(data=monitor.stats())
-router = ModelsRouter().router
+_instance = ModelsRouter()
+router = _instance.router

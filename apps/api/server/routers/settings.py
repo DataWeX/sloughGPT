@@ -146,6 +146,40 @@ class SettingsRouter:
             "/training/compare", self.compare_training_runs, methods=["GET"],
         )
 
+        # Training run management
+        self.router.add_api_route(
+            "/training/runs", self.filter_training_runs, methods=["GET"],
+        )
+        self.router.add_api_route(
+            "/training/runs/{run_id}", self.get_training_run, methods=["GET"],
+        )
+        self.router.add_api_route(
+            "/training/runs/{run_id}", self.delete_training_run, methods=["DELETE"],
+        )
+        self.router.add_api_route(
+            "/training/history/clear", self.clear_training_history, methods=["POST"],
+        )
+
+        # Training run tags and notes
+        self.router.add_api_route(
+            "/training/runs/{run_id}/tags", self.add_run_tag, methods=["POST"],
+        )
+        self.router.add_api_route(
+            "/training/runs/{run_id}/tags/{tag}", self.remove_run_tag, methods=["DELETE"],
+        )
+        self.router.add_api_route(
+            "/training/runs/{run_id}/notes", self.set_run_notes, methods=["PUT"],
+        )
+        self.router.add_api_route(
+            "/training/tags", self.get_all_tags, methods=["GET"],
+        )
+        self.router.add_api_route(
+            "/training/tags/{tag}", self.get_runs_by_tag, methods=["GET"],
+        )
+        self.router.add_api_route(
+            "/training/runs/{run_id}/export", self.export_training_run, methods=["GET"],
+        )
+
     # ── Handlers ────────────────────────────────────────────────────
 
     @endpoint("settings.get_all")
@@ -425,6 +459,167 @@ class SettingsRouter:
         safe_audit_log("settings.apply_preset", resource="training", detail=preset_name)
         from dataclasses import asdict
         return success_response(data={"preset": preset_name, "applied": config, "settings": asdict(ps.settings.training)})
+
+    @endpoint("settings.get_training_run")
+    async def get_training_run(self, run_id: str) -> dict:
+        """Get a single training run by ID."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        outcomes = tracker.load_outcomes()
+        run = next((o for o in outcomes if o.run_id == run_id), None)
+        if not run:
+            return success_response(data={"error": f"Run '{run_id}' not found"})
+        return success_response(data=run.to_dict())
+
+    @endpoint("settings.delete_training_run")
+    async def delete_training_run(
+        self,
+        run_id: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Delete a specific training run by ID."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        import json
+        tracker = TrainingOutcomeTracker()
+        outcomes = tracker.load_outcomes()
+        filtered = [o for o in outcomes if o.run_id != run_id]
+        if len(filtered) == len(outcomes):
+            return success_response(data={"error": f"Run '{run_id}' not found", "deleted": False})
+        # Rewrite history without the deleted run
+        tracker.history_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(tracker.history_path, "w") as f:
+            for o in filtered:
+                f.write(json.dumps(o.to_dict()) + "\n")
+        safe_audit_log("settings.delete_run", resource="training", detail=run_id)
+        return success_response(data={"deleted": True, "run_id": run_id})
+
+    @endpoint("settings.filter_training_runs")
+    async def filter_training_runs(
+        self,
+        model: str | None = None,
+        method: str | None = None,
+        converged: bool | None = None,
+        min_quality: float | None = None,
+        limit: int = 50,
+    ) -> dict:
+        """Filter training runs by model, method, convergence, or quality."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        outcomes = tracker.load_outcomes()
+        if model:
+            outcomes = [o for o in outcomes if o.model == model]
+        if method:
+            outcomes = [o for o in outcomes if o.method == method]
+        if converged is not None:
+            outcomes = [o for o in outcomes if o.converged == converged]
+        if min_quality is not None:
+            outcomes = [o for o in outcomes if o.quality_score >= min_quality]
+        outcomes = outcomes[-limit:]
+        return success_response(data={
+            "runs": [o.to_dict() for o in outcomes],
+            "count": len(outcomes),
+        })
+
+    @endpoint("settings.clear_training_history")
+    async def clear_training_history(
+        self,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Clear all training history."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        count = tracker.clear()
+        safe_audit_log("settings.clear_history", resource="training", detail=f"{count} runs removed")
+        return success_response(data={"cleared": True, "removed_count": count})
+
+    @endpoint("settings.add_run_tag")
+    async def add_run_tag(
+        self,
+        run_id: str,
+        tag: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Add a tag to a training run."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        run = tracker.add_tag(run_id, tag)
+        if not run:
+            return success_response(data={"error": f"Run '{run_id}' not found"})
+        safe_audit_log("settings.add_tag", resource="training", detail=f"{run_id}: {tag}")
+        return success_response(data=run.to_dict())
+
+    @endpoint("settings.remove_run_tag")
+    async def remove_run_tag(
+        self,
+        run_id: str,
+        tag: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Remove a tag from a training run."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        run = tracker.remove_tag(run_id, tag)
+        if not run:
+            return success_response(data={"error": f"Run '{run_id}' not found"})
+        safe_audit_log("settings.remove_tag", resource="training", detail=f"{run_id}: {tag}")
+        return success_response(data=run.to_dict())
+
+    @endpoint("settings.set_run_notes")
+    async def set_run_notes(
+        self,
+        run_id: str,
+        notes: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Set notes on a training run."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        run = tracker.set_notes(run_id, notes)
+        if not run:
+            return success_response(data={"error": f"Run '{run_id}' not found"})
+        safe_audit_log("settings.set_notes", resource="training", detail=run_id)
+        return success_response(data=run.to_dict())
+
+    @endpoint("settings.get_all_tags")
+    async def get_all_tags(self) -> dict:
+        """Get all unique tags across all training runs."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        tags = tracker.get_all_tags()
+        return success_response(data={"tags": tags})
+
+    @endpoint("settings.get_runs_by_tag")
+    async def get_runs_by_tag(self, tag: str) -> dict:
+        """Get all training runs with a specific tag."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        runs = tracker.get_outcomes_by_tag(tag)
+        return success_response(data={
+            "runs": [o.to_dict() for o in runs],
+            "count": len(runs),
+            "tag": tag,
+        })
+
+    @endpoint("settings.export_training_run")
+    async def export_training_run(self, run_id: str, format: str = "json") -> dict:
+        """Export a single training run as JSON or YAML."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        outcomes = tracker.load_outcomes()
+        run = next((o for o in outcomes if o.run_id == run_id), None)
+        if not run:
+            return success_response(data={"error": f"Run '{run_id}' not found"})
+        run_dict = run.to_dict()
+        if format == "yaml":
+            try:
+                import yaml
+                content = yaml.dump(run_dict, default_flow_style=False)
+            except ImportError:
+                content = str(run_dict)
+        else:
+            import json
+            content = json.dumps(run_dict, indent=2)
+        return success_response(data={"run_id": run_id, "format": format, "content": content})
 
 
 router = SettingsRouter().router

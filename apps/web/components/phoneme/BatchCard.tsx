@@ -60,7 +60,7 @@ export default function BatchCard() {
         <CardTitle>Batch Operations</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <Select value={mode} onValueChange={v => setMode(v as 'encode' | 'score')}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
@@ -96,7 +96,7 @@ export default function BatchCard() {
             </Button>
 
             {encodeResults.length > 0 && (
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                 {encodeResults.map((r, i) => (
                   <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 text-sm">
                     <span className="font-medium min-w-[80px]">{r.text}</span>
@@ -124,7 +124,7 @@ export default function BatchCard() {
             </Button>
 
             {scoreResults.length > 0 && (
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                 {scoreResults.map((r, i) => (
                   <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 text-sm">
                     <span className="font-medium min-w-[80px]">{r.target}</span>

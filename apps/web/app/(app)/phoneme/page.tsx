@@ -13,7 +13,10 @@ import DetectLanguageCard from '@/components/phoneme/DetectLanguageCard'
 import QuizCard from '@/components/phoneme/QuizCard'
 import SynthesisCard from '@/components/phoneme/SynthesisCard'
 import HistoryCard from '@/components/phoneme/HistoryCard'
+import PhonemeReference from '@/components/phoneme/PhonemeReference'
+import TabErrorBoundary from '@/components/phoneme/TabErrorBoundary'
 import { usePhonemeShortcuts } from '@/hooks/usePhonemeShortcuts'
+import { usePhonemeStore } from '@/lib/phoneme-store'
 
 const TABS = [
   { value: 'encode', label: 'Encode', shortcut: '1' },
@@ -29,6 +32,8 @@ const TABS = [
 
 export default function PhonemePage() {
   const [activeTab, setActiveTab] = useState('encode')
+  const triggerRandomWord = usePhonemeStore(s => s.triggerRandomWord)
+  const clearHistory = usePhonemeStore(s => s.clearHistory)
 
   const goToTab = useCallback((value: string) => {
     setActiveTab(value)
@@ -44,6 +49,13 @@ export default function PhonemePage() {
     onQuiz: () => goToTab('quiz'),
     onSynthesize: () => goToTab('synthesize'),
     onHistory: () => goToTab('history'),
+    onRandomWord: () => {
+      goToTab('practice')
+      triggerRandomWord()
+    },
+    onClear: () => {
+      clearHistory()
+    },
   })
 
   return (
@@ -51,10 +63,15 @@ export default function PhonemePage() {
       title="Phoneme Encoder"
       subtitle="Multi-language phoneme encoding, pronunciation scoring, and TTS"
       headerRight={
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Shortcuts:</span>
+        <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
           <Kbd>Ctrl+1-9</Kbd>
-          <span>switch tabs</span>
+          <span>tabs</span>
+          <span className="text-border">|</span>
+          <Kbd>Ctrl+Shift+R</Kbd>
+          <span>random</span>
+          <span className="text-border">|</span>
+          <Kbd>Ctrl+Shift+X</Kbd>
+          <span>clear</span>
         </div>
       }
     >
@@ -68,42 +85,46 @@ export default function PhonemePage() {
           ))}
         </TabsList>
 
-        <TabsContent value="encode">
-          <EncodingCard />
-        </TabsContent>
+        <div className="animate-in fade-in duration-200" key={activeTab}>
+          <TabsContent value="encode">
+            <TabErrorBoundary tabName="Encode"><EncodingCard /></TabErrorBoundary>
+          </TabsContent>
 
-        <TabsContent value="score">
-          <ScoringCard />
-        </TabsContent>
+          <TabsContent value="score">
+            <TabErrorBoundary tabName="Score"><ScoringCard /></TabErrorBoundary>
+          </TabsContent>
 
-        <TabsContent value="compare">
-          <ComparisonCard />
-        </TabsContent>
+          <TabsContent value="compare">
+            <TabErrorBoundary tabName="Compare"><ComparisonCard /></TabErrorBoundary>
+          </TabsContent>
 
-        <TabsContent value="practice">
-          <PracticeCard />
-        </TabsContent>
+          <TabsContent value="practice">
+            <TabErrorBoundary tabName="Practice"><PracticeCard /></TabErrorBoundary>
+          </TabsContent>
 
-        <TabsContent value="batch">
-          <BatchCard />
-        </TabsContent>
+          <TabsContent value="batch">
+            <TabErrorBoundary tabName="Batch"><BatchCard /></TabErrorBoundary>
+          </TabsContent>
 
-        <TabsContent value="detect">
-          <DetectLanguageCard />
-        </TabsContent>
+          <TabsContent value="detect">
+            <TabErrorBoundary tabName="Detect"><DetectLanguageCard /></TabErrorBoundary>
+          </TabsContent>
 
-        <TabsContent value="quiz">
-          <QuizCard />
-        </TabsContent>
+          <TabsContent value="quiz">
+            <TabErrorBoundary tabName="Quiz"><QuizCard /></TabErrorBoundary>
+          </TabsContent>
 
-        <TabsContent value="synthesize">
-          <SynthesisCard />
-        </TabsContent>
+          <TabsContent value="synthesize">
+            <TabErrorBoundary tabName="Synthesize"><SynthesisCard /></TabErrorBoundary>
+          </TabsContent>
 
-        <TabsContent value="history">
-          <HistoryCard />
-        </TabsContent>
+          <TabsContent value="history">
+            <TabErrorBoundary tabName="History"><HistoryCard /></TabErrorBoundary>
+          </TabsContent>
+        </div>
       </Tabs>
+
+      <PhonemeReference />
     </PageContainer>
   )
 }

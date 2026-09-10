@@ -19,12 +19,16 @@ interface PhonemeStore {
   history: HistoryEntry[]
   quizScore: number
   quizTotal: number
+  quizStreak: number
+  quizBestStreak: number
+  randomWordTrigger: number
   addToHistory: (entry: Omit<HistoryEntry, 'id' | 'timestamp'>) => void
   clearHistory: () => void
   exportHistory: () => string
   importHistory: (json: string) => void
   incrementQuizScore: (correct: boolean) => void
   resetQuiz: () => void
+  triggerRandomWord: () => void
 }
 
 const STORAGE_KEY = 'sloughgpt-phoneme-history'
@@ -52,6 +56,9 @@ const phonemeStore = createStore<PhonemeStore>((set, get) => ({
   history: loadHistory(),
   quizScore: 0,
   quizTotal: 0,
+  quizStreak: 0,
+  quizBestStreak: 0,
+  randomWordTrigger: 0,
 
   addToHistory: (entry) => {
     const id = `hist_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
@@ -85,14 +92,23 @@ const phonemeStore = createStore<PhonemeStore>((set, get) => ({
   },
 
   incrementQuizScore: (correct: boolean) => {
-    set(prev => ({
-      quizScore: prev.quizScore + (correct ? 1 : 0),
-      quizTotal: prev.quizTotal + 1,
-    }))
+    set(prev => {
+      const newStreak = correct ? prev.quizStreak + 1 : 0
+      return {
+        quizScore: prev.quizScore + (correct ? 1 : 0),
+        quizTotal: prev.quizTotal + 1,
+        quizStreak: newStreak,
+        quizBestStreak: Math.max(prev.quizBestStreak, newStreak),
+      }
+    })
   },
 
   resetQuiz: () => {
-    set({ quizScore: 0, quizTotal: 0 })
+    set({ quizScore: 0, quizTotal: 0, quizStreak: 0, quizBestStreak: 0 })
+  },
+
+  triggerRandomWord: () => {
+    set(prev => ({ randomWordTrigger: prev.randomWordTrigger + 1 }))
   },
 }))
 
