@@ -52,15 +52,11 @@ describe('ExplainPage', () => {
     expect(screen.getByRole('button', { name: /^Explain$/ })).toBeDefined()
   })
 
-  it('shows toast when submitting empty form', async () => {
+it('disables the explain button with empty form', async () => {
     render(<ExplainPage />)
     
     const explainButton = screen.getByRole('button', { name: /^Explain$/ })
-    fireEvent.click(explainButton)
-
-    await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Type something to explain', 'info')
-    })
+    expect(explainButton.hasAttribute('disabled')).toBe(true)
   })
 
   it('calls generateTool when topic is provided', async () => {

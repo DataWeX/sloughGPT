@@ -59,15 +59,11 @@ describe('WritingAssistantPage', () => {
     expect(screen.getByPlaceholderText(/tell me what you want to write about/i)).toBeDefined()
   })
 
-  it('shows toast when clicking write with empty input', async () => {
+  it('disables write button when input is empty', () => {
     render(<WritingAssistantPage />)
     
     const writeButton = screen.getByRole('button', { name: /^Write$/i })
-    fireEvent.click(writeButton)
-
-    await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Write something first', 'info')
-    })
+    expect(writeButton).toBeDisabled()
   })
 
   it('calls generateTool when writing with input', async () => {

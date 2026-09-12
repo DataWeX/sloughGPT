@@ -44,7 +44,7 @@ describe('BrainstormPage', () => {
 
   it('has an input field for typing', () => {
     render(<BrainstormPage />)
-    expect(screen.getByPlaceholderText(/type your thought/i)).toBeDefined()
+    expect(screen.getByPlaceholderText(/what's on your mind/i)).toBeDefined()
   })
 
   it('has a send button', () => {
@@ -58,7 +58,7 @@ describe('BrainstormPage', () => {
 
     render(<BrainstormPage />)
     
-    const input = screen.getByPlaceholderText(/type your thought/i)
+    const input = screen.getByPlaceholderText(/What/i)
     fireEvent.change(input, { target: { value: 'Test idea' } })
     
     const sendButton = screen.getByRole('button', { name: /send/i })
@@ -75,7 +75,7 @@ describe('BrainstormPage', () => {
 
     render(<BrainstormPage />)
     
-    const input = screen.getByPlaceholderText(/type your thought/i)
+    const input = screen.getByPlaceholderText(/What/i)
     fireEvent.change(input, { target: { value: 'Test idea' } })
     
     const sendButton = screen.getByRole('button', { name: /send/i })
