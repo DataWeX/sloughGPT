@@ -1,6 +1,11 @@
-"""Backward-compatibility shim — imports from the new ``auth`` package."""
+"""auth — User, Tenant, Workspace, RBAC models.
 
-from auth import (
+Public API:
+    Role, Permission, UserRole, User, Tenant, Workspace, WorkspaceMember
+    RBAC, get_rbac
+"""
+
+from auth._internal.models import (
     Role,
     Permission,
     UserRole,
@@ -8,9 +13,8 @@ from auth import (
     Tenant,
     Workspace,
     WorkspaceMember,
-    RBAC,
-    get_rbac,
 )
+from auth._internal.rbac import RBAC, get_rbac
 
 __all__ = [
     "Role",
