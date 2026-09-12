@@ -165,7 +165,7 @@ def enrich_with_knowledge(
     if _is_casual_small_talk(user_message):
         return {"facts": [], "source": "none", "topics": []}
 
-    from knowledge._internal.knowledge import get_knowledge_memory
+    from domain.knowledge._internal.knowledge import get_knowledge_memory
     memory = get_knowledge_memory()
 
     def _relevant(results, query):
@@ -195,7 +195,7 @@ def enrich_with_knowledge(
 
     if auto_search and _needs_web_search(user_message):
         try:
-            from knowledge._internal.knowledge import get_knowledge_ingestor
+            from domain.knowledge._internal.knowledge import get_knowledge_ingestor
             ingestor = get_knowledge_ingestor()
             ingestor.search_and_ingest(user_message, max_results=2)
             results = memory.search(user_message, top_k=max_facts)

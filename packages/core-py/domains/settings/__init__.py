@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``settings`` package."""
+"""Backward-compatibility shim — imports from the new ``domain.settings`` package."""
 
-from settings import (
+from domain.settings import (
     GenerationSettings,
     TrainingSettings,
     AdaptiveSettings,

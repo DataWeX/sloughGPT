@@ -17,14 +17,14 @@ Usage:
 
 from __future__ import annotations
 
-from voice._internal.speech import (
+from domain.voice._internal.speech import (
     TranscriptionResult,
     SpeechRecognizer,
     BrowserSpeechRecognizer,
     ServerSpeechRecognizer,
     get_speech_recognizer,
 )
-from voice._internal.audio_filter import (
+from domain.voice._internal.audio_filter import (
     FilterMode,
     AudioFilterConfig,
     FilterResult,
@@ -34,16 +34,16 @@ from voice._internal.audio_filter import (
     detect_voice_activity,
     apply_audio_filter,
 )
-from voice._internal.phoneme_encoder import (
+from domain.voice._internal.phoneme_encoder import (
     PhonemeEncoder,
     NUM_PHONEMES,
     text_to_phonemes,
 )
-from voice._internal.unified_phoneme_encoder import (
+from domain.voice._internal.unified_phoneme_encoder import (
     UnifiedPhonemeEncoder,
     detect_language,
 )
-from voice._internal.tts import (
+from domain.voice._internal.tts import (
     parse_ssml,
     SpectrogramDecoder,
     GriffinLimVocoder,

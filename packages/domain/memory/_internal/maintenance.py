@@ -22,8 +22,8 @@ import asyncio
 import logging
 from typing import Optional
 
-from memory._internal.config import MemoryConfig
-from memory._internal.task_memory import prune_archive, submit_memory_consolidate
+from domain.memory._internal.config import MemoryConfig
+from domain.memory._internal.task_memory import prune_archive, submit_memory_consolidate
 
 logger = logging.getLogger("slo.memory_maintenance")
 

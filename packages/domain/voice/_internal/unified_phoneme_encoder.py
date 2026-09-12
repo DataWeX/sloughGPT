@@ -10,14 +10,14 @@ from __future__ import annotations
 from typing import Optional
 import numpy as np
 
-from voice._internal.phoneme_encoder import PhonemeEncoder, BOS as EN_BOS, EOS as EN_EOS, PAD as EN_PAD
-from voice._internal.german_phoneme_encoder import (
+from domain.voice._internal.phoneme_encoder import PhonemeEncoder, BOS as EN_BOS, EOS as EN_EOS, PAD as EN_PAD
+from domain.voice._internal.german_phoneme_encoder import (
     GermanPhonemeEncoder, BOS as DE_BOS, EOS as DE_EOS, PAD as DE_PAD,
 )
-from voice._internal.french_phoneme_encoder import FrenchPhonemeEncoder
-from voice._internal.spanish_phoneme_encoder import SpanishPhonemeEncoder
-from voice._internal.italian_phoneme_encoder import ItalianPhonemeEncoder
-from voice._internal.portuguese_phoneme_encoder import PortuguesePhonemeEncoder
+from domain.voice._internal.french_phoneme_encoder import FrenchPhonemeEncoder
+from domain.voice._internal.spanish_phoneme_encoder import SpanishPhonemeEncoder
+from domain.voice._internal.italian_phoneme_encoder import ItalianPhonemeEncoder
+from domain.voice._internal.portuguese_phoneme_encoder import PortuguesePhonemeEncoder
 
 
 # Language detection patterns

@@ -9,8 +9,8 @@ Public API:
     get_knowledge_ingestor() — singleton accessor
 """
 
-from knowledge._internal.data_filter import DataFilter, get_data_filter
-from knowledge._internal.knowledge import (
+from domain.knowledge._internal.data_filter import DataFilter, get_data_filter
+from domain.knowledge._internal.knowledge import (
     KnowledgeFact,
     KnowledgeIngestor,
     KnowledgeMemory,

@@ -18,15 +18,15 @@ Usage:
 
 from __future__ import annotations
 
-from memory._internal.config import MemoryConfig
-from memory._internal.provider import KnowledgeMemoryProvider, MemoryProvider
-from memory._internal.service import MemoryService, get_memory_service
-from memory._internal.maintenance import (
+from domain.memory._internal.config import MemoryConfig
+from domain.memory._internal.provider import KnowledgeMemoryProvider, MemoryProvider
+from domain.memory._internal.service import MemoryService, get_memory_service
+from domain.memory._internal.maintenance import (
     maintenance_tick,
     start_memory_maintenance,
     stop_memory_maintenance,
 )
-from memory._internal.task_memory import (
+from domain.memory._internal.task_memory import (
     TASK_CONSOLIDATE,
     TASK_REMEMBER,
     TASK_STORE,
@@ -39,7 +39,7 @@ from memory._internal.task_memory import (
     submit_memory_store,
     unregister_memory_handlers,
 )
-from memory._internal.consolidation import plan_consolidation
+from domain.memory._internal.consolidation import plan_consolidation
 
 __all__ = [
     "MemoryConfig",

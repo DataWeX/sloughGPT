@@ -19,8 +19,8 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
-from memory._internal.config import MemoryConfig
-from memory._internal.provider import KnowledgeMemoryProvider, MemoryProvider
+from domain.memory._internal.config import MemoryConfig
+from domain.memory._internal.provider import KnowledgeMemoryProvider, MemoryProvider
 
 logger = logging.getLogger(__name__)
 

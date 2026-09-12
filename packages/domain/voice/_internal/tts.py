@@ -18,7 +18,7 @@ import logging
 
 logger = logging.getLogger("slo.multimodal.tts")
 
-from voice._internal.phoneme_encoder import PhonemeEncoder, NUM_PHONEMES, SILENCE
+from domain.voice._internal.phoneme_encoder import PhonemeEncoder, NUM_PHONEMES, SILENCE
 
 
 # SSML tag patterns

@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``auth`` package."""
+"""Backward-compatibility shim — imports from the new ``domain.auth`` package."""
 
-from auth import (
+from domain.auth import (
     Role,
     Permission,
     UserRole,

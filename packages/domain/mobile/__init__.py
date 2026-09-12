@@ -4,7 +4,7 @@ Public API:
     PushNotificationService, NotificationPayload, DeviceToken, get_notification_service
 """
 
-from mobile._internal.notifications import (
+from domain.mobile._internal.notifications import (
     PushNotificationService,
     NotificationPayload,
     DeviceToken,

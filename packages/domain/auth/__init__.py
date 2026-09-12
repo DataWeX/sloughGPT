@@ -5,7 +5,7 @@ Public API:
     RBAC, get_rbac
 """
 
-from auth._internal.models import (
+from domain.auth._internal.models import (
     Role,
     Permission,
     UserRole,
@@ -14,7 +14,7 @@ from auth._internal.models import (
     Workspace,
     WorkspaceMember,
 )
-from auth._internal.rbac import RBAC, get_rbac
+from domain.auth._internal.rbac import RBAC, get_rbac
 
 __all__ = [
     "Role",

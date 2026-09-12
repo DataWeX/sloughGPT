@@ -20,9 +20,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from memory._internal.consolidation import plan_consolidation
-from memory._internal.config import MemoryConfig
-from memory._internal.service import MemoryService, get_memory_service
+from domain.memory._internal.consolidation import plan_consolidation
+from domain.memory._internal.config import MemoryConfig
+from domain.memory._internal.service import MemoryService, get_memory_service
 
 logger = logging.getLogger("slo.memory_task")
 

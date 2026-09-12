@@ -5,7 +5,7 @@ Public API:
     AppSettings, PersistentSettings, get_settings
 """
 
-from settings._internal.persistent import (
+from domain.settings._internal.persistent import (
     GenerationSettings,
     TrainingSettings,
     AdaptiveSettings,

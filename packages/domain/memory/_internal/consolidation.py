@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from memory._internal.embedding import cosine_similarity, ngram_embed
+from domain.memory._internal.embedding import cosine_similarity, ngram_embed
 
 logger = logging.getLogger(__name__)
 

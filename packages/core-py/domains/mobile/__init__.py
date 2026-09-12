@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``mobile`` package."""
+"""Backward-compatibility shim — imports from the new ``domain.mobile`` package."""
 
-from mobile import (
+from domain.mobile import (
     PushNotificationService,
     NotificationPayload,
     DeviceToken,

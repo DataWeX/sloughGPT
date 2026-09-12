@@ -1,13 +1,6 @@
-"""Memory layer - DEPRECATED: import from `memory` package instead.
+"""Backward-compatibility shim — imports from the new ``domain.memory`` package."""
 
-This module is a compatibility shim. All code should migrate to:
-    from memory import get_memory_service, MemoryConfig, ...
-"""
-
-from __future__ import annotations
-
-# Re-export everything from the new package for backward compatibility
-from memory import (
+from domain.memory import (
     MemoryConfig,
     MemoryProvider,
     KnowledgeMemoryProvider,

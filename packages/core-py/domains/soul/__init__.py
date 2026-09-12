@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``soul`` package."""
+"""Backward-compatibility shim — imports from the new ``domain.soul`` package."""
 
-from soul import (
+from domain.soul import (
     SentimentAnalyzer,
     HDMemoryStore,
     QuantumCognitiveEngine,
