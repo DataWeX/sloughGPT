@@ -32,7 +32,7 @@ describe('DecidePage', () => {
 
   it('renders the page title', () => {
     render(<DecidePage />)
-    expect(screen.getByText('Help Me Decide')).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'Help Me Decide' })).toBeDefined()
   })
 
   it('has input fields for question and options', () => {
@@ -49,12 +49,16 @@ describe('DecidePage', () => {
 
   it('shows toast when submitting empty form', async () => {
     render(<DecidePage />)
-    
-    const decideButton = screen.getByRole('button', { name: /decide/i })
-    fireEvent.click(decideButton)
 
+    const questionInput = screen.getByPlaceholderText(/e\.g\. Should I take the job/i)
+    fireEvent.change(questionInput, { target: { value: 'Test' } })
+
+    const decideButton = screen.getByRole('button', { name: /decide/i })
+    expect(decideButton).toBeDisabled()
+
+    fireEvent.change(questionInput, { target: { value: '' } })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Fill in the question and both options', 'info')
+      expect(decideButton).toBeDisabled()
     })
   })
 

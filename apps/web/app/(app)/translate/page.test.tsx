@@ -32,7 +32,7 @@ describe('TranslatePage', () => {
 
   it('renders the page title', () => {
     render(<TranslatePage />)
-    expect(screen.getByText('Translate')).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'Translate' })).toBeDefined()
   })
 
   it('has a textarea for source text', () => {
@@ -42,7 +42,7 @@ describe('TranslatePage', () => {
 
   it('has a language selector', () => {
     render(<TranslatePage />)
-    expect(screen.getByDisplayValue('Spanish')).toBeDefined()
+    expect(screen.getByRole('combobox')).toBeDefined()
   })
 
   it('has a translate button', () => {
@@ -50,15 +50,11 @@ describe('TranslatePage', () => {
     expect(screen.getByRole('button', { name: /translate/i })).toBeDefined()
   })
 
-  it('shows toast when clicking translate with empty text', async () => {
+  it('disables the translate button with empty text', async () => {
     render(<TranslatePage />)
     
     const translateButton = screen.getByRole('button', { name: /translate/i })
-    fireEvent.click(translateButton)
-
-    await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Type something to translate', 'info')
-    })
+    expect(translateButton.hasAttribute('disabled')).toBe(true)
   })
 
   it('calls generateTool when translating text', async () => {
@@ -92,8 +88,8 @@ describe('TranslatePage', () => {
 
     render(<TranslatePage />)
     
-    const languageSelect = screen.getByDisplayValue('Spanish')
-    fireEvent.change(languageSelect, { target: { value: 'French' } })
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByText('French'))
     
     const sourceTextarea = screen.getByPlaceholderText(/type or paste text to translate/i)
     fireEvent.change(sourceTextarea, { target: { value: 'Hello world' } })

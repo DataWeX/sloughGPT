@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, Button, Textarea, Select } from '@sloughgpt/strui'
+import { Card, CardContent, Button, Textarea, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { generateTool } from '@/lib/tools-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
@@ -91,11 +91,15 @@ export default function TranslatePage() {
               <Select
                 value={targetLang}
                 onValueChange={setTargetLang}
-                className="w-40 h-7 text-xs"
               >
-                {LANGUAGES.map((lang) => (
-                  <option key={lang} value={lang}>{lang}</option>
-                ))}
+                <SelectTrigger className="w-40 h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGES.map((lang) => (
+                    <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
             <Textarea

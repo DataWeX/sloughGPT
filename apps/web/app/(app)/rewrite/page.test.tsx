@@ -49,15 +49,11 @@ describe('RewritePage', () => {
     expect(screen.getByText('Sound Like Me')).toBeDefined()
   })
 
-  it('shows toast when clicking action with empty text', async () => {
+  it('disables action buttons with empty text', async () => {
     render(<RewritePage />)
     
     const grammarButton = screen.getByText('Fix Grammar')
-    fireEvent.click(grammarButton)
-
-    await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Paste something to rewrite', 'info')
-    })
+    expect(grammarButton.hasAttribute('disabled')).toBe(true)
   })
 
   it('calls generateTool when action is clicked with text', async () => {

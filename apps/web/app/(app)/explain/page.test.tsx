@@ -49,13 +49,13 @@ describe('ExplainPage', () => {
 
   it('has an explain button', () => {
     render(<ExplainPage />)
-    expect(screen.getByRole('button', { name: /explain/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /^Explain$/ })).toBeDefined()
   })
 
   it('shows toast when submitting empty form', async () => {
     render(<ExplainPage />)
     
-    const explainButton = screen.getByRole('button', { name: /explain/i })
+    const explainButton = screen.getByRole('button', { name: /^Explain$/ })
     fireEvent.click(explainButton)
 
     await waitFor(() => {
@@ -72,7 +72,7 @@ describe('ExplainPage', () => {
     const topicInput = screen.getByPlaceholderText(/e\.g\. How does the internet work/i)
     fireEvent.change(topicInput, { target: { value: 'How does the internet work?' } })
     
-    const explainButton = screen.getByRole('button', { name: /explain/i })
+    const explainButton = screen.getByRole('button', { name: /^Explain$/ })
     fireEvent.click(explainButton)
 
     await waitFor(() => {
@@ -100,7 +100,7 @@ describe('ExplainPage', () => {
     const topicInput = screen.getByPlaceholderText(/e\.g\. How does the internet work/i)
     fireEvent.change(topicInput, { target: { value: 'Test topic' } })
     
-    const explainButton = screen.getByRole('button', { name: /explain/i })
+    const explainButton = screen.getByRole('button', { name: /^Explain$/ })
     fireEvent.click(explainButton)
 
     await waitFor(() => {
