@@ -3,13 +3,8 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import {
-  Card, CardContent, CardHeader, CardTitle, Button, Input,
-  Textarea, Skeleton, cn,
-  Tabs, TabsList, TabsTrigger, TabsContent,
-} from '@sloughgpt/strui'
+import { Skeleton, cn, Tabs, TabsList, TabsTrigger, TabsContent } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { StatusBanner } from '@/components/composed/StatusBanner'
 import { TerminalPanel } from '@/components/shell/TerminalPanel'
 import { V86TerminalPanel } from '@/components/shell/V86TerminalPanel'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
@@ -117,50 +112,59 @@ function FilesTab() {
   return (
     <div className="space-y-4">
       <FileStatsCard files={files} />
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Documents</CardTitle>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Search files..."
+      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+        <div className="flex items-center justify-between h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
+          <span className="text-[11px] font-medium text-[#8e8e93]">Documents</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="Search..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-48 h-8 text-xs"
+              className="w-40 h-7 rounded-md border border-white/[0.06] bg-[#111111] px-2.5 text-[11px] text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors font-mono"
               aria-label="Search files"
             />
-            <Button variant="ghost" size="sm" onClick={() => { setLoading(true); fetchFiles() }} aria-label="Refresh files">
-              <IconRefresh className="w-3.5 h-3.5" />
-            </Button>
+            <button
+              type="button"
+              onClick={() => { setLoading(true); fetchFiles() }}
+              className="h-7 w-7 flex items-center justify-center rounded-md border border-white/[0.06] bg-[#111111] text-[#8e8e93] hover:text-[#c7c7cc] hover:border-white/[0.12] transition-colors"
+              aria-label="Refresh files"
+            >
+              <IconRefresh className="w-3 h-3" />
+            </button>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="px-4 py-2">
           {loading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 py-2">
               {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-8 w-full" />
+                <Skeleton key={i} className="h-7 w-full bg-[#1c1c1e]" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-4 text-center">
+            <p className="text-[11px] text-[#636366] py-6 text-center">
               {search ? 'No files match your search.' : 'No files uploaded yet.'}
             </p>
           ) : (
-            <div className="space-y-1 max-h-64 overflow-y-auto">
-              {filtered.map(f => (
+            <div className="max-h-72 overflow-y-auto py-1">
+              {filtered.map((f, i) => (
                 <div
                   key={f.id}
-                  className="flex items-center justify-between px-2 py-1.5 rounded text-xs hover:bg-muted/50 transition-colors"
+                  className={cn(
+                    'flex items-center justify-between px-2.5 py-2 rounded-lg text-[11px] transition-colors hover:bg-white/[0.04]',
+                    i > 0 && 'border-t border-white/[0.04]',
+                  )}
                 >
-                  <span className="font-mono truncate">{f.filename}</span>
-                  <span className="text-muted-foreground shrink-0 ml-2">
+                  <span className="font-mono text-[#c7c7cc] truncate">{f.filename}</span>
+                  <span className="text-[#636366] shrink-0 ml-3 font-mono">
                     {f.size ? `${(f.size / 1024).toFixed(1)} KB` : '—'}
                   </span>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }
@@ -204,67 +208,78 @@ function VoiceTab() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Voice Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-16 w-full" />
-            ) : status ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    'w-2 h-2 rounded-full',
-                    status.server_tts ? 'bg-emerald-500' : 'bg-red-500',
-                  )} />
-                  <span className="text-xs">{status.server_tts ? 'TTS Available' : 'TTS Unavailable'}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Model: {status.model ?? 'none'}
-                </p>
-                {status.error && (
-                  <StatusBanner variant="error" message={status.error} dismissible={false} />
-                )}
+    <div className="grid grid-cols-2 gap-4">
+      {/* Status card */}
+      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+        <div className="flex items-center h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
+          <span className="text-[11px] font-medium text-[#8e8e93]">Voice Status</span>
+        </div>
+        <div className="px-4 py-3">
+          {loading ? (
+            <Skeleton className="h-14 w-full bg-[#1c1c1e]" />
+          ) : status ? (
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2.5">
+                <span className={cn(
+                  'w-2 h-2 rounded-full',
+                  status.server_tts ? 'bg-[#28c840]' : 'bg-[#ff5f57]',
+                )} />
+                <span className="text-[12px] text-[#c7c7cc]">{status.server_tts ? 'TTS Available' : 'TTS Unavailable'}</span>
               </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">Could not load status</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Quick Test</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Textarea
-              placeholder="Type text to speak..."
-              value={ttsText}
-              onChange={e => setTtsText(e.target.value)}
-              className="h-16 text-xs resize-none"
-              aria-label="Text to speech input"
-            />
-            <Button
-              size="sm"
-              onClick={handleGenerate}
-              disabled={generating || !ttsText.trim()}
-              className="w-full"
-            >
-              {generating ? 'Generating...' : 'Speak'}
-            </Button>
-            {ttsError && (
-              <StatusBanner variant="error" message={ttsError} dismissible={false} />
-            )}
-            {lastResult && (
-              <p className="text-xs text-muted-foreground">
-                {lastResult.duration_ms}ms · {lastResult.backend}
+              <p className="text-[11px] text-[#636366] font-mono">
+                {status.model ?? 'no model'}
               </p>
+              {status.error && (
+                <div className="flex items-start gap-2 text-[#ff5f57] bg-[#ff5f57]/[0.08] rounded-lg px-3 py-2 text-[11px]">
+                  <span className="shrink-0 text-[10px] font-bold">!</span>
+                  {status.error}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-[11px] text-[#636366]">Could not load status</p>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Test card */}
+      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+        <div className="flex items-center h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
+          <span className="text-[11px] font-medium text-[#8e8e93]">Quick Test</span>
+        </div>
+        <div className="px-4 py-3 space-y-2.5">
+          <textarea
+            placeholder="Type text to speak..."
+            value={ttsText}
+            onChange={e => setTtsText(e.target.value)}
+            className="w-full h-16 rounded-lg border border-white/[0.06] bg-[#111111] px-3 py-2 text-[12px] text-[#c7c7cc] placeholder:text-[#48484a] resize-none outline-none focus:border-white/[0.12] transition-colors font-mono"
+            aria-label="Text to speech input"
+          />
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={generating || !ttsText.trim()}
+            className={cn(
+              'w-full h-8 rounded-lg text-[11px] font-medium transition-all duration-200',
+              generating || !ttsText.trim()
+                ? 'bg-[#28c840]/20 text-[#28c840]/40 cursor-not-allowed'
+                : 'bg-[#28c840]/10 text-[#28c840] hover:bg-[#28c840]/20',
             )}
-          </CardContent>
-        </Card>
+          >
+            {generating ? 'Generating...' : 'Speak'}
+          </button>
+          {ttsError && (
+            <div className="flex items-start gap-2 text-[#ff5f57] bg-[#ff5f57]/[0.08] rounded-lg px-3 py-2 text-[11px]">
+              <span className="shrink-0 text-[10px] font-bold">!</span>
+              {ttsError}
+            </div>
+          )}
+          {lastResult && (
+            <p className="text-[10px] text-[#636366] font-mono">
+              {lastResult.duration_ms}ms · {lastResult.backend}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -372,117 +387,149 @@ function ApiTab() {
     localStorage.removeItem(HISTORY_KEY)
   }
 
+  const METHOD_COLORS: Record<string, string> = {
+    GET: 'bg-[#28c840]/10 text-[#28c840] border-[#28c840]/20',
+    POST: 'bg-[#febc2e]/10 text-[#febc2e] border-[#febc2e]/20',
+    PUT: 'bg-[#5ac8fa]/10 text-[#5ac8fa] border-[#5ac8fa]/20',
+    PATCH: 'bg-[#bf5af2]/10 text-[#bf5af2] border-[#bf5af2]/20',
+    DELETE: 'bg-[#ff5f57]/10 text-[#ff5f57] border-[#ff5f57]/20',
+  }
+
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">API Playground</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      {/* API Playground */}
+      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+        <div className="flex items-center h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
+          <span className="text-[11px] font-medium text-[#8e8e93]">API Playground</span>
+        </div>
+        <div className="px-4 py-3 space-y-3">
+          {/* URL bar */}
           <div className="flex gap-2">
             <select
               value={method}
               onChange={e => setMethod(e.target.value)}
-              className="h-8 rounded-md border border-border bg-muted/50 px-2 text-xs font-mono"
+              className={cn(
+                'h-8 rounded-lg border px-2.5 text-[11px] font-mono font-medium bg-[#111111] outline-none',
+                METHOD_COLORS[method] ?? 'border-white/[0.06] text-[#c7c7cc]',
+              )}
               aria-label="HTTP method"
             >
               {METHODS.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-            <Input
+            <input
               value={path}
               onChange={e => setPath(e.target.value)}
               placeholder="/endpoint"
-              className="h-8 text-xs font-mono flex-1"
+              className="flex-1 h-8 rounded-lg border border-white/[0.06] bg-[#111111] px-3 text-[12px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request path"
               onKeyDown={e => { if (e.key === 'Enter') handleSend() }}
             />
-            <Button size="sm" onClick={handleSend} disabled={loading || !path.trim()}>
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={loading || !path.trim()}
+              className={cn(
+                'h-8 px-4 rounded-lg text-[11px] font-medium transition-all duration-200',
+                loading || !path.trim()
+                  ? 'bg-[#0a7aff]/20 text-[#0a7aff]/40 cursor-not-allowed'
+                  : 'bg-[#0a7aff]/10 text-[#0a7aff] hover:bg-[#0a7aff]/20',
+              )}
+            >
               {loading ? 'Sending...' : 'Send'}
-            </Button>
+            </button>
           </div>
 
-          <Input
+          {/* Auth header */}
+          <input
             value={authHeader}
             onChange={e => setAuthHeader(e.target.value)}
             placeholder="Authorization: Bearer <token>"
-            className="h-8 text-xs font-mono"
+            className="w-full h-8 rounded-lg border border-white/[0.06] bg-[#111111] px-3 text-[11px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors"
             aria-label="Authorization header"
           />
 
+          {/* Body */}
           {method !== 'GET' && (
-            <Textarea
+            <textarea
               value={body}
               onChange={e => setBody(e.target.value)}
               placeholder='{"key": "value"}'
-              className="h-24 text-xs font-mono resize-none"
+              className="w-full h-24 rounded-lg border border-white/[0.06] bg-[#111111] px-3 py-2 text-[11px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] resize-none outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request body"
             />
           )}
 
+          {/* Response */}
           {response !== null && (
             <div className="space-y-2">
-              <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-3 text-[11px]">
                 <span className={cn(
                   'font-mono font-medium',
-                  responseStatus && responseStatus >= 200 && responseStatus < 300 ? 'text-emerald-500' :
-                  responseStatus && responseStatus >= 400 ? 'text-red-500' : 'text-muted-foreground',
+                  responseStatus && responseStatus >= 200 && responseStatus < 300 ? 'text-[#28c840]' :
+                  responseStatus && responseStatus >= 400 ? 'text-[#ff5f57]' : 'text-[#636366]',
                 )}>
                   {responseStatus}
                 </span>
                 {responseTime != null && (
-                  <span className="text-muted-foreground">{responseTime}ms</span>
+                  <span className="text-[#636366] font-mono">{responseTime}ms</span>
                 )}
               </div>
 
               {responseHeaders && Object.keys(responseHeaders).length > 0 && (
-                <details className="text-xs">
-                  <summary className="text-muted-foreground cursor-pointer hover:text-foreground">Response Headers</summary>
-                  <pre className="mt-1 rounded border border-border/30 bg-muted/20 p-2 font-mono text-[10px] overflow-auto max-h-32">
+                <details className="text-[11px]">
+                  <summary className="text-[#636366] cursor-pointer hover:text-[#8e8e93] transition-colors">Response Headers</summary>
+                  <pre className="mt-1.5 rounded-lg border border-white/[0.04] bg-[#111111] p-2.5 font-mono text-[10px] text-[#c7c7cc] overflow-auto max-h-32 leading-relaxed">
                     {Object.entries(responseHeaders).map(([k, v]) => `${k}: ${v}`).join('\n')}
                   </pre>
                 </details>
               )}
 
-              <pre className="rounded-lg border border-border/50 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-96 whitespace-pre-wrap">
+              <pre className="rounded-xl border border-white/[0.04] bg-[#111111] p-3.5 text-[11px] font-mono text-[#c7c7cc] overflow-auto max-h-96 whitespace-pre-wrap leading-relaxed">
                 {response}
               </pre>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
+      {/* History */}
       {history.length > 0 && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Request History</CardTitle>
-            <Button variant="ghost" size="sm" onClick={clearHistory} className="text-destructive text-xs">
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+          <div className="flex items-center justify-between h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
+            <span className="text-[11px] font-medium text-[#8e8e93]">Request History</span>
+            <button
+              type="button"
+              onClick={clearHistory}
+              className="text-[10px] text-[#ff5f57]/60 hover:text-[#ff5f57] transition-colors"
+            >
               Clear
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {history.map(entry => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => loadFromHistory(entry)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted/50 transition-colors text-left"
-                >
-                  <span className={cn(
-                    'font-mono font-medium w-12 shrink-0',
-                    entry.status >= 200 && entry.status < 300 ? 'text-emerald-500' :
-                    entry.status >= 400 ? 'text-red-500' : 'text-muted-foreground',
-                  )}>
-                    {entry.status || 'ERR'}
-                  </span>
-                  <span className="font-mono text-muted-foreground w-12 shrink-0">{entry.method}</span>
-                  <span className="font-mono truncate flex-1">{entry.path}</span>
-                  <span className="text-muted-foreground shrink-0">{entry.timeMs}ms</span>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+            </button>
+          </div>
+          <div className="px-2 py-1 max-h-56 overflow-y-auto">
+            {history.map((entry, i) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => loadFromHistory(entry)}
+                className={cn(
+                  'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[11px] hover:bg-white/[0.04] transition-colors text-left',
+                  i > 0 && 'border-t border-white/[0.03]',
+                )}
+              >
+                <span className={cn(
+                  'font-mono font-medium w-10 shrink-0',
+                  entry.status >= 200 && entry.status < 300 ? 'text-[#28c840]' :
+                  entry.status >= 400 ? 'text-[#ff5f57]' : 'text-[#636366]',
+                )}>
+                  {entry.status || 'ERR'}
+                </span>
+                <span className="font-mono text-[#48484a] w-12 shrink-0">{entry.method}</span>
+                <span className="font-mono text-[#c7c7cc] truncate flex-1">{entry.path}</span>
+                <span className="text-[#636366] shrink-0 font-mono">{entry.timeMs}ms</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )
@@ -509,65 +556,84 @@ function QuickActionsTab() {
     }
   }
 
+  const METHOD_COLORS: Record<string, string> = {
+    GET: 'bg-emerald-500/10 text-emerald-500',
+    POST: 'bg-amber-500/10 text-amber-500',
+    PUT: 'bg-blue-500/10 text-blue-400',
+    PATCH: 'bg-purple-500/10 text-purple-400',
+    DELETE: 'bg-red-500/10 text-red-500',
+  }
+
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {QUICK_ACTIONS.map(action => (
-              <button
-                key={action.label}
-                type="button"
-                onClick={() => executeAction(action)}
-                disabled={running !== null}
-                className={cn(
-                  'flex flex-col items-start p-3 rounded-lg border text-left transition-all hover:-translate-y-0.5 hover:shadow-sm',
-                  running === action.label ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-primary/30',
-                  results[action.label]?.status === 200 ? 'border-emerald-500/30 bg-emerald-500/5' :
-                  results[action.label]?.status === 404 ? 'border-amber-500/30 bg-amber-500/5' :
-                  results[action.label]?.status === 0 ? 'border-red-500/30 bg-red-500/5' : ''
-                )}
-              >
-                <div className="flex items-center gap-2 w-full">
-                  <span className="text-sm font-medium">{action.label}</span>
-                  {running === action.label && (
-                    <span className="ml-auto text-[10px] text-amber-500 animate-pulse">Running...</span>
-                  )}
-                  {results[action.label] && running !== action.label && (
-                    <span className={cn(
-                      'ml-auto text-[10px] font-mono',
-                      results[action.label]!.status >= 200 && results[action.label]!.status < 300 ? 'text-emerald-500' :
-                      results[action.label]!.status >= 400 ? 'text-amber-500' : 'text-red-500'
-                    )}>
-                      {results[action.label]!.status || 'ERR'} · {results[action.label]!.timeMs}ms
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground">{action.description}</span>
-                <span className="text-[10px] text-muted-foreground/60 font-mono mt-1">{action.method} {action.endpoint}</span>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        {QUICK_ACTIONS.map(action => (
+          <button
+            key={action.label}
+            type="button"
+            onClick={() => executeAction(action)}
+            disabled={running !== null}
+            className={cn(
+              'group flex flex-col items-start p-4 rounded-xl border text-left transition-all duration-200',
+              'hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10',
+              running === action.label
+                ? 'border-primary/40 bg-primary/[0.04]'
+                : results[action.label]
+                  ? results[action.label]!.status >= 200 && results[action.label]!.status < 300
+                    ? 'border-emerald-500/20 bg-emerald-500/[0.03]'
+                    : 'border-red-500/20 bg-red-500/[0.03]'
+                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]',
+            )}
+          >
+            <div className="flex items-center gap-2 w-full mb-1">
+              <span className={cn(
+                'text-[10px] font-mono font-medium px-1.5 py-0.5 rounded',
+                METHOD_COLORS[action.method] ?? 'bg-muted text-muted-foreground',
+              )}>
+                {action.method}
+              </span>
+              <span className="text-sm font-medium text-[#e5e5ea]">{action.label}</span>
+              {running === action.label && (
+                <span className="ml-auto flex items-center gap-1.5 text-[10px] text-[#febc2e]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#febc2e] animate-pulse" />
+                  running
+                </span>
+              )}
+              {results[action.label] && running !== action.label && (
+                <span className={cn(
+                  'ml-auto text-[10px] font-mono',
+                  results[action.label]!.status >= 200 && results[action.label]!.status < 300 ? 'text-[#28c840]' :
+                  results[action.label]!.status >= 400 ? 'text-[#febc2e]' : 'text-[#ff5f57]'
+                )}>
+                  {results[action.label]!.status || 'ERR'}
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] text-[#8e8e93]">{action.description}</span>
+            <span className="text-[10px] text-[#48484a] font-mono mt-1.5">{action.endpoint}</span>
+          </button>
+        ))}
+      </div>
 
       {Object.entries(results).map(([label, result]) => result && (
-        <Card key={label}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm">{label}</CardTitle>
-            <span className="text-[10px] text-muted-foreground font-mono">
-              {result.status || 'ERR'} · {result.timeMs}ms
-            </span>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs font-mono bg-muted/30 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap">
-              {result.body || 'No response'}
-            </pre>
-          </CardContent>
-        </Card>
+        <div key={label} className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-[#1c1c1e] border-b border-white/[0.06]">
+            <span className="text-[11px] font-medium text-[#c7c7cc]">{label}</span>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'text-[10px] font-mono',
+                result.status >= 200 && result.status < 300 ? 'text-[#28c840]' :
+                result.status >= 400 ? 'text-[#febc2e]' : 'text-[#ff5f57]'
+              )}>
+                {result.status || 'ERR'}
+              </span>
+              <span className="text-[10px] text-[#636366] font-mono">{result.timeMs}ms</span>
+            </div>
+          </div>
+          <pre className="px-4 py-3 text-[11px] font-mono text-[#c7c7cc] overflow-auto max-h-48 whitespace-pre-wrap leading-relaxed">
+            {result.body || 'No response'}
+          </pre>
+        </div>
       ))}
     </div>
   )

@@ -54,13 +54,13 @@ function SidebarContent({
   onLoadConversation: (id: string) => void
   onNewChat: () => void
   onDeleteConversation?: (id: string) => void
-  onStarConversation?: (e: React.MouseEvent, id: string, starred: boolean) => void
-  onPinConversation?: (e: React.MouseEvent, id: string, pinned: boolean) => void
-  onArchiveConversation?: (e: React.MouseEvent, id: string, archived: boolean) => void
+  onStarConversation?: (id: string, starred: boolean) => void
+  onPinConversation?: (id: string, pinned: boolean) => void
+  onArchiveConversation?: (id: string, archived: boolean) => void
   archivedCount?: number
   onRenameConversation?: (id: string, name: string) => void
-  onToggleUnreadConversation?: (e: React.MouseEvent, id: string, unread: boolean) => void
-  onDuplicateConversation?: (e: React.MouseEvent, id: string, name: string) => void
+  onToggleUnreadConversation?: (id: string, unread: boolean) => void
+  onDuplicateConversation?: (id: string, name: string) => void
   onClose?: () => void
   isDrawer?: boolean
   onToggleCollapse?: () => void
@@ -130,28 +130,28 @@ function SidebarContent({
     onClose?.()
   }, [onLoadConversation, onClose])
 
-  const handleStar = useCallback((e: React.MouseEvent, id: string, starred: boolean) => {
-    onStarConversation?.(e, id, starred)
+  const handleStar = useCallback((id: string, starred: boolean) => {
+    onStarConversation?.(id, starred)
   }, [onStarConversation])
 
-  const handlePin = useCallback((e: React.MouseEvent, id: string, pinned: boolean) => {
-    onPinConversation?.(e, id, pinned)
+  const handlePin = useCallback((id: string, pinned: boolean) => {
+    onPinConversation?.(id, pinned)
   }, [onPinConversation])
 
-  const handleArchive = useCallback((e: React.MouseEvent, id: string, archive: boolean) => {
-    onArchiveConversation?.(e, id, archive)
+  const handleArchive = useCallback((id: string, archive: boolean) => {
+    onArchiveConversation?.(id, archive)
   }, [onArchiveConversation])
 
   const handleRename = useCallback((id: string, name: string) => {
     onRenameConversation?.(id, name)
   }, [onRenameConversation])
 
-  const handleDuplicate = useCallback((e: React.MouseEvent, id: string, name: string) => {
-    onDuplicateConversation?.(e, id, name)
+  const handleDuplicate = useCallback((id: string, name: string) => {
+    onDuplicateConversation?.(id, name)
   }, [onDuplicateConversation])
 
-  const handleToggleUnread = useCallback((e: React.MouseEvent, id: string, unread: boolean) => {
-    onToggleUnreadConversation?.(e, id, unread)
+  const handleToggleUnread = useCallback((id: string, unread: boolean) => {
+    onToggleUnreadConversation?.(id, unread)
   }, [onToggleUnreadConversation])
 
   const starred = useMemo(() => filtered.filter(c => c.starred).slice(0, 10), [filtered])
@@ -487,7 +487,7 @@ function SidebarContent({
                         onDelete={handleDelete}
                         onStar={handleStar}
                         onPin={handlePin}
-                        onArchive={(e, id, archive) => handleArchive(e, id, false)}
+                        onArchive={(e, id, archive) => handleArchive(id, false)}
                         onRename={handleRename}
                         onExport={handleExport}
                         onDuplicate={handleDuplicate}

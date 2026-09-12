@@ -143,8 +143,8 @@ export default function SettingsPage() {
 
   const isOnline = apiHealth !== null && apiHealth !== 'offline'
   const apiOk = isOnline && (apiHealth.status === 'healthy' || detailed?.status === 'healthy')
-  const modelLoaded = isOnline && (apiHealth.model_loaded || detailed?.model_loaded)
-  const modelType = isOnline ? (apiHealth.model_type || detailed?.model_type) : null
+  const modelLoaded = isOnline ? Boolean(apiHealth.model_loaded || detailed?.model_loaded) : false
+  const modelType = isOnline ? (apiHealth.model_type || detailed?.model_type) ?? null : null
 
   const handleTestConnection = async () => {
     setConnectionTest({ status: 'testing' })

@@ -90,8 +90,8 @@ domains = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 apps = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 
 [tool.setuptools.packages.find]
-where = ["packages/core-py", "."]
-include = ["domains*", "utils*", "apps*"]
+where = ["packages/core-py", "packages", "."]
+include = ["domains*", "utils*", "apps*", "memory*"]
 exclude = ["tests*", "apps.web*"]
 
 [tool.black]

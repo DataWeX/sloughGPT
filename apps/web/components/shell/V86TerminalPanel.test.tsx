@@ -14,9 +14,10 @@ vi.mock('@/hooks/useV86', () => ({
 afterEach(() => cleanup())
 
 describe('V86TerminalPanel', () => {
-  it('shows Booting when not booted', () => {
-    render(<V86TerminalPanel />)
-    expect(screen.getAllByText('Booting...').length).toBeGreaterThanOrEqual(1)
+  it('shows booting indicator when not booted', () => {
+    const { container } = render(<V86TerminalPanel />)
+    const dot = container.querySelector('.animate-pulse')
+    expect(dot).not.toBeNull()
   })
   it('renders screen container', () => {
     const { container } = render(<V86TerminalPanel />)

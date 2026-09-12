@@ -85,6 +85,7 @@ export interface DetailedHealth {
     rss_mb?: number
   }
   gpu?: GPUInfo
+  versions?: { package?: string; api?: string; torch?: string; features?: Record<string, string> }
   model_loaded: boolean
   model_loading?: boolean
   model_type: string | null

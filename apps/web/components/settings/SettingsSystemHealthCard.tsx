@@ -3,15 +3,7 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Button, Skeleton, StatCard, KpiGrid, IconRefresh, cn } from '@sloughgpt/strui'
 import { formatUptime } from '@/lib/chat-utils'
 
-interface DetailedHealth {
-  status: string
-  model_loaded?: boolean
-  model_type?: string | null
-  uptime_seconds?: number
-  inference?: { inference_count?: number }
-  gpu?: { backend: string; tier: string }
-  versions?: { package?: string; api?: string; torch?: string; features?: Record<string, string> }
-}
+import type { DetailedHealth } from '@/lib/system-controller'
 
 interface SystemMetrics {
   cpu_percent?: number

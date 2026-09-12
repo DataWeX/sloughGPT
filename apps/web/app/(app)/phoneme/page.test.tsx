@@ -201,7 +201,7 @@ import PhonemePage from './page'
 describe('PhonemePage', () => {
   it('renders the page with tabs', () => {
     render(<PhonemePage />)
-    expect(screen.getByText(/Phoneme/i)).toBeDefined()
+    expect(screen.getByRole('heading', { name: /Phoneme/i })).toBeDefined()
   })
 
   it('shows the encoding tab by default', () => {
