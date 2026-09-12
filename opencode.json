@@ -26,6 +26,11 @@
       "description": "Diagnose and fix the most recent test failures",
       "agent": "error-fixer"
     },
+    "test-training-flow": {
+      "template": "Run the training flow tests using chrome-devtools MCP. Open http://localhost:3000/training in a browser, take snapshots, click buttons, verify the training page loads correctly, check for console errors, and report results.",
+      "description": "Test training flow using browser automation",
+      "agent": "training-flow-tester"
+    },
     "ui-fix": {
       "template": "Read the UI error log at ~/.opencode-ui-error-log.json and the live backend errors at http://localhost:8000/errors/recent. Diagnose the most recent frontend error, identify the file and root cause, and apply a fix.",
       "description": "Diagnose and fix the most recent frontend UI error",
