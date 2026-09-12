@@ -1,6 +1,12 @@
-"""Backward-compatibility shim — imports from the new ``domain.ops`` package."""
+"""ops — Optimized NumPy operations (fused ops, attention, softmax).
 
-from domain.ops import (
+Public API:
+    FusedLayerNorm, FusedRMSNorm, FusedCrossEntropyLoss, FusedAttentionBias
+    ChunkedOperation, MemoryEfficientSoftmax, FusedScaleBias, OptimizedEmbedding
+    fused_swiglu, efficient_cross_entropy, chunked_matmul, silu, gelu
+"""
+
+from domain.ops._internal.ops import (
     FusedLayerNorm,
     FusedRMSNorm,
     FusedCrossEntropyLoss,

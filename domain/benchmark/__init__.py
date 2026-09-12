@@ -1,6 +1,10 @@
-"""Backward-compatibility shim — imports from the new ``domain.benchmark`` package."""
+"""benchmark — Benchmark domain for performance testing.
 
-from domain.benchmark import (
+Public API:
+    BenchmarkDomain, BenchmarkResult, get_benchmark_domain, reset_benchmark_domain
+"""
+
+from domain.benchmark._internal.domain import (
     BenchmarkDomain,
     BenchmarkResult,
     get_benchmark_domain,
