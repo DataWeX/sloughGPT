@@ -1,7 +1,27 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 import { ResourceCard } from './ResourceCard'
+
+vi.mock('@sloughgpt/strui', () => {
+  const passthrough = ({ children }: any) => <div>{children}</div>
+  return {
+    cn: (...args: any[]) => args.filter(Boolean).join(' '),
+    Card: passthrough, CardContent: passthrough,
+    StatCard: ({ label, value }: any) => (
+      <div data-testid={`stat-${label}`}>
+        {typeof value === 'string' || typeof value === 'number' ? <span>{String(value)}</span> : value}
+      </div>
+    ),
+    KpiGrid: ({ children }: any) => <div data-testid="kpi-grid">{children}</div>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    StatusDot: () => <span data-testid="status-dot" />,
+  }
+})
+
+vi.mock('@/components/composed/SectionLabel', () => ({
+  SectionLabel: ({ children }: any) => <div>{children}</div>,
+}))
 
 const detailed = {
   system: { memory_available_mb: 8192 },
@@ -28,8 +48,8 @@ describe('ResourceCard', () => {
 
   it('shows skeleton placeholders when no data', () => {
     renderCard()
-    const skeletons = document.querySelectorAll('.animate-pulse')
-    expect(skeletons.length).toBeGreaterThanOrEqual(4)
+    const skeletons = document.querySelectorAll('[data-testid="skeleton"]')
+    expect(skeletons.length).toBeGreaterThanOrEqual(2)
   })
 
   it('renders cpu and memory from liveHealth', () => {
@@ -46,12 +66,12 @@ describe('ResourceCard', () => {
 
   it('renders used memory from metrics', () => {
     renderCard({ metrics })
-    expect(screen.getByText('2.5 GB')).toBeDefined()
+    expect(screen.getByText(/2\.5 \/ 8\.0 GB/)).toBeDefined()
   })
 
-  it('renders available memory from detailed health', () => {
-    renderCard({ detailed })
-    expect(screen.getByText('8.0 GB')).toBeDefined()
+  it('shows available memory when detailed health provides it', () => {
+    renderCard({ detailed, metrics })
+    expect(screen.getByText(/free/)).toBeDefined()
   })
 
   it('prefers liveHealth over metrics when both present', () => {

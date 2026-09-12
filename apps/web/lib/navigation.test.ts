@@ -3,7 +3,7 @@ import { NAV_SECTIONS, SHORTCUT_TO_PATH, ALL_ROUTES, SIDEBAR_ICONS } from './nav
 
 describe('navigation', () => {
   it('has 4 sections', () => {
-    expect(NAV_SECTIONS).toHaveLength(4)
+    expect(NAV_SECTIONS).toHaveLength(5)
   })
 
   it('each section has a labelKey and at least one route', () => {

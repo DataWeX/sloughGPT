@@ -1,6 +1,3 @@
-/**
- * Tests for the useConsciousnessStatus hook and utilities.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import {
@@ -8,6 +5,15 @@ import {
   getConsciousnessLevelLabel,
   getQualiaMood,
 } from './useConsciousnessStatus'
+
+vi.mock('@/lib/consciousness-controller', () => ({
+  consciousnessController: {
+    getStatus: vi.fn(),
+  },
+}))
+
+import { consciousnessController } from '@/lib/consciousness-controller'
+const mockCtrl = vi.mocked(consciousnessController)
 
 describe('getConsciousnessLevelLabel', () => {
   it('returns Off for level 0', () => {
@@ -57,7 +63,7 @@ describe('useConsciousnessStatus', () => {
   })
 
   it('returns loading state initially', () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+    mockCtrl.getStatus.mockRejectedValue(new Error('not ready'))
     const { result } = renderHook(() => useConsciousnessStatus())
     expect(result.current.loading).toBe(true)
     expect(result.current.status).toBeNull()
@@ -71,10 +77,7 @@ describe('useConsciousnessStatus', () => {
       beliefs: { competence: 0.7 },
       current_qualia: { valence: 0.5, arousal: 0.3, novelty: 0.6, coherence: 0.7, salience: 0.4 },
     }
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: mockStatus }),
-    }))
+    mockCtrl.getStatus.mockResolvedValue(mockStatus)
 
     const { result } = renderHook(() => useConsciousnessStatus())
     await waitFor(() => {
@@ -86,7 +89,7 @@ describe('useConsciousnessStatus', () => {
   })
 
   it('degrades gracefully on fetch failure', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
+    mockCtrl.getStatus.mockRejectedValue(new Error('network'))
 
     const { result } = renderHook(() => useConsciousnessStatus())
     await waitFor(() => {

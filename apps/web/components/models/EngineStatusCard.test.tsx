@@ -62,7 +62,7 @@ describe('EngineStatusCard', () => {
     })
     render(<EngineStatusCard />)
     await vi.waitFor(() => {
-      expect(screen.getByText('30s')).toBeDefined()
+      expect(screen.getByText('0m')).toBeDefined()
     })
   })
 

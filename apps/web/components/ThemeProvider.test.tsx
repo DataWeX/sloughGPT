@@ -1,18 +1,15 @@
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/lib/db', () => {
-  const store = new Map<string, unknown>()
-  return {
-    chatDB: {
-      getKV: vi.fn((key: string) => Promise.resolve(store.get(key) as string | undefined)),
-      setKV: vi.fn((key: string, value: unknown) => { store.set(key, value); return Promise.resolve() }),
-    },
-  }
-})
+vi.mock('@/lib/sync-html-theme', () => ({
+  syncHtmlTheme: vi.fn(),
+}))
+
+vi.mock('@/lib/dev-log', () => ({
+  trackEvent: vi.fn(),
+}))
 
 import { ThemeProvider, useTheme } from './ThemeProvider'
-import { chatDB } from '@/lib/db'
 
 function TestChild() {
   const { theme, mode, palette, setTheme, setMode, setPalette } = useTheme()
@@ -48,12 +45,9 @@ describe('ThemeProvider', () => {
     expect(lastMode.textContent).toBe('dark')
   })
 
-  it('reads saved theme and mode from chatDB', async () => {
-    const store = new Map<string, unknown>([
-      ['man_theme', 'green'],
-      ['man_mode', 'light'],
-    ])
-    vi.mocked(chatDB.getKV).mockImplementation((key: string) => Promise.resolve(store.get(key) as string | undefined))
+  it('reads saved theme and mode from localStorage', async () => {
+    localStorage.setItem('man_theme', 'green')
+    localStorage.setItem('man_mode', 'light')
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
     await waitFor(() => {
       const themes = container.querySelectorAll('[data-testid="theme"]')
@@ -65,10 +59,9 @@ describe('ThemeProvider', () => {
     })
   })
 
-  it('falls back to defaults for invalid chatDB values', async () => {
-    vi.mocked(chatDB.getKV).mockImplementation((key: string) =>
-      Promise.resolve(key === 'man_theme' ? 'invalid' : key === 'man_mode' ? 'invalid' : undefined)
-    )
+  it('falls back to defaults for invalid localStorage values', async () => {
+    localStorage.setItem('man_theme', 'invalid')
+    localStorage.setItem('man_mode', 'invalid')
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
     await waitFor(() => {
       const themes = container.querySelectorAll('[data-testid="theme"]')
@@ -105,10 +98,8 @@ describe('ThemeProvider — palette', () => {
     expect(last.textContent).toBe('noir-violet')
   })
 
-  it('reads saved palette from chatDB', async () => {
-    vi.mocked(chatDB.getKV).mockImplementation((key: string) =>
-      Promise.resolve(key === 'man_palette' ? 'neural-precision' : undefined)
-    )
+  it('reads saved palette from localStorage', async () => {
+    localStorage.setItem('man_palette', 'neural-precision')
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
     await waitFor(() => {
       const palettes = container.querySelectorAll('[data-testid="palette"]')
@@ -117,10 +108,8 @@ describe('ThemeProvider — palette', () => {
     })
   })
 
-  it('falls back to noir-violet for invalid chatDB value', async () => {
-    vi.mocked(chatDB.getKV).mockImplementation((key: string) =>
-      Promise.resolve(key === 'man_palette' ? 'solarized' : undefined)
-    )
+  it('falls back to noir-violet for invalid localStorage value', async () => {
+    localStorage.setItem('man_palette', 'solarized')
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
     await waitFor(() => {
       const palettes = container.querySelectorAll('[data-testid="palette"]')
@@ -140,14 +129,13 @@ describe('ThemeProvider — palette', () => {
     })
   })
 
-  it('persists palette to chatDB', async () => {
-    vi.mocked(chatDB.setKV).mockResolvedValue(undefined)
+  it('persists palette to localStorage', async () => {
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
     await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     const btn = container.querySelector('[data-testid="set-palette"]') as HTMLButtonElement
     btn.click()
     await waitFor(() => {
-      expect(chatDB.setKV).toHaveBeenCalledWith('man_palette', 'neural-precision')
+      expect(localStorage.getItem('man_palette')).toBe('neural-precision')
     })
   })
 

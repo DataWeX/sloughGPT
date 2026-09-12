@@ -1164,6 +1164,19 @@ describe('SloughGPTClient', () => {
     });
   });
 
+  describe('getTrainingAnalytics()', () => {
+    it('calls GET /settings/training/analytics', async () => {
+      const mockData = { total_runs: 5, avg_quality: 0.75, convergence_rate: 0.6 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getTrainingAnalytics();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/analytics');
+    });
+  });
+
   describe('Security Keys', () => {
     it('listSecurityKeys calls GET /security/keys', async () => {
       const mockData = [{ id: 'k1' }];
@@ -1857,6 +1870,782 @@ describe('SloughGPTClient', () => {
 
       expect(result).toEqual(mockData);
       expect(mockFetch.mock.calls[0][0]).toContain('/metrics');
+    });
+  });
+
+  describe('Generation', () => {
+    it('generate calls POST /inference/generate', async () => {
+      const mockData = { text: 'Hello world', model: 'gpt2', inference_time_ms: 50 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.generate({ prompt: 'Hello', max_new_tokens: 50, temperature: 0.7 });
+
+      expect(result.text).toBe('Hello world');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('quickGenerate calls generate and returns text', async () => {
+      const mockData = { text: 'Quick result', model: 'gpt2' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.quickGenerate('Test');
+
+      expect(result).toBe('Quick result');
+    });
+  });
+
+  describe('Chat', () => {
+    it('chat calls POST /chat', async () => {
+      const mockData = { message: 'Hi there', model: 'gpt2' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.chat({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      expect(result.message.content).toBe('Hi there');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('quickChat calls chat and returns content', async () => {
+      const mockData = { message: 'Quick reply', model: 'gpt2' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.quickChat('Hello');
+
+      expect(result).toBe('Quick reply');
+    });
+  });
+
+  describe('Souls', () => {
+    it('listSouls calls GET /souls', async () => {
+      const mockData = [{ name: 'default', description: 'Default soul' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listSouls();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/souls');
+    });
+
+    it('getCurrentSoul calls GET /souls/current', async () => {
+      const mockData = { name: 'default', description: 'Default' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getCurrentSoul();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/souls/current');
+    });
+
+    it('switchSoul calls POST /souls/switch', async () => {
+      const mockData = { switched: true, name: 'creative' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.switchSoul('creative');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('Tokenizer', () => {
+    it('tokenize calls POST /tokenizer/tokenize', async () => {
+      const mockData = { tokens: [1, 2, 3], token_count: 3 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.tokenize('Hello world');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('trainTokenizer calls POST /tokenizer/train', async () => {
+      const mockData = { vocab_size: 1000, trained: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.trainTokenizer('training text', 1000);
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('System', () => {
+    it('getSystemMetrics calls GET /system/metrics', async () => {
+      const mockData = { cpu_percent: 50, memory_percent: 60, disk_percent: 30, uptime_seconds: 1000 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getSystemMetrics();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/system/metrics');
+    });
+
+    it('getSystemInfo calls GET /system/info', async () => {
+      const mockData = { platform: 'linux', python: '3.12' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getSystemInfo();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/system/info');
+    });
+
+    it('getSystemDisk calls GET /system/disk', async () => {
+      const mockData = { total_gb: 500, used_gb: 200 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getSystemDisk();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/system/disk');
+    });
+  });
+
+  describe('Companion', () => {
+    it('getPersonalities calls GET /personalities', async () => {
+      const mockData = [{ name: 'friendly', description: 'Friendly' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getPersonalities();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/personalities');
+    });
+
+    it('setPersonality calls POST /companion/personality', async () => {
+      const mockData = { status: 'set', personality: 'friendly' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.setPersonality('friendly');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('getCompanionPrompt calls GET /companion/prompt', async () => {
+      const mockData = { prompt: 'You are helpful' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getCompanionPrompt();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/companion/prompt');
+    });
+
+    it('listCompanionPresets calls GET /companion/presets', async () => {
+      const mockData = [{ name: 'default' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listCompanionPresets();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/companion/presets');
+    });
+  });
+
+  describe('Training Core', () => {
+    it('startTraining calls POST /training/start', async () => {
+      const mockData = { id: 't1', status: 'pending' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.startTraining({ name: 'test', model: 'gpt2', dataset: 'd1', epochs: 5 });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('getTrainingStatus calls GET /training/jobs/{id}', async () => {
+      const mockData = { id: 't1', status: 'running', progress: 0.5 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getTrainingStatus('t1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/training/jobs/t1');
+    });
+
+    it('listTrainingJobs calls GET /training/jobs', async () => {
+      const mockData = [{ id: 't1', status: 'running' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listTrainingJobs();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/training/jobs');
+    });
+
+    it('deleteTrainingJob calls DELETE /training/jobs/{id}', async () => {
+      const mockData = { deleted: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.deleteTrainingJob('t1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+
+    it('stopTraining calls POST /training/control/stop', async () => {
+      const mockData = { stopped: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.stopTraining();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('pauseTraining calls POST /training/control/pause', async () => {
+      const mockData = { paused: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.pauseTraining();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('resumeTraining calls POST /training/control/resume', async () => {
+      const mockData = { resumed: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.resumeTraining();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('getTrainingRecoveryStats calls GET /recovery/stats', async () => {
+      const mockData = { recoverable: 2, last_checkpoint: 'ckpt-5' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getTrainingRecoveryStats();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/recovery/stats');
+    });
+
+    it('abandonRecovery calls DELETE /recovery/abandon/{id}', async () => {
+      const mockData = { abandoned: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.abandonRecovery('t1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+  });
+
+  describe('Auto-Train Control', () => {
+    it('startAutoTrain calls POST /training/start', async () => {
+      const mockData = { started: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.startAutoTrain({ model: 'gpt2', dataset: 'd1' });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('stopAutoTrain calls POST /training/stop', async () => {
+      const mockData = { stopped: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.stopAutoTrain();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('listAutoTrainCheckpoints calls GET /training/checkpoints', async () => {
+      const mockData = [{ name: 'ckpt-1' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listAutoTrainCheckpoints();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/training/checkpoints');
+    });
+
+    it('deleteAutoTrainCheckpoint calls DELETE /training/checkpoints/{name}', async () => {
+      const mockData = { deleted: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.deleteAutoTrainCheckpoint('ckpt-1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+
+    it('loadAutoTrainCheckpoint calls POST /training/checkpoints/{name}/load', async () => {
+      const mockData = { loaded: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.loadAutoTrainCheckpoint('ckpt-1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('Feedback Stats', () => {
+    it('getFeedbackStats calls GET /feedback/stats/summary', async () => {
+      const mockData = { total: 50, avg_score: 4.2 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getFeedbackStats();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/feedback/stats/summary');
+    });
+  });
+
+  describe('Knowledge Extended', () => {
+    it('getKnowledgeStats calls GET /knowledge/stats', async () => {
+      const mockData = { total_items: 100, topics: 5 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getKnowledgeStats();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/knowledge/stats');
+    });
+
+    it('getKnowledgeTopics calls GET /knowledge/topics', async () => {
+      const mockData = ['ai', 'math'];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getKnowledgeTopics();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/knowledge/topics');
+    });
+
+    it('ingestKnowledgeUrl calls POST /knowledge/ingest-url', async () => {
+      const mockData = { id: 'k3', url: 'https://example.com' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.ingestKnowledgeUrl('https://example.com');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('Datasets Import', () => {
+    it('importDatasetLocal calls POST /datasets/import/local', async () => {
+      const mockData = { dataset_id: 'd2', name: 'local' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.importDatasetLocal('/path/to/data.csv', 'local');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('importDatasetUrl calls POST /datasets/import/url', async () => {
+      const mockData = { dataset_id: 'd4', name: 'url' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.importDatasetUrl('https://example.com/data.csv', 'url');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('VQA', () => {
+    it('askQuestion calls POST /multimodal/ask', async () => {
+      const mockData = { answer: 'a cat', confidence: 0.9 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const mockFile = new File([''], 'test.png', { type: 'image/png' });
+      const result = await client.askQuestion(mockFile, 'What is this?');
+
+      expect(result.answer).toBe('a cat');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('detectObjects calls POST /multimodal/detect', async () => {
+      const mockData = { objects: [{ label: 'cat', bbox: [0, 0, 100, 100], confidence: 0.95 }] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const mockFile = new File([''], 'test.png', { type: 'image/png' });
+      const result = await client.detectObjects(mockFile);
+
+      expect(result.objects).toHaveLength(1);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('analyzePdf calls POST /multimodal/pdf/upload', async () => {
+      const mockData = { analysis: 'This is a report', filename: 'doc.pdf' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const mockFile = new File([''], 'doc.pdf', { type: 'application/pdf' });
+      const result = await client.analyzePdf(mockFile, 'Summarize this');
+
+      expect(result.analysis).toBe('This is a report');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('OpenWebUI Integration', () => {
+    it('openwebuiDatasets calls GET /openwebui/datasets', async () => {
+      const mockData = { datasets: [{ id: 'd1', name: 'train' }] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.openwebuiDatasets();
+
+      expect(result).toEqual(mockData.datasets);
+      expect(mockFetch.mock.calls[0][0]).toContain('/openwebui/datasets');
+    });
+
+    it('openwebuiCheckpoints calls GET /openwebui/checkpoints', async () => {
+      const mockData = { checkpoints: [{ name: 'ckpt-1' }] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.openwebuiCheckpoints();
+
+      expect(result).toEqual(mockData.checkpoints);
+      expect(mockFetch.mock.calls[0][0]).toContain('/openwebui/checkpoints');
+    });
+
+    it('openwebuiStartTraining calls POST /openwebui/training/start', async () => {
+      const mockData = { started: true, job_id: 'j1' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.openwebuiStartTraining('d1', 'finetune');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('openwebuiStopTraining calls POST /openwebui/training/stop', async () => {
+      const mockData = { stopped: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.openwebuiStopTraining();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('openwebuiTrainingStatus calls GET /openwebui/training/status', async () => {
+      const mockData = { status: 'running', progress: 0.5 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.openwebuiTrainingStatus();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/openwebui/training/status');
+    });
+  });
+
+  describe('Cloud Training', () => {
+    it('cloudTrainingJobs calls GET /cloud-training/jobs', async () => {
+      const mockData = { jobs: [{ id: 'c1', status: 'running' }] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.cloudTrainingJobs(5);
+
+      expect(result).toEqual(mockData.jobs);
+      expect(mockFetch.mock.calls[0][0]).toContain('/cloud-training/jobs');
+    });
+
+    it('cloudTrainingSubmit calls POST /cloud-training/submit', async () => {
+      const mockData = { job_id: 'c2', status: 'submitted' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.cloudTrainingSubmit('aws', 'd1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('cloudTrainingStatus calls GET /cloud-training/{id}/status', async () => {
+      const mockData = { job_id: 'c1', status: 'completed' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.cloudTrainingStatus('c1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/cloud-training/c1/status');
+    });
+
+    it('cloudTrainingCancel calls POST /cloud-training/{id}/cancel', async () => {
+      const mockData = { cancelled: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.cloudTrainingCancel('c1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('Plugins', () => {
+    it('pluginsList calls GET /plugins', async () => {
+      const mockData = { plugins: [{ name: 'plugin-a', enabled: true }] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.pluginsList();
+
+      expect(result).toEqual(mockData.plugins);
+      expect(mockFetch.mock.calls[0][0]).toContain('/plugins');
+    });
+
+    it('pluginsEnable calls POST /plugins/{name}/enable', async () => {
+      const mockData = { enabled: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.pluginsEnable('plugin-a');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('pluginsDisable calls POST /plugins/{name}/disable', async () => {
+      const mockData = { disabled: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.pluginsDisable('plugin-a');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('pluginsReload calls POST /plugins/reload', async () => {
+      const mockData = { reloaded: true, count: 3 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.pluginsReload();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('Docstore', () => {
+    it('listDocstoreDocs calls GET /docstore/{collection}', async () => {
+      const mockData = { data: [{ id: 'd1' }] };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.listDocstoreDocs('articles');
+
+      expect(result).toEqual([{ id: 'd1' }]);
+      expect(mockFetch.mock.calls[0][0]).toContain('/docstore/articles');
+      expect(mockFetch.mock.calls[0][1].method).toBe('GET');
+    });
+
+    it('getDocstoreDoc calls GET /docstore/{collection}/{docId}', async () => {
+      const mockData = { status: 'success', data: { id: 'd1', content: 'hello' } };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.getDocstoreDoc('articles', 'd1');
+
+      expect(result).toEqual({ id: 'd1', content: 'hello' });
+      expect(mockFetch.mock.calls[0][0]).toContain('/docstore/articles/d1');
+    });
+
+    it('putDocstoreDoc calls PUT /docstore/{collection}/{docId}', async () => {
+      const mockData = { status: 'success', data: { id: 'd1', status: 'saved' } };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.putDocstoreDoc('articles', 'd1', { content: 'hello' });
+
+      expect(result).toEqual({ id: 'd1', status: 'saved' });
+      expect(mockFetch.mock.calls[0][1].method).toBe('PUT');
+    });
+
+    it('deleteDocstoreDoc calls DELETE /docstore/{collection}/{docId}', async () => {
+      const mockData = { deleted: true };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.deleteDocstoreDoc('articles', 'd1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+
+    it('bulkPutDocstore calls POST /docstore/{collection}/bulk', async () => {
+      const mockData = { status: 'success', data: { count: 5 } };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.bulkPutDocstore('articles', [{ id: 'd1' }]);
+
+      expect(result).toEqual({ count: 5 });
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('Collections', () => {
+    it('listCollections calls GET /collections', async () => {
+      const mockData = { data: [{ id: 'c1' }] };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.listCollections();
+
+      expect(result).toEqual([{ id: 'c1' }]);
+      expect(mockFetch.mock.calls[0][1].method).toBe('GET');
+    });
+
+    it('createCollection calls POST /collections/create', async () => {
+      const mockData = { status: 'success', data: { id: 'c1', name: 'news' } };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.createCollection('news');
+
+      expect(result).toEqual({ id: 'c1', name: 'news' });
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('deleteCollection calls DELETE /collections/{id}', async () => {
+      const mockData = { deleted: true };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.deleteCollection('c1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+
+    it('runCollection calls POST /collections/run', async () => {
+      const mockData = { status: 'success', data: { status: 'running' } };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.runCollection('c1');
+
+      expect(result).toEqual({ status: 'running' });
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('getCollectionRecords calls GET /collections/{id}/records', async () => {
+      const mockData = { data: [{ r1: 'v1' }] };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.getCollectionRecords('c1');
+
+      expect(result).toEqual([{ r1: 'v1' }]);
+      expect(mockFetch.mock.calls[0][0]).toContain('/collections/c1/records');
+    });
+
+    it('getCollectionStats calls GET /collections/stats', async () => {
+      const mockData = { status: 'success', data: { total: 5 } };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.getCollectionStats();
+
+      expect(result).toEqual({ total: 5 });
+      expect(mockFetch.mock.calls[0][0]).toContain('/collections/stats');
+    });
+
+    it('patchDocstoreDoc calls PATCH /docstore/{collection}/{docId}', async () => {
+      const mockData = { id: 'd1', status: 'updated' };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.patchDocstoreDoc('notes', 'd1', { content: 'patched' });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/docstore/notes/d1');
+      expect(mockFetch.mock.calls[0][1]?.method).toBe('PATCH');
+    });
+
+    it('clearDocstoreCollection calls DELETE /docstore/{collection}', async () => {
+      const mockData = { cleared: 5 };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.clearDocstoreCollection('notes');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/docstore/notes');
+      expect(mockFetch.mock.calls[0][1]?.method).toBe('DELETE');
+    });
+
+    it('getCollection calls GET /collections/{id}', async () => {
+      const mockData = { id: 'c1', name: 'web-scrape' };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.getCollection('c1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/collections/c1');
+    });
+
+    it('collectFromCollection calls POST /collections/{id}/collect', async () => {
+      const mockData = { collected: 50 };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockData) });
+
+      const client = new SloughGPTClient();
+      const result = await client.collectFromCollection('c1', { query: 'python' });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/collections/c1/collect');
+      expect(mockFetch.mock.calls[0][1]?.method).toBe('POST');
     });
   });
 });

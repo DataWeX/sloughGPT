@@ -22,7 +22,43 @@ vi.mock('@sloughgpt/strui', () => {
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-  }
+  
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+}
 })
 
 vi.mock('@/lib/workflow-controller', () => ({
@@ -56,7 +92,7 @@ afterEach(cleanup)
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockStatus.mockResolvedValue({ running: false, last_run: null, total_runs: 0 })
+  mockStatus.mockResolvedValue({ running: false, last_run: null, total_runs: 0, config: { aggregate_interval_minutes: 5, prune_interval_minutes: 10, export_interval_hours: 24, health_check_interval_seconds: 60 } })
   mockStart.mockResolvedValue({})
   mockStop.mockResolvedValue({})
   mockTrigger.mockResolvedValue({ status: 'done' })
@@ -102,7 +138,7 @@ describe('WorkflowPage — stopped state flow', () => {
 
 describe('WorkflowPage — running state flow', () => {
   it('shows running status', async () => {
-    mockStatus.mockResolvedValue({ running: true, stats: { feedback_recorded: 10 } })
+    mockStatus.mockResolvedValue({ running: true, stats: { feedback_recorded: 10 }, config: { aggregate_interval_minutes: 5, prune_interval_minutes: 10, export_interval_hours: 24, health_check_interval_seconds: 60 } })
     render(<WorkflowPage />)
     await waitFor(() => {
       expect(screen.getAllByText('Running').length).toBeGreaterThanOrEqual(1)
@@ -199,6 +235,7 @@ describe('WorkflowPage — stats display', () => {
       running: true,
       total_runs: 5,
       stats: { feedback_recorded: 100, auto_train_steps: 10 },
+      config: { aggregate_interval_minutes: 5, prune_interval_minutes: 10, export_interval_hours: 24, health_check_interval_seconds: 60 },
     })
     render(<WorkflowPage />)
     await waitFor(() => {

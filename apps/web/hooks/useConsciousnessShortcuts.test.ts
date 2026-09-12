@@ -35,7 +35,7 @@ describe('useConsciousnessShortcuts', () => {
   it('navigates to personality on Ctrl+Shift+P', () => {
     const { result } = renderHook(() => mod.useConsciousnessShortcuts())
     act(() => { fireKey('P') })
-    expect(mockPush).toHaveBeenCalledWith('/personality')
+    expect(mockPush).toHaveBeenCalledWith('/consciousness/personality')
     expect(result.current.lastAction).toBe('personality')
   })
 

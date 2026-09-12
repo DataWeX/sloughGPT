@@ -2,9 +2,46 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, waitFor, fireEvent } from '@testing-library/react'
 import PersonalityPage from './page'
 
+const {
+  mockGetPersonality,
+  mockGetPersonalityPresets,
+  mockGetPersonalityHistory,
+  mockGetPersonalityConflicts,
+  mockListPersonas,
+  mockResetPersonality,
+  mockApplyPersonalityPreset,
+  mockSavePersona,
+  mockActivatePersona,
+  mockDeletePersona,
+  mockApiPatch,
+  mockAddToast,
+} = vi.hoisted(() => ({
+  mockGetPersonality: vi.fn(),
+  mockGetPersonalityPresets: vi.fn(),
+  mockGetPersonalityHistory: vi.fn(),
+  mockGetPersonalityConflicts: vi.fn(),
+  mockListPersonas: vi.fn(),
+  mockResetPersonality: vi.fn(),
+  mockApplyPersonalityPreset: vi.fn(),
+  mockSavePersona: vi.fn(),
+  mockActivatePersona: vi.fn(),
+  mockDeletePersona: vi.fn(),
+  mockApiPatch: vi.fn(),
+  mockAddToast: vi.fn(),
+}))
+
+const mockProfile = {
+  values: ['honesty', 'curiosity'],
+  goals: ['be helpful'],
+  voice: { formality: 0.5, warmth: 0.7, confidence: 0.6, humor: 0.3, verbosity: 0.4, empathy: 0.8 },
+  style: { use_examples: true, ask_follow_ups: false, acknowledge_uncertainty: true, use_analogies: false, break_down_complex_topics: true },
+  traits: { openness: 0.6, conscientiousness: 0.7, extraversion: 0.4, agreeableness: 0.8, neuroticism: 0.3 },
+  interests: ['AI', 'science'],
+  avoid: ['rudeness'],
+}
+
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://localhost:8000' }))
 
-const mockAddToast = vi.fn()
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: (selector: (s: { addToast: typeof mockAddToast }) => typeof mockAddToast) =>
     selector({ addToast: mockAddToast }),
@@ -31,6 +68,26 @@ vi.mock('recharts', () => ({
   Legend: () => null,
 }))
 
+vi.mock('@sloughgpt/strui', () => {
+  const passthrough = ({ children }: any) => <div>{children}</div>
+  return {
+    cn: vi.fn((...a: any[]) => a.join(' ')),
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Button: ({ children, onClick, disabled, variant }: any) => (
+      <button onClick={onClick} disabled={disabled} data-variant={variant}>{children}</button>
+    ),
+    Card: passthrough,
+    CardContent: passthrough,
+    CardDescription: ({ children }: any) => <div>{children}</div>,
+    CardHeader: passthrough,
+    CardTitle: ({ children }: any) => <div>{children}</div>,
+    Input: ({ value, onChange, placeholder, ...props }: any) => (
+      <input value={value} onChange={onChange} placeholder={placeholder} {...props} />
+    ),
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  }
+})
+
 vi.mock('./PersonalityQuiz', () => ({
   PersonalityQuiz: ({ onApply }: { onApply: (preset: string) => void }) => (
     <div data-testid="personality-quiz">
@@ -39,64 +96,59 @@ vi.mock('./PersonalityQuiz', () => ({
   ),
 }))
 
-const mockProfile = {
-  values: ['honesty', 'curiosity'],
-  goals: ['be helpful'],
-  voice: { formality: 0.5, warmth: 0.7, confidence: 0.6, humor: 0.3, verbosity: 0.4, empathy: 0.8 },
-  style: { use_examples: true, ask_follow_ups: false, acknowledge_uncertainty: true, use_analogies: false, break_down_complex_topics: true },
-  traits: { openness: 0.6, conscientiousness: 0.7, extraversion: 0.4, agreeableness: 0.8, neuroticism: 0.3 },
-  interests: ['AI', 'science'],
-  avoid: ['rudeness'],
+vi.mock('@/lib/http-client', () => ({
+  apiPatch: mockApiPatch,
+}))
+
+vi.mock('@/lib/consciousness-controller', () => ({
+  consciousnessController: {
+    getPersonality: mockGetPersonality,
+    getPersonalityPresets: mockGetPersonalityPresets,
+    getPersonalityHistory: mockGetPersonalityHistory,
+    getPersonalityConflicts: mockGetPersonalityConflicts,
+    listPersonas: mockListPersonas,
+    resetPersonality: mockResetPersonality,
+    applyPersonalityPreset: mockApplyPersonalityPreset,
+    savePersona: mockSavePersona,
+    activatePersona: mockActivatePersona,
+    deletePersona: mockDeletePersona,
+  },
+}))
+
+const consciousnessController = {
+  getPersonality: mockGetPersonality,
+  getPersonalityPresets: mockGetPersonalityPresets,
+  getPersonalityHistory: mockGetPersonalityHistory,
+  getPersonalityConflicts: mockGetPersonalityConflicts,
+  listPersonas: mockListPersonas,
+  resetPersonality: mockResetPersonality,
+  applyPersonalityPreset: mockApplyPersonalityPreset,
+  savePersona: mockSavePersona,
+  activatePersona: mockActivatePersona,
+  deletePersona: mockDeletePersona,
 }
 
-const mockPresets = { data: { names: ['default', 'formal', 'creative'] } }
-const mockHistory = {
-  data: {
+const apiPatch = mockApiPatch
+
+beforeEach(() => {
+  mockGetPersonality.mockResolvedValue(mockProfile)
+  mockGetPersonalityPresets.mockResolvedValue({ names: ['default', 'formal', 'creative'] })
+  mockGetPersonalityHistory.mockResolvedValue({
     history: [
       { timestamp: Date.now() / 1000 - 3600, voice: { warmth: 0.5 }, traits: { openness: 0.4 } },
       { timestamp: Date.now() / 1000, voice: { warmth: 0.7 }, traits: { openness: 0.6 } },
     ],
-  },
-}
-const mockConflicts = { data: { conflicts: [{ type: 'style', severity: 'medium', message: 'Conflict', fields: ['humor', 'formality'] }] } }
-const mockPersonas = { personas: [{ id: 'p1', name: 'Test Persona', values: ['honesty'] }] }
-
-let fetchMock: ReturnType<typeof vi.fn>
-
-beforeEach(() => {
-  fetchMock = vi.fn().mockImplementation((url: string, opts?: any) => {
-    if (typeof url === 'string') {
-      if (url.includes('/personality') && !url.includes('preset') && !url.includes('history') && !url.includes('conflict') && !url.includes('reset') && !url.includes('save')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: mockProfile }) })
-      }
-      if (url.includes('/presets') && !url.includes('apply')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockPresets) })
-      }
-      if (url.includes('/history')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockHistory) })
-      }
-      if (url.includes('/conflicts')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockConflicts) })
-      }
-      if (url.includes('/personas') && !url.includes('save') && !url.includes('activate')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockPersonas) })
-      }
-      if (url.includes('/reset')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: mockProfile }) })
-      }
-      if (url.includes('/presets/apply')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: mockProfile }) })
-      }
-      if (url.includes('/personas/save')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
-      }
-      if (url.includes('/activate')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
-      }
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
   })
-  global.fetch = fetchMock
+  mockGetPersonalityConflicts.mockResolvedValue({
+    conflicts: [{ type: 'style', severity: 'medium', message: 'Conflict', fields: ['humor', 'formality'] }],
+  })
+  mockListPersonas.mockResolvedValue({ personas: [{ id: 'p1', name: 'Test Persona', values: ['honesty'] }] })
+  mockResetPersonality.mockResolvedValue({ reset: true })
+  mockApplyPersonalityPreset.mockResolvedValue({ applied: true })
+  mockSavePersona.mockResolvedValue({ id: 'new-p' })
+  mockActivatePersona.mockResolvedValue({ activated: true })
+  mockDeletePersona.mockResolvedValue({ deleted: true })
+  mockApiPatch.mockResolvedValue(mockProfile)
 })
 
 afterEach(() => {
@@ -157,10 +209,10 @@ describe('PersonalityPage', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('Save Changes'))
     })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8000/consciousness/personality',
-      expect.objectContaining({ method: 'PATCH' })
-    )
+    expect(apiPatch).toHaveBeenCalledWith('/consciousness/personality', expect.objectContaining({
+      values: expect.any(Array),
+      goals: expect.any(Array),
+    }))
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Personality saved', 'success')
     })
@@ -172,10 +224,7 @@ describe('PersonalityPage', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('Reset'))
     })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8000/consciousness/personality/reset',
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(consciousnessController.resetPersonality).toHaveBeenCalled()
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Personality reset to defaults', 'success')
     })
@@ -187,10 +236,7 @@ describe('PersonalityPage', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('Apply Creative'))
     })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8000/consciousness/personality/presets/apply',
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(consciousnessController.applyPersonalityPreset).toHaveBeenCalledWith('creative')
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Applied "creative" preset', 'success')
     })
@@ -231,10 +277,10 @@ describe('PersonalityPage', () => {
       const saveBtn = btns.find(el => el.tagName === 'BUTTON')!
       fireEvent.click(saveBtn)
     })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8000/consciousness/personas/save',
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(consciousnessController.savePersona).toHaveBeenCalledWith(expect.objectContaining({
+      persona_id: 'my-test-persona',
+      name: 'My Test Persona',
+    }))
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Persona saved', 'success')
     })
@@ -246,10 +292,7 @@ describe('PersonalityPage', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('personality.activate'))
     })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8000/consciousness/personas/p1/activate',
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(consciousnessController.activatePersona).toHaveBeenCalledWith('p1')
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Persona activated', 'success')
     })
@@ -262,10 +305,7 @@ describe('PersonalityPage', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('personality.delete'))
     })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8000/consciousness/personas/p1',
-      expect.objectContaining({ method: 'DELETE' })
-    )
+    expect(consciousnessController.deletePersona).toHaveBeenCalledWith('p1')
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('Persona deleted', 'success')
     })
@@ -278,8 +318,7 @@ describe('PersonalityPage', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('personality.delete'))
     })
-    const deleteCalls = fetchMock.mock.calls.filter((c: any) => c[1]?.method === 'DELETE')
-    expect(deleteCalls.length).toBe(0)
+    expect(consciousnessController.deletePersona).not.toHaveBeenCalled()
   })
 
   it('edits values input field', async () => {

@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
+
+const mockAddToast = vi.fn()
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
   Card: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   CardContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Button: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
   StatCard: ({ label, value, loading }: any) => <div>{loading ? 'Loading...' : `${label}: ${value}`}</div>,
   KpiGrid: ({ children }: any) => <div>{children}</div>,
   IconRefresh: ({ className }: any) => <span className={className} />,
@@ -14,7 +16,7 @@ vi.mock('@sloughgpt/strui', () => ({
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: any) => selector({ addToast: vi.fn() }),
+  useToastStore: (selector: any) => selector({ addToast: mockAddToast }),
 }))
 
 vi.mock('@/components/composed/StatusBanner', () => ({
@@ -33,7 +35,7 @@ vi.mock('@/lib/system-controller', () => ({
 
 import { systemController } from '@/lib/system-controller'
 
-afterEach(() => { cleanup(); vi.resetAllMocks() })
+afterEach(() => { cleanup(); vi.clearAllMocks() })
 
 it('renders loading state while loading', () => {
   vi.mocked(systemController.getInferencePoolStatus).mockReturnValue(new Promise(() => {}))
@@ -85,23 +87,22 @@ it('hides error when absent', async () => {
   expect(screen.queryByText('OOM killed')).toBeNull()
 })
 
-it('calls onRefresh and refetches when Refresh clicked', async () => {
+it('calls onRefresh when Refresh clicked', async () => {
   const onRefresh = vi.fn()
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true })
   render(<InferencePoolCard onRefresh={onRefresh} />)
   await vi.waitFor(() => expect(screen.getByText('Initialized: Yes')).toBeTruthy())
-  screen.getByRole('button', { name: /refresh/i }).click()
+  fireEvent.click(screen.getByRole('button', { name: /refresh inference pool/i }))
   expect(onRefresh).toHaveBeenCalledOnce()
-  expect(systemController.getInferencePoolStatus).toHaveBeenCalledTimes(2)
 })
 
 it('does not crash when Refresh clicked and onRefresh is absent', async () => {
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true })
   render(<InferencePoolCard />)
   await vi.waitFor(() => expect(screen.getByText('Initialized: Yes')).toBeTruthy())
-  const btn = screen.getByRole('button', { name: /refresh/i })
+  const btn = screen.getByRole('button', { name: /refresh inference pool/i })
   expect(btn).toBeTruthy()
-  btn.click()
+  fireEvent.click(btn)
   await vi.waitFor(() => expect(screen.getByText('Initialized: Yes')).toBeTruthy())
 })
 

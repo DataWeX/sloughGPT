@@ -3,8 +3,16 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { ConsciousnessChatPanel } from './ConsciousnessChatPanel'
 import { emitConsciousness } from '@/lib/consciousness-bus'
 import type { ConsciousnessEvent } from '@/lib/consciousness-bus'
+import { consciousnessController } from '@/lib/consciousness-controller'
 
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://localhost:8000' }))
+vi.mock('@/lib/consciousness-controller', () => ({
+  consciousnessController: {
+    reflect: vi.fn().mockResolvedValue({}),
+    seedData: vi.fn().mockResolvedValue({}),
+    submitFeedback: vi.fn().mockResolvedValue({}),
+  },
+}))
 vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({
     t: (key: string) => {
@@ -110,25 +118,25 @@ describe('ConsciousnessChatPanel', () => {
     expect(screen.getByText('Beliefs')).toBeDefined()
   })
 
-  it('reflect button calls POST /api/consciousness/reflect', async () => {
+  it('reflect button calls consciousnessController.reflect', async () => {
     render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
     const expandBtn = screen.getByRole('button', { name: /Expand panel/i })
     fireEvent.click(expandBtn)
     const reflectBtn = screen.getByRole('button', { name: /Reflect/i })
     fireEvent.click(reflectBtn)
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/consciousness/reflect', expect.objectContaining({ method: 'POST' }))
+      expect(consciousnessController.reflect).toHaveBeenCalled()
     })
   })
 
-  it('seed button calls POST /api/consciousness/seed', async () => {
+  it('seed button calls consciousnessController.seedData', async () => {
     render(<ConsciousnessChatPanel open={true} onClose={onClose} />)
     const expandBtn = screen.getByRole('button', { name: /Expand panel/i })
     fireEvent.click(expandBtn)
     const seedBtn = screen.getByRole('button', { name: /Seed Data/i })
     fireEvent.click(seedBtn)
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('/api/consciousness/seed', expect.objectContaining({ method: 'POST' }))
+      expect(consciousnessController.seedData).toHaveBeenCalled()
     })
   })
 

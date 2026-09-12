@@ -3,6 +3,16 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ConsciousnessOnboarding } from './ConsciousnessOnboarding'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+const mockUpdateConfig = vi.fn().mockResolvedValue({})
+const mockApplyPreset = vi.fn().mockResolvedValue({})
+const mockSeedData = vi.fn().mockResolvedValue({})
+vi.mock('@/lib/consciousness-controller', () => ({
+  consciousnessController: {
+    updateConfig: (...args: unknown[]) => mockUpdateConfig(...args),
+    applyPersonalityPreset: (...args: unknown[]) => mockApplyPreset(...args),
+    seedData: (...args: unknown[]) => mockSeedData(...args),
+  },
+}))
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://localhost:8000' }))
 vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: (key: string) => key }),
@@ -50,10 +60,7 @@ describe('ConsciousnessOnboarding', () => {
     await waitFor(() => {
       expect(screen.getByText('consciousness_onboarding.step3_title')).toBeDefined()
     })
-    expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/consciousness/config',
-      expect.objectContaining({ method: 'PATCH' })
-    )
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ level: 2 })
   })
 
   it('POSTs preset apply when selected on step 3 → step 4', async () => {
@@ -67,10 +74,7 @@ describe('ConsciousnessOnboarding', () => {
     await waitFor(() => {
       expect(screen.getByText('consciousness_onboarding.step4_title')).toBeDefined()
     })
-    expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/consciousness/personality/presets/apply',
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(mockApplyPreset).toHaveBeenCalledWith(expect.any(String))
   })
 
   it('POSTs seed on step 4', async () => {
@@ -86,10 +90,7 @@ describe('ConsciousnessOnboarding', () => {
     await waitFor(() => {
       expect(screen.getByText('consciousness_onboarding.step4_done')).toBeDefined()
     })
-    expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/consciousness/seed?count=10',
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(mockSeedData).toHaveBeenCalledWith({ count: 10 })
   })
 
   it('calls onComplete on Finish (step 5)', async () => {

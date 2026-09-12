@@ -37,24 +37,42 @@ const mockEval = {
   },
 }
 
+const mockGetStatus = vi.fn()
+const mockReflect = vi.fn()
+const mockEvaluate = vi.fn()
+const mockGetEpisodeHistory = vi.fn()
+const mockSeedData = vi.fn()
+
+vi.mock('@/lib/consciousness-controller', () => ({
+  consciousnessController: {
+    getStatus: (...a: unknown[]) => mockGetStatus(...a),
+    reflect: (...a: unknown[]) => mockReflect(...a),
+    evaluate: (...a: unknown[]) => mockEvaluate(...a),
+    getEpisodeHistory: (...a: unknown[]) => mockGetEpisodeHistory(...a),
+    seedData: (...a: unknown[]) => mockSeedData(...a),
+    updateConfig: vi.fn().mockResolvedValue({ updated: true }),
+    startTraining: vi.fn().mockResolvedValue({ started: true }),
+  },
+}))
+
+vi.mock('@/lib/toast-store', () => ({
+  useToastStore: (sel: any) => sel({ addToast: vi.fn() }),
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/consciousness',
+}))
+
 describe('ConsciousnessPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
-      if (url.includes('/status')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: mockStatus }) })
-      }
-      if (url.includes('/evaluate')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: mockEval }) })
-      }
-      if (url.includes('/reflect')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { reflection: 'I am reflecting.' } }) })
-      }
-      if (url.includes('/config')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: { level: 2, enabled: true } }) })
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: {} }) })
-    }))
+    mockGetStatus.mockResolvedValue(mockStatus)
+    mockReflect.mockResolvedValue({ reflection: 'I am reflecting.' })
+    mockEvaluate.mockResolvedValue(mockEval)
+    mockGetEpisodeHistory.mockResolvedValue({ episodes: [] })
+    mockSeedData.mockResolvedValue({ seeded: true })
   })
 
   it('renders the page title', async () => {

@@ -1,17 +1,32 @@
-/**
- */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup, renderHook, act } from '@testing-library/react'
+import { render, screen, cleanup, renderHook, act, waitFor } from '@testing-library/react'
+
+const mockGetKV = vi.fn()
+const mockSetKV = vi.fn()
+
+vi.mock('@/lib/db', () => ({
+  chatDB: {
+    getKV: (...a: unknown[]) => mockGetKV(...a),
+    setKV: (...a: unknown[]) => mockSetKV(...a),
+  },
+}))
+
+vi.mock('@/lib/dev-log', () => ({
+  trackEvent: vi.fn(),
+}))
+
 import { LocaleProvider, useLocale, LOCALES } from './useLocale'
 
 afterEach(() => {
   cleanup()
-  localStorage.clear()
+  vi.clearAllMocks()
 })
 
 beforeEach(() => {
-  localStorage.clear()
+  vi.clearAllMocks()
   document.documentElement.lang = ''
+  mockGetKV.mockResolvedValue(undefined)
+  mockSetKV.mockResolvedValue(undefined)
 })
 
 describe('LOCALES', () => {
@@ -112,27 +127,37 @@ describe('LocaleProvider behavior', () => {
     expect(document.documentElement.lang).toBe('en')
   })
 
-  it('reads saved locale from localStorage', () => {
-    localStorage.setItem('man_locale', 'fr')
+  it('reads saved locale from chatDB', async () => {
+    mockGetKV.mockImplementation((key: string) => {
+      if (key === 'man_locale') return Promise.resolve('fr')
+      return Promise.resolve(undefined)
+    })
     render(
       <LocaleProvider>
         <LocaleReader fn={() => {}} />
       </LocaleProvider>
     )
-    expect(document.documentElement.lang).toBe('fr')
+    await waitFor(() => {
+      expect(document.documentElement.lang).toBe('fr')
+    })
   })
 
-  it('falls back to en for invalid saved locale', () => {
-    localStorage.setItem('man_locale', 'invalid_code')
+  it('falls back to en for invalid saved locale', async () => {
+    mockGetKV.mockImplementation((key: string) => {
+      if (key === 'man_locale') return Promise.resolve('invalid_code')
+      return Promise.resolve(undefined)
+    })
     render(
       <LocaleProvider>
         <LocaleReader fn={() => {}} />
       </LocaleProvider>
     )
-    expect(document.documentElement.lang).toBe('en')
+    await waitFor(() => {
+      expect(document.documentElement.lang).toBe('en')
+    })
   })
 
-  it('setLocale updates lang attribute and localStorage', () => {
+  it('setLocale updates lang attribute and chatDB', async () => {
     let ctx!: ReturnType<typeof useLocale>
     render(
       <LocaleProvider>
@@ -141,11 +166,10 @@ describe('LocaleProvider behavior', () => {
     )
     act(() => { ctx.setLocale('de') })
     expect(document.documentElement.lang).toBe('de')
-    expect(localStorage.getItem('man_locale')).toBe('de')
+    expect(mockSetKV).toHaveBeenCalledWith('man_locale', 'de')
   })
 })
 
-/** Helper that captures locale context for assertions. */
 function LocaleReader({ fn }: { fn: (ctx: ReturnType<typeof useLocale>) => void }) {
   const ctx = useLocale()
   fn(ctx)

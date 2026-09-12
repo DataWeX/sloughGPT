@@ -38,6 +38,7 @@ vi.mock('@sloughgpt/strui', () => {
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     FoldSection: ({ heading, children }: any) => <details open><summary>{heading}</summary><div>{children}</div></details>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
     AlertDialog: ({ children }: any) => <div data-testid="alert-dialog">{children}</div>,
     AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
     AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
@@ -79,7 +80,11 @@ const { mockExportMetrics, mockModelStatus, mockPreview, mockAddToast } = vi.hoi
   mockExportMetrics: vi.fn(), mockModelStatus: vi.fn(), mockPreview: vi.fn(), mockAddToast: vi.fn(),
 }))
 
-vi.mock('next/navigation', () => ({ useSearchParams: () => ({ get: (k: string) => (mockSearchParams as Record<string, string | null>)[k] ?? null }) }))
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
+  useSearchParams: () => ({ get: (k: string) => (mockSearchParams as Record<string, string | null>)[k] ?? null }),
+  usePathname: () => '/training',
+}))
 vi.mock('@/lib/controllers', () => ({
   datasetController: { preview: mockPreview },
   modelController: { status: mockModelStatus },
@@ -93,7 +98,10 @@ vi.mock('@/hooks/useTrainingDatasets', () => ({ useTrainingDatasets: () => mockD
 vi.mock('@/hooks/useTrainingCheckpoints', () => ({ useTrainingCheckpoints: () => mockCheckpoints }))
 vi.mock('@/hooks/useTestDialog', () => ({ useTestDialog: () => mockTest }))
 vi.mock('@/hooks/useTrainingForm', () => ({ useTrainingForm: () => mockForm }))
-vi.mock('@/hooks/useLiveStatus', () => ({ useApiReady: () => true }))
+vi.mock('@/hooks/useLiveStatus', () => ({
+  useApiReady: () => true,
+  liveStatusStore: { getState: () => ({ health: null, connectionStatus: 'connected' }), subscribe: () => () => {} },
+}))
 vi.mock('@/components/training/TrainingSummaryCard', () => ({ TrainingSummaryCard: () => null }))
 vi.mock('@/components/training/TrainingHealthCard', () => ({ TrainingHealthCard: () => null }))
 vi.mock('@/components/OutputCard', () => ({ OutputCard: () => null }))

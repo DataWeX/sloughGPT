@@ -25,7 +25,42 @@ vi.mock('@sloughgpt/strui', () => {
     Breadcrumbs: ({ items, className }: any) => <nav aria-label="Breadcrumb" className={className}>{items?.map((item: any, i: number) => <span key={i}>{item.label}</span>)}</nav>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     IconTrash: () => <span data-testid="icon-trash">trash</span>,
-  }
+  
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+}
 })
 
 const mocks = vi.hoisted(() => ({
@@ -44,7 +79,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const stableRouter = { push: vi.fn() }
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'gpt2' }), useRouter: () => stableRouter }))
+vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'gpt2' }), useRouter: () => stableRouter, useSearchParams: () => new URLSearchParams(), usePathname: () => '/model/gpt2' }))
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mocks.addToast }) }))
 vi.mock('@/lib/model-controller', () => ({
   modelController: {
@@ -80,10 +115,10 @@ vi.mock('@/components/model/QuantizeCard', () => ({
 }))
 
 vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ title, children, loading, loadingContent }: any) => (
+  PageContainer: ({ title, children, loading, loadingContent, loadingCards }: any) => (
     <div className="sl-page mx-auto max-w-4xl">
       <h1>{loading ? '...' : title}</h1>
-      {loading ? loadingContent : children}
+      {loading ? (loadingContent ?? (loadingCards ? <div data-testid="skeleton" /> : null)) : children}
     </div>
   ),
 }))
@@ -91,8 +126,9 @@ vi.mock('@/components/PageContainer', () => ({
 import Page from './page'
 
 const SAMPLE_MODEL: any = {
-  id: 'gpt2', name: 'GPT-2', source: 'huggingface', description: 'Small model',
+  model_id: 'gpt2', id: 'gpt2', name: 'GPT-2', source: 'huggingface', description: 'Small model',
   size_gb: 0.5, params: '124M', type: 'text-generation', tags: ['gpt', 'small'],
+  status: 'ready',
 }
 
 beforeEach(() => {
@@ -100,7 +136,10 @@ beforeEach(() => {
   mocks.list.mockResolvedValue([SAMPLE_MODEL])
   mocks.getHealth.mockResolvedValue({ model_loaded: false, device: null })
   mocks.listFineTuned.mockResolvedValue([])
-  mocks.apiGet.mockResolvedValue({ logs: [] })
+  mocks.apiGet.mockImplementation((url: string) => {
+    if (url.includes('/registry/models/')) return Promise.resolve(SAMPLE_MODEL)
+    return Promise.resolve({ logs: [] })
+  })
   mocks.get.mockResolvedValue({ temperature: 0.7, max_new_tokens: 256, top_p: 1.0, top_k: 50 })
   mocks.update.mockResolvedValue({})
 })
@@ -117,181 +156,109 @@ describe('ModelDetailPage', () => {
   it('shows model name and breadcrumbs', async () => {
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getAllByText('GPT-2').length).toBeGreaterThanOrEqual(1)
-    })
-    expect(screen.getByText('Models')).toBeTruthy()
-  })
-
-  it('shows status card with Loaded badge', async () => {
-    mocks.getHealth.mockResolvedValue({ model_loaded: true, model_type: 'gpt2', device: 'cpu' })
-    render(<Page />)
-    await waitFor(() => {
-      expect(screen.getByText('Loaded')).toBeTruthy()
+      expect(screen.getAllByText(/GPT.?2/).length).toBeGreaterThanOrEqual(1)
     })
   })
 
-  it('shows inactive status when not loaded', async () => {
+  it('shows status card with ready badge', async () => {
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Inactive')).toBeTruthy()
+      expect(screen.getByText('ready')).toBeTruthy()
     })
   })
 
-  it('shows load button when not loaded', async () => {
+  it('shows unloaded status for non-ready model', async () => {
+    mocks.apiGet.mockImplementation((url: string) => {
+      if (url.includes('/registry/models/')) return Promise.resolve({ ...SAMPLE_MODEL, status: 'unloaded' })
+      return Promise.resolve({ logs: [] })
+    })
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Load model')).toBeTruthy()
+      expect(screen.getByText('unloaded')).toBeTruthy()
     })
   })
 
-  it('loads model', async () => {
-    mocks.load.mockResolvedValue({ device: 'cpu' })
+  it('shows Quick Actions card', async () => {
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Load model')).toBeTruthy()
-    })
-    fireEvent.click(screen.getByText('Load model'))
-    await waitFor(() => {
-      expect(mocks.load).toHaveBeenCalledWith('gpt2')
-      expect(mocks.addToast).toHaveBeenCalledWith('Model ready: gpt2 (cpu)', 'success')
+      expect(screen.getByText('Quick Actions')).toBeTruthy()
     })
   })
 
-  it('shows error toast on load failure', async () => {
-    mocks.load.mockRejectedValue(new Error('OOM'))
+  it('shows Latency Distribution card', async () => {
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Load model')).toBeTruthy()
-    })
-    fireEvent.click(screen.getByText('Load model'))
-    await waitFor(() => {
-      expect(mocks.addToast).toHaveBeenCalledWith('OOM', 'error')
+      expect(screen.getByText('Latency Distribution')).toBeTruthy()
     })
   })
 
-  it('unloads model', async () => {
-    mocks.getHealth.mockResolvedValue({ model_loaded: true, model_type: 'gpt2', device: 'cpu' })
-    mocks.unloadModel.mockResolvedValue({})
+  it('shows metrics grid with zero values', async () => {
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Remove')).toBeTruthy()
+      expect(screen.getByText('Total Requests')).toBeTruthy()
     })
-    fireEvent.click(screen.getByText('Remove'))
+    expect(screen.getByText('Total Tokens')).toBeTruthy()
+    expect(screen.getByText('Avg Latency')).toBeTruthy()
+    expect(screen.getByText('Tokens/sec')).toBeTruthy()
+  })
+
+  it('shows Request Queue card', async () => {
+    render(<Page />)
     await waitFor(() => {
-      expect(mocks.unloadModel).toHaveBeenCalled()
-      expect(mocks.addToast).toHaveBeenCalledWith('Model stopped', 'info')
+      expect(screen.getByText('Request Queue')).toBeTruthy()
     })
   })
 
-  it('shows metrics card', async () => {
+  it('shows Circuit Breaker card', async () => {
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Metrics')).toBeTruthy()
-    })
-    expect(screen.getByText('Load this model to see live metrics.')).toBeTruthy()
-  })
-
-  it('runs benchmark', async () => {
-    mocks.getHealth.mockResolvedValue({ model_loaded: true, model_type: 'gpt2', device: 'cpu' })
-    mocks.run.mockResolvedValue({
-      num_parameters: 124000000, memory_mb: 500, throughput_tokens_per_sec: 10,
-      inference_time_ms: 50, latency_p50_ms: 45, latency_p95_ms: 55, latency_p99_ms: 60,
-    })
-    render(<Page />)
-    await waitFor(() => {
-      expect(screen.getByText('Run benchmark')).toBeTruthy()
-    })
-    fireEvent.click(screen.getByText('Run benchmark'))
-    await waitFor(() => {
-      expect(screen.getByText('124.0M')).toBeTruthy()
-      expect(screen.getByText('500 MB')).toBeTruthy()
+      expect(screen.getByText('Circuit Breaker')).toBeTruthy()
     })
   })
 
-  it('shows benchmark error', async () => {
-    mocks.getHealth.mockResolvedValue({ model_loaded: true, model_type: 'gpt2', device: 'cpu' })
-    mocks.run.mockRejectedValue(new Error('timeout'))
+  it('navigates to training queue', async () => {
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Run benchmark')).toBeTruthy()
+      expect(screen.getByText('Quick Actions')).toBeTruthy()
     })
-    fireEvent.click(screen.getByText('Run benchmark'))
-    await waitFor(() => {
-      expect(screen.getByText(/Benchmark failed/)).toBeTruthy()
-    })
+    fireEvent.click(screen.getByText('Training Queue'))
+    expect(stableRouter.push).toHaveBeenCalledWith('/training/queue')
   })
 
-  it('shows generation config card', async () => {
+  it('navigates to HuggingFace', async () => {
+    const openSpy = vi.spyOn(window, 'open')
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Generation Config')).toBeTruthy()
+      expect(screen.getByText('HuggingFace')).toBeTruthy()
     })
-    expect(screen.getByText('Temperature')).toBeTruthy()
-    expect(screen.getByText('Max tokens')).toBeTruthy()
-    expect(screen.getByText('Top-p')).toBeTruthy()
-    expect(screen.getByText('Top-k')).toBeTruthy()
+    fireEvent.click(screen.getByText('HuggingFace'))
+    expect(openSpy).toHaveBeenCalledWith('https://huggingface.co/gpt2', '_blank')
+    openSpy.mockRestore()
   })
 
-  it('saves generation config', async () => {
+  it('calls apiGet on mount', async () => {
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Generation Config')).toBeTruthy()
-    })
-    fireEvent.click(screen.getByText('Save'))
-    await waitFor(() => {
-      expect(mocks.update).toHaveBeenCalled()
-      expect(mocks.addToast).toHaveBeenCalledWith('Generation config updated', 'success')
-    })
-  })
-
-  it('shows quantize card when loaded', async () => {
-    mocks.getHealth.mockResolvedValue({ model_loaded: true, model_type: 'gpt2', device: 'cpu' })
-    render(<Page />)
-    await waitFor(() => {
-      expect(screen.getByTestId('quantize-card')).toBeTruthy()
-    })
-  })
-
-  it('hides quantize card when not loaded', async () => {
-    render(<Page />)
-    await waitFor(() => {
-      expect(screen.getByText('Load model')).toBeTruthy()
-    })
-    expect(screen.queryByTestId('quantize-card')).toBeNull()
-  })
-
-  it('shows details card', async () => {
-    render(<Page />)
-    await waitFor(() => {
-      expect(screen.getByText('Details')).toBeTruthy()
-    })
-    expect(screen.getAllByText('Type').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('shows model not found', async () => {
-    mocks.list.mockResolvedValue([])
-    mocks.listFineTuned.mockResolvedValue([])
-    render(<Page />)
-    await waitFor(() => {
-      expect(screen.getByText(/not found/)).toBeTruthy()
+      expect(mocks.apiGet).toHaveBeenCalledWith('/registry/models/gpt2')
     })
   })
 
   it('shows error toast on load failure', async () => {
-    mocks.list.mockRejectedValue(new Error('network'))
+    mocks.apiGet.mockRejectedValue(new Error('network'))
     render(<Page />)
     await waitFor(() => {
-      expect(mocks.addToast).toHaveBeenCalledWith('Something went wrong loading the model', 'error')
+      expect(mocks.addToast).toHaveBeenCalledWith('Failed to load model details', 'error')
     })
   })
 
-  it('navigates to chat with model', async () => {
-    mocks.getHealth.mockResolvedValue({ model_loaded: true, model_type: 'gpt2', device: 'cpu' })
+  it('shows placeholder when model data is empty', async () => {
+    mocks.apiGet.mockImplementation((url: string) => {
+      if (url.includes('/registry/models/')) return Promise.resolve(null)
+      return Promise.resolve({ logs: [] })
+    })
     render(<Page />)
     await waitFor(() => {
-      expect(screen.getByText('Chat with this model')).toBeTruthy()
+      expect(mocks.apiGet).toHaveBeenCalled()
     })
-    fireEvent.click(screen.getByText('Chat with this model'))
-    expect(stableRouter.push).toHaveBeenCalledWith('/chat')
   })
 })

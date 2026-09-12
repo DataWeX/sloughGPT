@@ -93,4 +93,46 @@ describe('middleware', () => {
     expect(response).toBeDefined()
     expect(mockNext.next).toHaveBeenCalledTimes(1)
   })
+
+  it('handles PUT requests', () => {
+    const response = middleware(makeRequest('/settings', 'PUT'))
+    expect(response).toBeDefined()
+    expect(mockNext.next).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles DELETE requests', () => {
+    const response = middleware(makeRequest('/training/runs/123', 'DELETE'))
+    expect(response).toBeDefined()
+    expect(mockNext.next).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles PATCH requests', () => {
+    const response = middleware(makeRequest('/settings/generation', 'PATCH'))
+    expect(response).toBeDefined()
+    expect(mockNext.next).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes through static assets without timing headers', () => {
+    const response = middleware(makeRequest('/_next/static/chunk.js'))
+    expect(response).toBeDefined()
+    expect(mockNext.next).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes through favicon without timing headers', () => {
+    const response = middleware(makeRequest('/favicon.ico'))
+    expect(response).toBeDefined()
+    expect(mockNext.next).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles API routes', () => {
+    const response = middleware(makeRequest('/api/health'))
+    expect(response).toBeDefined()
+    expect(mockNext.next).toHaveBeenCalledTimes(1)
+  })
+
+  it('config matcher includes catch-all pattern', () => {
+    const matcherStr = config.matcher.join(' ')
+    expect(matcherStr).toContain('/(')
+    expect(matcherStr).toContain('.*)')
+  })
 })

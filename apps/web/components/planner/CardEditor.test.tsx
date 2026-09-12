@@ -3,7 +3,15 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { CardEditor } from './CardEditor'
 import type { Card } from './types'
 
-afterEach(() => cleanup())
+const mockHashTree = vi.fn()
+
+vi.mock('@/lib/oon', () => ({
+  oon: {
+    hashTree: (...a: unknown[]) => mockHashTree(...a),
+  },
+}))
+
+afterEach(() => { cleanup(); vi.clearAllMocks() })
 
 const makeCard = (overrides: Partial<Card> = {}): Card => ({
   id: 'c1', title: 'My Card', description: 'Card desc', column: 'todo',
@@ -19,7 +27,8 @@ const defaultProps = {
 }
 
 beforeEach(() => {
-  global.fetch = vi.fn(() => Promise.resolve({ ok: false })) as any
+  vi.clearAllMocks()
+  mockHashTree.mockResolvedValue({ root: { root: 'abc123def456789012345678901234567890', tray: 'todo' }, notes: [], history: [], commits: [] })
 })
 
 describe('CardEditor', () => {
@@ -87,10 +96,9 @@ describe('CardEditor', () => {
     expect(onUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ title: 'Updated Card' }))
   })
   it('loads hash tree on mount', async () => {
-    const hashTree = { root: { root: 'abc123def456789012345678901234567890', tray: 'todo' }, notes: [], history: [], commits: [] }
-    global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(hashTree) })) as any
     render(<CardEditor card={makeCard()} {...defaultProps} />)
     await screen.findByText('Hash Tree')
     expect(screen.getAllByText('Hash Tree').length).toBeGreaterThanOrEqual(1)
+    expect(mockHashTree).toHaveBeenCalledWith('c1')
   })
 })
