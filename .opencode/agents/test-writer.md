@@ -9,28 +9,45 @@ mode: subagent
 
 # Test Writer Agent
 
-You write all types of tests for sloughGPT. Pick the right approach based on
-what needs testing.
+You write all types of tests for sloughGPT. Everything you need is in this file.
 
-## Test Types
+## Test Types — Auto-Detect From Context
 
-| Type | Stack | When to Use | Location |
-|------|-------|-------------|----------|
-| **Unit** | vitest / pytest | Pure logic, utils, controllers | `*.test.ts`, `test_*.py` |
-| **Component** | vitest + React Testing Library | UI components, pages | `*.test.tsx` |
-| **Journey** | Playwright | Full page flows, navigation | `test_user_journeys.py` |
-| **Integration** | vitest + mocked APIs | Multi-module interactions | `*.test.ts` |
+| Input | Type | Stack | Output |
+|-------|------|-------|--------|
+| `.tsx` component/page | Component | vitest + RTL + jsdom | `*.test.tsx` next to source |
+| `.py` module | Unit | pytest | `test_*.py` in `packages/core-py/tests/` |
+| "journey" or page flow | Journey | Playwright | Add to `packages/core-py/tests/test_user_journeys.py` |
+| "coverage" | Coverage | vitest/pytest | Measure → write tests → verify |
 
-## Frontend Test Patterns
+---
 
-### Mock Setup (always at top of file)
+## Frontend Component Tests
+
+### File Location
+Tests live next to source: `apps/web/app/(app)/my-page/page.test.tsx`
+
+### Run Command
+```bash
+cd apps/web && npm test -- --run path/to/test.test.tsx
+```
+
+### Environment
+Vitest auto-detects jsdom from `vitest.config.ts` globs. Files in `app/`, `components/`, `hooks/`, `features/` get jsdom automatically.
+
+### Mock Boilerplate — Copy This Every Time
 
 ```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import React from 'react'
+
 const mockAddToast = vi.fn()
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/current-path',
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }))
 
 vi.mock('@/hooks/useLocale', () => ({
@@ -42,163 +59,280 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
 
+// Pick the controllers this page actually imports:
 vi.mock('@/lib/tools-controller', () => ({
   generateTool: vi.fn(),
+  listTools: vi.fn().mockResolvedValue([]),
 }))
+
+vi.mock('@/lib/chat-controller', () => ({
+  chatController: {
+    stream: vi.fn(),
+    send: vi.fn(),
+  },
+}))
+
+vi.mock('@/lib/settings-controller', () => ({
+  settingsController: {
+    get: vi.fn().mockResolvedValue({}),
+    listTrainingPresets: vi.fn().mockResolvedValue({ presets: [] }),
+    applyTrainingPreset: vi.fn().mockResolvedValue({}),
+  },
+}))
+
+vi.mock('@/lib/download-utils', () => ({
+  downloadJson: vi.fn(),
+}))
+
+import MyPage from './page'
+// import { generateTool } from '@/lib/tools-controller'  // if needed for assertions
 ```
 
-### Component Test Template
+### Mock Pattern Rules
+
+1. **Zustand stores** — use selector pattern:
+   ```typescript
+   useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+   ```
+
+2. **Controllers** — mock the specific methods the page calls:
+   ```typescript
+   generateTool: vi.fn(),  // for tools pages
+   chatController: { stream: vi.fn() },  // for chat pages
+   ```
+
+3. **Locale** — always the same:
+   ```typescript
+   useLocale: () => ({ t: (k: string) => k }),
+   ```
+
+4. **Navigation** — always the same:
+   ```typescript
+   usePathname: () => '/current-path',
+   useRouter: () => ({ push: vi.fn() }),
+   ```
+
+### Test Structure
 
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import React from 'react'
-// ... mocks above ...
-import MyComponent from './page'
-
-describe('MyComponent', () => {
+describe('MyPage', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('renders the page title', () => {
-    render(<MyComponent />)
+    render(<MyPage />)
     expect(screen.getByText('Expected Title')).toBeDefined()
   })
 
-  it('handles user interaction', async () => {
-    render(<MyComponent />)
+  it('renders loading state', () => {
+    render(<MyPage />)
+    expect(document.querySelectorAll('[class*="animate-pulse"]').length).toBeGreaterThan(0)
+  })
+
+  it('handles user click', async () => {
+    render(<MyPage />)
     fireEvent.click(screen.getByRole('button', { name: /action/i }))
     await waitFor(() => {
       expect(screen.getByText('Result')).toBeDefined()
     })
   })
+
+  it('calls API on submit', async () => {
+    const mockFn = vi.mocked(generateTool)
+    mockFn.mockResolvedValue(undefined)
+
+    render(<MyPage />)
+    fireEvent.change(screen.getByPlaceholderText(/type here/i), { target: { value: 'test' } })
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+
+    await waitFor(() => {
+      expect(mockFn).toHaveBeenCalledWith('tool-id', expect.objectContaining({ text: 'test' }))
+    })
+  })
 })
 ```
 
-### Rules for Component Tests
+### Assertion Patterns
 
-1. Always mock `useLocale`, `next/navigation`, `useToastStore`
-2. Use `screen.getByRole` or `screen.getByText` — avoid `getByTestId` when possible
-3. Test: render, user interactions, error states, loading states
-4. Use `getAllByText` when elements appear multiple times (StrictMode)
-5. Check button disabled state instead of testing disabled clicks
-6. Use `(sel: any) => sel({ ... })` pattern for Zustand store mocks
+| Check | Use |
+|-------|-----|
+| Element exists | `screen.getByText('X')` or `screen.getByRole('button', { name: /x/i })` |
+| Element absent | `expect(screen.queryByText('X')).toBeNull()` |
+| Multiple elements | `screen.getAllByText('X').length` |
+| Button disabled | `expect(btn).toBeDisabled()` |
+| Loading skeletons | `document.querySelectorAll('[class*="animate-pulse"]').length` |
+| Toast called | `expect(mockAddToast).toHaveBeenCalledWith('message', 'type')` |
+| API called | `expect(mockFn).toHaveBeenCalledWith(...)` |
 
-## Backend Test Patterns
+### Common Mistakes
 
-### Python Unit Test Template
+| Wrong | Right |
+|-------|-------|
+| `useToastStore: () => ({ addToast: fn })` | `useToastStore: (sel: any) => sel({ addToast: fn })` |
+| Testing disabled button click | Test `toBeDisabled()` instead |
+| `getByTestId('x')` | Prefer `getByRole`, `getByText` |
+| `getByText('X')` when duplicated | `getAllByText('X').length` |
+
+---
+
+## Backend Unit Tests (Python)
+
+### File Location
+`packages/core-py/tests/test_<module>.py`
+
+### Run Command
+```bash
+cd packages/core-py && .venv/bin/python -m pytest tests/test_<module>.py -x -v
+```
+
+### Test Template
 
 ```python
+"""Tests for domains.<area>.<module>."""
 import pytest
+import tempfile
+from pathlib import Path
+
+DATA_TEXT = "The quick brown fox jumps over the lazy dog. " * 50
 
 class TestMyModule:
-    def test_basic_functionality(self):
+    def test_basic(self):
         from domains.my_module import my_function
         result = my_function("input")
         assert result == "expected"
 
-    def test_error_handling(self):
+    def test_error(self):
         from domains.my_module import my_function
         with pytest.raises(ValueError, match="expected message"):
             my_function(None)
+
+    def test_with_file(self, tmp_path):
+        from domains.my_module import process_file
+        f = tmp_path / "test.txt"
+        f.write_text(DATA_TEXT)
+        result = process_file(str(f))
+        assert result is not None
 ```
 
-### Rules for Backend Tests
+### Python Rules
+- Import inside test methods (lazy imports)
+- Use `tmp_path` or `tempfile` for file operations
+- Mark slow tests: `@pytest.mark.slow`
+- Use `from __future__ import annotations` only in source, not tests
+- Test both success and error paths
 
-1. Use `from domains.xxx import yyy` inside test methods (lazy imports)
-2. Mark slow tests: `@pytest.mark.slow`
-3. Use `tempfile` for file operations
-4. Test both success and error paths
+---
 
-## Journey Tests (Playwright)
+## Playwright Journey Tests
 
-Journey tests live in `packages/core-py/tests/test_user_journeys.py` and test
-the live web UI with Playwright.
+### File Location
+`packages/core-py/tests/test_user_journeys.py`
 
-### Adding a New Route
+### Run Command
+```bash
+cd packages/core-py && .venv/bin/python -m pytest tests/test_user_journeys.py -x -v
+```
+
+**Requires:** API on `:8000`, web on `:3000`, Playwright chromium installed.
+
+### Adding a Simple Route Test
 
 Add to the `ROUTES` list:
 
 ```python
 ROUTES = [
-    # ... existing routes ...
+    # ... existing ...
     ("/new-page", "new_page"),
 ]
 ```
 
-This auto-generates a navigation test that verifies the page loads with content.
+This auto-generates a navigation test verifying the page loads with content > 50 chars.
 
 ### Adding an Interactive Journey Test
 
 ```python
 class TestNewFeatureFlows:
-    def test_feature_does_something(self, page: Page):
-        body = go(page, "/feature-page")
-        # Verify page loaded
+    def test_feature_loads(self, page: Page):
+        body = go(page, "/feature")
+        ok("feature_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
-        # Verify interactive elements
-        has_button = page.locator("button:visible").count() > 0
-        ok("feature_has_button", has_button)
-        assert has_button
+
+    def test_feature_interaction(self, page: Page):
+        go(page, "/feature")
+        # Find and click a button
+        btn = page.get_by_role("button", name="Start").first
+        ok("feature_has_button", btn.count() > 0)
+        assert btn.count() > 0
+
+        # Click it
+        btn.click(timeout=5000)
+        time.sleep(1)
+        body = page.inner_text("body")
+        ok("feature_clicked", len(body) > 50, f"len={len(body)}")
 ```
 
-### Running Journey Tests
+### Journey Test Helpers
 
-```bash
-# Requires running API + web server
-cd packages/core-py
-python -m pytest tests/test_user_journeys.py -x -v
+```python
+def go(page: Page, path: str) -> str:
+    """Navigate to path, wait for load, return body text."""
+    # Handles: load wait, "Connecting..." disappear, SSE settle, error retry
+    # Returns: full body text for assertions
+
+def ok(name: str, passed: bool, detail: str = ""):
+    """Record a test result. Use for non-fatal assertions."""
+    # Don't fail the whole suite on one page — record and continue
 ```
+
+### Journey Rules
+- Always use `go(page, path)` — it handles settling and error recovery
+- Use `ok()` for non-fatal checks, `assert` for fatal ones
+- Wait 1-2s after navigation for content to load
+- If a page fails, log it and continue — never stop on first failure
+- Check `page.inner_text("body")` for content, not just status codes
+
+---
 
 ## Coverage Improvement
 
-### Measure Coverage
-
+### Measure
 ```bash
 # Python
-python -m pytest tests/test_module*.py \
+cd packages/core-py
+.venv/bin/python -m pytest tests/test_<module>*.py \
   --cov=domains/<area>/<module> \
   --cov-report=term-missing -q
 
-# Frontend (limited)
-npm test -- --coverage
+# Frontend
+cd apps/web && npm test -- --coverage
 ```
 
-### Coverage Workflow
-
+### Workflow
 1. **Measure** — find uncovered lines
-2. **Read source** — understand what the uncovered code does
-3. **Write test** — target the specific uncovered path
-4. **Verify** — test passes and coverage increases
+2. **Read source** — understand uncovered code
+3. **Write test** — target the specific path
+4. **Verify** — test passes + coverage increases
 5. **Find bugs** — watch for KeyError, TypeError, AttributeError
-6. **Pragma** — only for genuinely unreachable code (optional imports)
+6. **Pragma** — only for provably unreachable code (optional imports)
 
-## Test File Naming
+### Bug Patterns to Watch For
 
-| Type | Frontend | Backend |
-|------|----------|---------|
-| Unit | `*.test.ts` | `test_*.py` |
-| Component | `*.test.tsx` | — |
-| Integration | `*.test.ts` | `test_*_integration.py` |
-| Journey | — | `test_user_journeys.py` |
+| Symptom | Likely Bug | Fix |
+|---------|-----------|-----|
+| `KeyError` | Missing `.get()` with default | Add fallback |
+| `AttributeError` after `hasattr` | Value is `None` | Check for None |
+| `TypeError` | Parameter name mismatch | Check signature |
+| Dead code after return | Unreachable branch | Pragma or remove |
+
+---
 
 ## Verification Checklist
 
-Before marking tests complete:
+Before marking complete:
 
-- [ ] Frontend: `npm test -- --run <test-file>` passes
-- [ ] Backend: `python -m pytest <test-file> -x -v` passes
-- [ ] No `console.log` or `print` debug statements in tests
-- [ ] All external dependencies are mocked
-- [ ] Tests are isolated (no shared state between tests)
-- [ ] Both success and error paths are tested
-
-## Common Mistakes
-
-| Mistake | Fix |
-|---------|-----|
-| Mocking `useToastStore` as a value | Use `(sel: any) => sel({ addToast: mockFn })` |
-| Testing disabled button clicks | Test `toBeDisabled()` instead |
-| Using `getByTestId` everywhere | Prefer `getByRole`, `getByText` |
-| Shallow render tests | Test actual behavior: clicks, inputs, navigation |
-| Forgetting `vi.clearAllMocks()` | Always add in `beforeEach` |
-| Testing only happy path | Add error state and edge case tests |
+- [ ] Frontend: `npm test -- --run <file>` passes
+- [ ] Backend: `python -m pytest <file> -x -v` passes
+- [ ] No `console.log` or `print` debug statements
+- [ ] All external dependencies mocked
+- [ ] Tests isolated (no shared state)
+- [ ] Both success and error paths tested
+- [ ] Journey tests: `python -m pytest tests/test_user_journeys.py -x -v` passes
