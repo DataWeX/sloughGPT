@@ -29,6 +29,9 @@ API = "http://localhost:8000"
 RESULTS: list[dict[str, Any]] = []
 DEVTOOLS_LOG: list[dict[str, Any]] = []
 
+MAX_RETRIES = 3
+RETRY_DELAY = 2
+
 
 # ── Helpers ────────────────────────────────────────────────────────
 
@@ -48,6 +51,39 @@ def _wait_for_api(timeout: int = 60) -> bool:
             return True
         time.sleep(1)
     return False
+
+
+def retry_on_failure(max_retries: int = MAX_RETRIES, delay: float = RETRY_DELAY):
+    """Decorator: retry a test function on AssertionError or OSError."""
+    import functools
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exc = None
+            for attempt in range(1, max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except (AssertionError, OSError) as exc:
+                    last_exc = exc
+                    if attempt < max_retries:
+                        print(f"  [RETRY] {func.__name__} attempt {attempt} failed: {exc}, retrying in {delay}s")
+                        time.sleep(delay)
+            raise last_exc  # type: ignore[misc]
+        return wrapper
+    return decorator
+
+
+def api_get_json(path: str, retries: int = 3) -> dict[str, Any]:
+    """GET an API path with retries, return parsed JSON."""
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(f"{API}{path}")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return json.loads(resp.read().decode())
+        except Exception:
+            if attempt < retries - 1:
+                time.sleep(1)
+    return {}
 
 
 @pytest.fixture(scope="session", autouse=True)

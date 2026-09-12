@@ -68,6 +68,22 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 | `--chart-4` | `90 150 220` | `100 165 240` |
 | `--chart-5` | `220 80 90` | `235 100 110` |
 
+## Accent Auras
+
+Each accent theme is a full aura — not just a primary color swap. Themes override `--primary`, `--ring`, `--secondary`, `--secondary-foreground`, `--muted`, `--border`, and `--input` to shift the entire UI atmosphere.
+
+| Theme | Aura | Primary | Mood |
+|-------|------|---------|------|
+| `theme-blue` | Periwinkle | `90 130 220` | Calm ocean, trustworthy |
+| `theme-purple` | Lilac | `155 108 214` | Ethereal lilac, mystical |
+| `theme-pink` | Rose | `218 130 170` | Soft rose, delicate |
+| `theme-red` | Coral | `230 120 130` | Warm coral, energetic |
+| `theme-orange` | Peach | `236 155 90` | Peachy bread crust, warm bakery |
+| `theme-green` | Mint | `72 178 130` | Fresh mint, natural |
+| `theme-teal` | Dew | `72 166 200` | Cool dew, refreshing |
+
+Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool tints to match the aura. Dark mode variants deepen these shifts.
+
 ## Typography
 
 ### Font Families
