@@ -21,6 +21,18 @@ logger = logging.getLogger("slo")
 router = APIRouter(tags=["training", "jobs"])
 
 
+def _to_timestamp(val):
+    """Convert an ISO datetime string or numeric value to a Unix timestamp float."""
+    if isinstance(val, (int, float)):
+        return val
+    if isinstance(val, str):
+        try:
+            return datetime.fromisoformat(val).timestamp()
+        except (ValueError, TypeError):
+            return 0
+    return 0
+
+
 def _job_summary(job: dict) -> dict:
     """Build a human-readable job summary, stripping internal (underscore) fields."""
     status = job.get("status", "unknown")
@@ -92,7 +104,7 @@ async def list_training_jobs(
     stale = [
         jid for jid, j in training_jobs.items()
         if j.get("status") in ("completed", "failed", "stopped")
-        and now - j.get("updated_at", j.get("started_at", 0)) > 3600
+        and now - _to_timestamp(j.get("updated_at") or j.get("started_at")) > 3600
     ]
     for jid in stale:
         training_jobs.pop(jid, None)
