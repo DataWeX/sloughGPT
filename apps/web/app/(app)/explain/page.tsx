@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea } from '@sloughgpt/strui'
-import { chatController } from '@/lib/chat-controller'
+import { generateTool } from '@/lib/tools-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -34,21 +34,18 @@ export default function ExplainPage() {
     setExplanation('')
 
     try {
-      const difficultyPrompt = {
-        simple: 'Explain this like I\'m 5 years old. Use simple words, analogies, and examples a child would understand.',
-        normal: 'Explain this clearly and simply. Use everyday language and relatable examples.',
-        detailed: 'Explain this in depth. Include technical details, examples, and real-world applications.',
-      }
-
-      const prompt = `${difficultyPrompt[difficulty]}\n\nTopic: ${topic}`
-
-      let result = ''
-      for await (const event of chatController.stream(prompt, { max_tokens: 800 })) {
-        if (event.token) {
-          result += event.token
-          setExplanation(result)
-        }
-      }
+      await generateTool(
+        'explain',
+        { topic, difficulty },
+        {
+          onToken: (token) => setExplanation(token),
+          onError: (msg) => {
+            _log.error('Explanation failed', { error: msg })
+            addToast('Explanation failed — is a model loaded?', 'error')
+          },
+        },
+        { max_tokens: 800 },
+      )
     } catch (err) {
       _log.error('Explanation failed', { error: err instanceof Error ? err.message : String(err) })
       addToast('Explanation failed — is a model loaded?', 'error')

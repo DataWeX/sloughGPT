@@ -52,6 +52,9 @@ PROGRESS_STREAM_FILE = "packages/core-py/tests/test_training_progress_stream.py"
 BENCHMARK_FILE = "packages/core-py/tests/test_training_benchmarks.py"
 EXPORT_PRESETS_FILE = "packages/core-py/tests/test_training_export_presets.py"
 INFRASTRUCTURE_FILE = "packages/core-py/tests/test_training_infrastructure.py"
+WORKFLOW_INTEGRATION_FILE = "packages/core-py/tests/test_training_integration.py"
+ROBUSTNESS_FILE = "packages/core-py/tests/test_training_robustness.py"
+QUALITY_METHODS_FILE = "packages/core-py/tests/test_training_quality_methods.py"
 
 
 def run_pytest(args: list[str], label: str) -> tuple[bool, float]:
@@ -123,6 +126,18 @@ def main():
         pytest_args = [INFRASTRUCTURE_FILE, "-v" if args.verbose else "-q"]
         ok, dur = run_pytest(pytest_args, "Training Infrastructure Tests")
         results.append({"suite": "infrastructure", "passed": ok, "duration_s": dur})
+
+    # Workflow integration tests
+    if args.local or args.all:
+        pytest_args = [WORKFLOW_INTEGRATION_FILE, "-v" if args.verbose else "-q"]
+        ok, dur = run_pytest(pytest_args, "Workflow Integration Tests")
+        results.append({"suite": "workflow_integration", "passed": ok, "duration_s": dur})
+
+    # Robustness tests
+    if args.local or args.all:
+        pytest_args = [ROBUSTNESS_FILE, "-v" if args.verbose else "-q"]
+        ok, dur = run_pytest(pytest_args, "Robustness Tests")
+        results.append({"suite": "robustness", "passed": ok, "duration_s": dur})
 
     # Journey tests (servers required)
     if args.journeys or args.all:

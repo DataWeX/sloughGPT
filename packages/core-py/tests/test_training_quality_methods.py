@@ -65,7 +65,8 @@ class TestQualityScorer:
         quality = compute_data_quality(DATA_TEXT)
         assert isinstance(quality, dict)
         assert "avg_quality" in quality
-        assert "sample_count" in quality
+        assert "repetition_rate" in quality
+        assert "diversity" in quality
 
     def test_quality_score_with_good_data(self):
         from domains.training.quality_scorer import score_text_chunk

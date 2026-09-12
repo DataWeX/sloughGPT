@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea } from '@sloughgpt/strui'
-import { chatController } from '@/lib/chat-controller'
+import { generateTool } from '@/lib/tools-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -33,21 +33,18 @@ export default function WellnessPage() {
     setResponse('')
 
     try {
-      const prompts: Record<WellnessType, string> = {
-        sleep: `Tell me a gentle, calming sleep story. ${preferences ? `The user wants: ${preferences}` : 'Make it about a peaceful natural setting.'} The story should be soothing, with a slow pace and calming imagery. End with the words fading into silence.`,
-        meditate: `Guide me through a short meditation. ${preferences ? `Focus on: ${preferences}` : 'Focus on breathing and presence.'} Speak slowly, calmly. Include pauses marked with "...". Help me feel grounded.`,
-        journal: `Give me a thoughtful journal prompt to reflect on. ${preferences ? `Theme: ${preferences}` : 'Make it about gratitude and growth.'} The prompt should inspire deep reflection.`,
-        breathe: `Guide me through a breathing exercise. ${preferences ? `Style: ${preferences}` : 'Use 4-7-8 breathing.'} Give me clear instructions with counts. Make it calming and rhythmic.`,
-        affirm: `Give me 3 positive affirmations for today. ${preferences ? `Theme: ${preferences}` : 'Make them empowering and kind.'} Each should be short, present-tense, and meaningful.`,
-      }
-
-      let result = ''
-      for await (const event of chatController.stream(prompts[selected], { max_tokens: 500 })) {
-        if (event.token) {
-          result += event.token
-          setResponse(result)
-        }
-      }
+      await generateTool(
+        'wellness',
+        { kind: selected, preferences },
+        {
+          onToken: (token) => setResponse(token),
+          onError: (msg) => {
+            _log.error('Wellness generation failed', { error: msg })
+            addToast('Failed to generate — is a model loaded?', 'error')
+          },
+        },
+        { max_tokens: 500 },
+      )
     } catch (err) {
       _log.error('Wellness generation failed', { error: err instanceof Error ? err.message : String(err) })
       addToast('Failed to generate — is a model loaded?', 'error')

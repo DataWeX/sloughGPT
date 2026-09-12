@@ -97,6 +97,7 @@ def get_all_routers() -> list[APIRouter]:
         "openwebui",
         "cloud_training",
         "plugins",
+        "tools",
     ]
 
     _cached_routers = []
