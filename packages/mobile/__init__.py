@@ -1,6 +1,10 @@
-"""Backward-compatibility shim — imports from the new ``mobile`` package."""
+"""mobile — Push notification service for React Native app.
 
-from mobile import (
+Public API:
+    PushNotificationService, NotificationPayload, DeviceToken, get_notification_service
+"""
+
+from mobile._internal.notifications import (
     PushNotificationService,
     NotificationPayload,
     DeviceToken,
