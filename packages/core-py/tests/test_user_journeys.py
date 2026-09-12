@@ -162,6 +162,29 @@ ROUTES = [
     ("/feedback", "feedback"),
     ("/files", "files"),
     ("/adapters", "adapters"),
+    # Tools pages
+    ("/brainstorm", "brainstorm"),
+    ("/decide", "decide"),
+    ("/explain", "explain"),
+    ("/rewrite", "rewrite"),
+    ("/translate", "translate"),
+    ("/wellness", "wellness"),
+    ("/writing", "writing"),
+    # Consciousness pages
+    ("/consciousness/dashboard", "consciousness_dashboard"),
+    ("/consciousness/health", "consciousness_health"),
+    ("/consciousness/training", "consciousness_training"),
+    ("/consciousness/settings", "consciousness_settings"),
+    ("/consciousness/playground", "consciousness_playground"),
+    # Training sub-pages
+    ("/training/analytics", "training_analytics"),
+    ("/training/presets", "training_presets"),
+    ("/training/runs", "training_runs"),
+    ("/training/compare", "training_compare"),
+    ("/training/trends", "training_trends"),
+    # Other
+    ("/shortcuts", "shortcuts"),
+    ("/phoneme", "phoneme"),
 ]
 
 
@@ -393,6 +416,83 @@ class TestRedirects:
         ok(f"redirect_{old.replace('/', '_')}", len(body) > 50,
            f"{old} -> /{expected}, len={len(body)}")
         assert len(body) > 50, f"Redirect {old} failed"
+
+
+# ── Tools Pages — Interactive Flows ──────────────────────────
+
+class TestToolsFlows:
+    def test_brstorm_has_input_and_suggestions(self, page: Page):
+        body = go(page, "/brainstorm")
+        has_input = page.locator("textarea:visible").count() > 0
+        has_suggestions = "Name ideas" in body or "Weekend" in body
+        ok("brainstorm_input_and_suggestions", has_input and has_suggestions,
+           f"input={has_input}, suggestions={has_suggestions}")
+        assert has_input and has_suggestions
+
+    def test_decide_has_two_options(self, page: Page):
+        body = go(page, "/decide")
+        inputs = page.locator("input:visible")
+        ok("decide_has_options", inputs.count() >= 2, f"inputs={inputs.count()}")
+        assert inputs.count() >= 2
+
+    def test_explain_has_difficulty_buttons(self, page: Page):
+        body = go(page, "/explain")
+        has_simple = "Simple" in body
+        has_normal = "Normal" in body
+        ok("explain_has_difficulty", has_simple and has_normal,
+           f"simple={has_simple}, normal={has_normal}")
+        assert has_simple and has_normal
+
+    def test_rewrite_has_action_buttons(self, page: Page):
+        body = go(page, "/rewrite")
+        has_grammar = "Fix Grammar" in body
+        has_shorter = "Make Shorter" in body
+        ok("rewrite_has_actions", has_grammar and has_shorter,
+           f"grammar={has_grammar}, shorter={has_shorter}")
+        assert has_grammar and has_shorter
+
+    def test_translate_has_language_selector(self, page: Page):
+        body = go(page, "/translate")
+        has_select = page.locator("select:visible").count() > 0
+        has_translate_btn = "Translate" in body
+        ok("translate_has_selector", has_select and has_translate_btn,
+           f"select={has_select}, btn={has_translate_btn}")
+        assert has_select and has_translate_btn
+
+    def test_wellness_has_options(self, page: Page):
+        body = go(page, "/wellness")
+        has_sleep = "Sleep" in body
+        has_meditate = "Meditat" in body
+        ok("wellness_has_options", has_sleep and has_meditate,
+           f"sleep={has_sleep}, meditate={has_meditate}")
+        assert has_sleep and has_meditate
+
+    def test_writing_has_tones_and_types(self, page: Page):
+        body = go(page, "/writing")
+        has_friendly = "Friendly" in body
+        has_email = "Email" in body
+        ok("writing_has_tones_types", has_friendly and has_email,
+           f"friendly={has_friendly}, email={has_email}")
+        assert has_friendly and has_email
+
+
+# ── Consciousness Pages ──────────────────────────────────────
+
+class TestConsciousnessFlows:
+    def test_dashboard_loads(self, page: Page):
+        body = go(page, "/consciousness/dashboard")
+        ok("consciousness_dashboard_loads", len(body) > 50, f"len={len(body)}")
+        assert len(body) > 50
+
+    def test_health_loads(self, page: Page):
+        body = go(page, "/consciousness/health")
+        ok("consciousness_health_loads", len(body) > 50, f"len={len(body)}")
+        assert len(body) > 50
+
+    def test_playground_loads(self, page: Page):
+        body = go(page, "/consciousness/playground")
+        ok("consciousness_playground_loads", len(body) > 50, f"len={len(body)}")
+        assert len(body) > 50
 
 
 # ── Results ───────────────────────────────────────────────────
