@@ -7,7 +7,6 @@ Usage:
     .venv/bin/python -m pytest tests/test_training_quality_methods.py -x -v
 """
 import tempfile
-import time
 
 DATA_TEXT = "The quick brown fox jumps over the lazy dog. " * 50
 
@@ -232,7 +231,7 @@ class TestPresetSystem:
         from domains.training.presets import apply_preset
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
-        preset_config = apply_preset("quick-finetune")
+        apply_preset("quick-finetune")
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
             f.flush()
