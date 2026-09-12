@@ -1,6 +1,7 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent, Button, EmptyCard, Skeleton, StatusBanner, cn } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, EmptyCard, Skeleton, cn } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconRefresh } from '@/components/icons/NavIcons'
 
 interface AgentRunTask {

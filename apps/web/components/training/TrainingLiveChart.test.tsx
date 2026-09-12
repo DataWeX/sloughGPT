@@ -19,7 +19,7 @@ vi.mock('@sloughgpt/strui', () => ({
   CardHeader: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   CardTitle: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   CardContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-  StatCard: ({ label, value }: any) => <div data-testid="stat-card">{label}: {value}</div>,
+  StatCard: ({ label, value }: any) => <div data-testid="stat-card" data-label={label} data-value={value}>{label}: {value}</div>,
   KpiGrid: ({ children }: any) => <div data-testid="kpi-grid">{children}</div>,
 }))
 
@@ -60,9 +60,10 @@ describe('TrainingLiveChart', () => {
         totalSteps={1000}
       />
     )
-    expect(screen.getByText('50.0%')).toBeDefined()
-    expect(screen.getByText('3/10')).toBeDefined()
-    expect(screen.getByText('500/1000')).toBeDefined()
+    const stats = screen.getAllByTestId('stat-card')
+    expect(stats[0]).toHaveAttribute('data-value', '50.0%')
+    expect(stats[1]).toHaveAttribute('data-value', '3/10')
+    expect(stats[2]).toHaveAttribute('data-value', '500/1000')
   })
 
   it('shows chart when loss data has more than 1 point', () => {
@@ -82,11 +83,13 @@ describe('TrainingLiveChart', () => {
 
   it('formats ETA in minutes and seconds', () => {
     render(<TrainingLiveChart {...defaultProps} eta={125} />)
-    expect(screen.getByText('2m 5s')).toBeDefined()
+    const stats = screen.getAllByTestId('stat-card')
+    expect(stats[3]).toHaveAttribute('data-value', '2m 5s')
   })
 
   it('formats ETA as dash when null', () => {
     render(<TrainingLiveChart {...defaultProps} eta={null} />)
-    expect(screen.getByText('—')).toBeDefined()
+    const stats = screen.getAllByTestId('stat-card')
+    expect(stats[3]).toHaveAttribute('data-value', '—')
   })
 })

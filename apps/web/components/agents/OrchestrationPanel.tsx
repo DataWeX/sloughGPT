@@ -1,6 +1,7 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatusBanner, cn } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, cn } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 
 interface Agent {
   id: string

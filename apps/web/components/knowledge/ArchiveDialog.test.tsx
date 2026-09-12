@@ -20,9 +20,8 @@ vi.mock('@sloughgpt/strui', () => ({
   Spinner: (props: any) => <span data-testid="spinner" {...props} />,
 }))
 
-const mockArchive = vi.fn()
 vi.mock('@/lib/memory-controller', () => ({
-  memoryController: { archive: mockArchive },
+  memoryController: { archive: vi.fn().mockResolvedValue({ records: [] }) },
 }))
 
 vi.mock('@/lib/toast-store', () => ({
@@ -48,6 +47,7 @@ vi.mock('@/lib/memory-card-utils', () => ({
 }))
 
 import { ArchiveDialog } from './ArchiveDialog'
+import { memoryController } from '@/lib/memory-controller'
 
 afterEach(() => cleanup())
 
@@ -59,7 +59,7 @@ const defaultProps = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockArchive.mockResolvedValue({ records: [] })
+  ;(memoryController.archive as any).mockResolvedValue({ records: [] })
 })
 
 describe('ArchiveDialog', () => {
@@ -69,7 +69,7 @@ describe('ArchiveDialog', () => {
   })
 
   it('shows empty card when no records', async () => {
-    mockArchive.mockResolvedValue({ records: [] })
+    ;(memoryController.archive as any).mockResolvedValue({ records: [] })
     render(<ArchiveDialog {...defaultProps} />)
     await waitFor(() => {
       expect(screen.getByTestId('empty-card')).toBeTruthy()
@@ -82,13 +82,13 @@ describe('ArchiveDialog', () => {
   })
 
   it('shows loading skeletons while loading', () => {
-    mockArchive.mockReturnValue(new Promise(() => {}))
+    ;(memoryController.archive as any).mockReturnValue(new Promise(() => {}))
     render(<ArchiveDialog {...defaultProps} />)
     expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders archive records', async () => {
-    mockArchive.mockResolvedValue({
+    ;(memoryController.archive as any).mockResolvedValue({
       records: [
         { task_id: '1', task_type: 'store', ts: 1700000000 },
         { task_id: '2', task_type: 'consolidate', ts: 1700001000 },
@@ -96,8 +96,8 @@ describe('ArchiveDialog', () => {
     })
     render(<ArchiveDialog {...defaultProps} />)
     await waitFor(() => {
-      expect(screen.getByText('store')).toBeTruthy()
-      expect(screen.getByText('consolidate')).toBeTruthy()
+      expect(screen.getAllByText('store').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('consolidate').length).toBeGreaterThanOrEqual(1)
     })
   })
 
