@@ -31,7 +31,7 @@ interface SettingsSystemHealthCardProps {
   apiOk: boolean
   modelLoaded: boolean
   modelType: string | null
-  detailed: DetailedHealth | null
+  detailed: Partial<DetailedHealth> | null
   metrics: SystemMetrics | null
   disk: DiskUsage | null
   info: SystemInfo | null

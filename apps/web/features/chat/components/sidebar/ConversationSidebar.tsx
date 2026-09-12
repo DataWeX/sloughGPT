@@ -361,13 +361,13 @@ function SidebarContent({
                         isActive={c.id === currentConversationId}
                         onSelect={handleSelect}
                         onDelete={handleDelete}
-                        onStar={handleStar}
-                        onPin={handlePin}
-                        onArchive={handleArchive}
+                        onStar={(_e, id, starred) => handleStar(id, starred)}
+                        onPin={(_e, id, pinned) => handlePin(id, pinned)}
+                        onArchive={(_e, id, archive) => handleArchive(id, archive)}
                         onRename={handleRename}
                         onExport={handleExport}
-                        onDuplicate={handleDuplicate}
-                        onToggleUnread={handleToggleUnread}
+                        onDuplicate={(_e, id, name) => handleDuplicate(id, name)}
+                        onToggleUnread={(_e, id, unread) => handleToggleUnread(id, unread)}
                         searchQuery={q}
                       />
                     ))}
@@ -389,13 +389,13 @@ function SidebarContent({
                         isActive={c.id === currentConversationId}
                         onSelect={handleSelect}
                         onDelete={handleDelete}
-                        onStar={handleStar}
-                        onPin={handlePin}
-                        onArchive={handleArchive}
+                        onStar={(_e, id, starred) => handleStar(id, starred)}
+                        onPin={(_e, id, pinned) => handlePin(id, pinned)}
+                        onArchive={(_e, id, archive) => handleArchive(id, archive)}
                         onRename={handleRename}
                         onExport={handleExport}
-                        onDuplicate={handleDuplicate}
-                        onToggleUnread={handleToggleUnread}
+                        onDuplicate={(_e, id, name) => handleDuplicate(id, name)}
+                        onToggleUnread={(_e, id, unread) => handleToggleUnread(id, unread)}
                         searchQuery={q}
                       />
                     ))}
@@ -417,13 +417,13 @@ function SidebarContent({
                         isActive={c.id === currentConversationId}
                         onSelect={handleSelect}
                         onDelete={handleDelete}
-                        onStar={handleStar}
-                        onPin={handlePin}
-                        onArchive={handleArchive}
+                        onStar={(_e, id, starred) => handleStar(id, starred)}
+                        onPin={(_e, id, pinned) => handlePin(id, pinned)}
+                        onArchive={(_e, id, archive) => handleArchive(id, archive)}
                         onRename={handleRename}
                         onExport={handleExport}
-                        onDuplicate={handleDuplicate}
-                        onToggleUnread={handleToggleUnread}
+                        onDuplicate={(_e, id, name) => handleDuplicate(id, name)}
+                        onToggleUnread={(_e, id, unread) => handleToggleUnread(id, unread)}
                         searchQuery={q}
                       />
                     ))}
@@ -485,13 +485,13 @@ function SidebarContent({
                         isActive={c.id === currentConversationId}
                         onSelect={handleSelect}
                         onDelete={handleDelete}
-                        onStar={handleStar}
-                        onPin={handlePin}
-                        onArchive={(e, id, archive) => handleArchive(id, false)}
+                        onStar={(_e, id, starred) => handleStar(id, starred)}
+                        onPin={(_e, id, pinned) => handlePin(id, pinned)}
+                        onArchive={(_e, id, _archive) => handleArchive(id, false)}
                         onRename={handleRename}
                         onExport={handleExport}
-                        onDuplicate={handleDuplicate}
-                        onToggleUnread={handleToggleUnread}
+                        onDuplicate={(_e, id, name) => handleDuplicate(id, name)}
+                        onToggleUnread={(_e, id, unread) => handleToggleUnread(id, unread)}
                         searchQuery={q}
                       />
                     ))
