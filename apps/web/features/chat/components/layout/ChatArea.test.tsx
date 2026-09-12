@@ -91,26 +91,18 @@ describe('ChatArea', () => {
     expect(screen.getByTestId('chat-input')).toBeDefined()
   })
 
-  it('shows jump-to-bottom button when scrolled up with messages', () => {
+  it('renders all messages via ChatScreen', () => {
     const messages = [createMessage('1', 'Hello'), createMessage('2', 'World')]
     render(<ChatArea {...defaultProps} messages={messages} />)
-    const container = screen.getByRole('region', { name: 'Chat messages' })
-    Object.defineProperty(container, 'scrollHeight', { value: 1000 })
-    Object.defineProperty(container, 'scrollTop', { value: 0 })
-    Object.defineProperty(container, 'clientHeight', { value: 200 })
-    fireEvent.scroll(container)
-    expect(screen.getByLabelText('Jump to latest messages')).toBeDefined()
+    expect(screen.getByTestId('chat-screen')).toBeDefined()
+    expect(screen.getAllByTestId('message')).toHaveLength(2)
   })
 
-  it('shows message count on jump-to-bottom button', () => {
+  it('does not render jump-to-bottom button (Virtuoso followOutput handles scroll)', () => {
     const messages = [createMessage('1', 'A'), createMessage('2', 'B'), createMessage('3', 'C')]
     render(<ChatArea {...defaultProps} messages={messages} />)
-    const container = screen.getByRole('region', { name: 'Chat messages' })
-    Object.defineProperty(container, 'scrollHeight', { value: 1000 })
-    Object.defineProperty(container, 'scrollTop', { value: 0 })
-    Object.defineProperty(container, 'clientHeight', { value: 200 })
-    fireEvent.scroll(container)
-    expect(screen.getByText('3')).toBeDefined()
+    expect(screen.queryByLabelText('Jump to latest messages')).toBeNull()
+    expect(screen.queryByText('3')).toBeNull()
   })
 
   it('filters messages by search query', () => {

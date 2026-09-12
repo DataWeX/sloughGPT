@@ -2,6 +2,31 @@
  */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+
+vi.mock('next/dynamic', () => ({
+  default: (factory: () => Promise<{ default: React.ComponentType<any> }>) =>
+    factory().then(m => m.default),
+}))
+
+vi.mock('./CodeBlock', () => ({
+  CodeBlock: ({ language, code }: { language: string; code: string }) => {
+    const [copied, setCopied] = React.useState(false)
+    return (
+      <div>
+        <span>{language || 'code'}</span>
+        <button
+          aria-label="Copy code"
+          onClick={() => navigator.clipboard.writeText(code).then(() => setCopied(true))}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+        <pre>{code}</pre>
+      </div>
+    )
+  },
+}))
+
+import React from 'react'
 import { Markdown } from './Markdown'
 
 afterEach(cleanup)
