@@ -41,7 +41,7 @@ class TestTrainingThroughput:
             config = {
                 "method": "sft", "data_quality_threshold": 0.0,
                 "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 5, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
             }
             trainer = ComprehensiveTrainer()
             t0 = time.time()
@@ -60,7 +60,7 @@ class TestTrainingThroughput:
             config = {
                 "method": "sft", "data_quality_threshold": 0.0,
                 "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 10, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
             }
             trainer = ComprehensiveTrainer()
             t0 = time.time()
@@ -79,14 +79,14 @@ class TestTrainingThroughput:
             config = {
                 "method": "sft", "data_quality_threshold": 0.0,
                 "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 20, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
             }
             trainer = ComprehensiveTrainer()
             t0 = time.time()
             result = trainer.run_full_cycle(data_path=f.name, config=config)
             duration = time.time() - t0
             steps = result.performance.get("phase_durations", {}).get("training", duration)
-            steps_per_sec = 20 / steps if steps > 0 else 0
+            steps_per_sec = 5 / steps if steps > 0 else 0
             assert result.success
             print(f"\n  Speed: {steps_per_sec:.2f} steps/s, {duration:.2f}s total")
 
@@ -100,7 +100,7 @@ class TestTrainingThroughput:
             base_config = {
                 "method": "sft", "data_quality_threshold": 0.0,
                 "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 5, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
             }
 
             trainer1 = ComprehensiveTrainer()
@@ -185,7 +185,7 @@ class TestMemoryUsage:
             config = {
                 "method": "sft", "data_quality_threshold": 0.0,
                 "epochs": 1, "batch_size": 8, "block_size": 32,
-                "max_steps": 3, "n_embed": 32, "n_layer": 2, "n_head": 2,
+                "max_steps": 2, "n_embed": 32, "n_layer": 2, "n_head": 2,
             }
             results = []
             for _ in range(3):

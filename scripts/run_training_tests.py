@@ -18,6 +18,9 @@ Usage:
     # Run E2E training trigger tests (servers required)
     python scripts/run_training_tests.py --e2e
 
+    # Run progress streaming + benchmarks (no servers)
+    python scripts/run_training_tests.py --local
+
     # Run with DevTools follower output
     python scripts/run_training_tests.py --journeys --devtools
 
@@ -45,6 +48,10 @@ UNIT_TEST_FILE = "packages/core-py/tests/test_comprehensive_trainer_unit.py"
 JOURNEY_TEST_FILE = "packages/core-py/tests/test_comprehensive_training_journeys.py"
 E2E_TEST_FILE = "packages/core-py/tests/test_e2e_training_trigger.py"
 INTEGRATION_TEST_FILE = "packages/core-py/tests/test_computer_use_training_integration.py"
+PROGRESS_STREAM_FILE = "packages/core-py/tests/test_training_progress_stream.py"
+BENCHMARK_FILE = "packages/core-py/tests/test_training_benchmarks.py"
+EXPORT_PRESETS_FILE = "packages/core-py/tests/test_training_export_presets.py"
+INFRASTRUCTURE_FILE = "packages/core-py/tests/test_training_infrastructure.py"
 
 
 def run_pytest(args: list[str], label: str) -> tuple[bool, float]:
@@ -68,28 +75,56 @@ def run_pytest(args: list[str], label: str) -> tuple[bool, float]:
 def main():
     parser = argparse.ArgumentParser(description="Run comprehensive training tests")
     parser.add_argument("--unit", action="store_true", help="Run unit tests only")
+    parser.add_argument("--local", action="store_true", help="Run local tests (unit + streaming + benchmarks)")
     parser.add_argument("--journeys", action="store_true", help="Run user journey tests")
     parser.add_argument("--e2e", action="store_true", help="Run E2E training trigger tests")
     parser.add_argument("--integration", action="store_true", help="Run integration tests")
+    parser.add_argument("--streaming", action="store_true", help="Run progress streaming tests")
+    parser.add_argument("--benchmarks", action="store_true", help="Run performance benchmarks")
     parser.add_argument("--all", action="store_true", help="Run all tests")
     parser.add_argument("--devtools", action="store_true", help="Enable DevTools follower output")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     parser.add_argument("--json", action="store_true", help="Output results as JSON")
     args = parser.parse_args()
 
-    if not any([args.unit, args.journeys, args.e2e, args.integration, args.all]):
+    if not any([args.unit, args.local, args.journeys, args.e2e, args.integration,
+                args.streaming, args.benchmarks, args.all]):
         args.unit = True
 
     results = []
     total_start = time.time()
 
     # Unit tests
-    if args.unit or args.all:
+    if args.unit or args.local or args.all:
         pytest_args = [UNIT_TEST_FILE, "-x", "-v" if args.verbose else "-q"]
         ok, dur = run_pytest(pytest_args, "Unit Tests")
         results.append({"suite": "unit", "passed": ok, "duration_s": dur})
 
-    # Journey tests
+    # Progress streaming tests
+    if args.streaming or args.local or args.all:
+        pytest_args = [PROGRESS_STREAM_FILE, "-v" if args.verbose else "-q"]
+        ok, dur = run_pytest(pytest_args, "Progress Streaming Tests")
+        results.append({"suite": "streaming", "passed": ok, "duration_s": dur})
+
+    # Benchmark tests
+    if args.benchmarks or args.local or args.all:
+        pytest_args = [BENCHMARK_FILE, "-v" if args.verbose else "-q", "-s"]
+        ok, dur = run_pytest(pytest_args, "Performance Benchmarks")
+        results.append({"suite": "benchmarks", "passed": ok, "duration_s": dur})
+
+    # Export and presets tests
+    if args.local or args.all:
+        pytest_args = [EXPORT_PRESETS_FILE, "-v" if args.verbose else "-q"]
+        ok, dur = run_pytest(pytest_args, "Export & Preset Tests")
+        results.append({"suite": "export_presets", "passed": ok, "duration_s": dur})
+
+    # Infrastructure tests
+    if args.local or args.all:
+        pytest_args = [INFRASTRUCTURE_FILE, "-v" if args.verbose else "-q"]
+        ok, dur = run_pytest(pytest_args, "Training Infrastructure Tests")
+        results.append({"suite": "infrastructure", "passed": ok, "duration_s": dur})
+
+    # Journey tests (servers required)
     if args.journeys or args.all:
         pytest_args = [JOURNEY_TEST_FILE, "-v" if args.verbose else "-q"]
         if args.devtools:
@@ -97,7 +132,7 @@ def main():
         ok, dur = run_pytest(pytest_args, "User Journey Tests")
         results.append({"suite": "journeys", "passed": ok, "duration_s": dur})
 
-    # E2E tests
+    # E2E tests (servers required)
     if args.e2e or args.all:
         pytest_args = [E2E_TEST_FILE, "-v" if args.verbose else "-q"]
         if args.devtools:
@@ -105,7 +140,7 @@ def main():
         ok, dur = run_pytest(pytest_args, "E2E Training Trigger Tests")
         results.append({"suite": "e2e", "passed": ok, "duration_s": dur})
 
-    # Integration tests
+    # Integration tests (servers required)
     if args.integration or args.all:
         pytest_args = [INTEGRATION_TEST_FILE, "-v" if args.verbose else "-q"]
         if args.devtools:

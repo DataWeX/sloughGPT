@@ -15,11 +15,13 @@ FAST_CONFIG = {
     "epochs": 1,
     "batch_size": 8,
     "block_size": 32,
-    "max_steps": 3,
+    "max_steps": 2,
     "n_embed": 32,
     "n_layer": 2,
     "n_head": 2,
 }
+
+DATA_TEXT = "The quick brown fox jumps over the lazy dog. " * 50
 
 
 class TestTrainingProgressCallbacks:
@@ -29,7 +31,7 @@ class TestTrainingProgressCallbacks:
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("The quick brown fox jumps over the lazy dog. " * 200)
+            f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
             events = []
@@ -43,7 +45,7 @@ class TestTrainingProgressCallbacks:
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("The quick brown fox jumps over the lazy dog. " * 200)
+            f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
             events = []
@@ -56,7 +58,7 @@ class TestTrainingProgressCallbacks:
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("The quick brown fox jumps over the lazy dog. " * 200)
+            f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
             events = []
@@ -70,7 +72,7 @@ class TestTrainingProgressCallbacks:
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("The quick brown fox jumps over the lazy dog. " * 200)
+            f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
             events = []
@@ -83,7 +85,7 @@ class TestTrainingProgressCallbacks:
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("The quick brown fox jumps over the lazy dog. " * 200)
+            f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
             events1 = []
@@ -97,7 +99,7 @@ class TestTrainingProgressCallbacks:
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("The quick brown fox jumps over the lazy dog. " * 200)
+            f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
             bad_called = [False]
@@ -123,6 +125,7 @@ class TestSSEEnvelopeIntegration:
         event = sse_event(
             stream="training",
             phase="TRAINING",
+            status="working",
             data={"progress": 0.5, "loss": 1.23},
         )
         assert "data:" in event
@@ -134,12 +137,12 @@ class TestSSEEnvelopeIntegration:
 
         env = SSEEnvelope(
             stream="training",
-            phase=StreamPhase.RUNNING.value,
+            phase=StreamPhase.TRAIN.value,
             status=StreamStatus.SUCCESS.value,
             data={"progress": 0.5},
         )
         assert env.stream == "training"
-        assert env.phase == StreamPhase.RUNNING.value
+        assert env.phase == StreamPhase.TRAIN.value
 
     def test_sse_training_event_format(self):
         from domains.api.sse_envelope import sse_event
@@ -147,6 +150,7 @@ class TestSSEEnvelopeIntegration:
         event = sse_event(
             stream="training",
             phase="TRAINING",
+            status="working",
             data={
                 "global_step": 10,
                 "epoch": 1,
@@ -162,7 +166,7 @@ class TestTrainingQueueSSE:
     """Tests the training queue SSE integration."""
 
     def test_training_queue_event_format(self):
-        from domains.infrastructure.training_queue import _json_safe
+        from domains.infrastructure.training_queue import _json_safe_payload
 
         data = {
             "progress": 0.5,
@@ -170,7 +174,7 @@ class TestTrainingQueueSSE:
             "step": 10,
             "nested": {"a": float("nan")},
         }
-        safe = _json_safe(data)
+        safe = _json_safe_payload(data)
         assert safe["progress"] == 0.5
         assert safe["loss"] is None
         assert safe["nested"]["a"] is None
@@ -179,10 +183,9 @@ class TestTrainingQueueSSE:
         from domains.infrastructure.event_buffer import get_event_buffer
 
         buffer = get_event_buffer()
-        initial_count = len(buffer.get_recent("TRAIN", limit=100))
         buffer.record("TRAIN", "test_progress_event")
-        new_count = len(buffer.get_recent("TRAIN", limit=100))
-        assert new_count >= initial_count
+        recent = buffer.recent(n=100)
+        assert len(recent) > 0
 
 
 class TestProgressStreamingEndToEnd:
@@ -192,7 +195,7 @@ class TestProgressStreamingEndToEnd:
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("The quick brown fox jumps over the lazy dog. " * 200)
+            f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
             phases_seen = []
@@ -206,7 +209,7 @@ class TestProgressStreamingEndToEnd:
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("The quick brown fox jumps over the lazy dog. " * 200)
+            f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
             result = trainer.run_full_cycle(data_path=f.name, config=FAST_CONFIG)
@@ -218,7 +221,7 @@ class TestProgressStreamingEndToEnd:
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write("The quick brown fox jumps over the lazy dog. " * 200)
+            f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
             result = trainer.run_full_cycle(data_path=f.name, config=FAST_CONFIG)

@@ -1,32 +1,43 @@
 /**
  */
+import React from 'react'
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+
+vi.mock('./CodeBlock', () => {
+  return {
+    CodeBlock: (props: any) => {
+      const { language, code } = props || {}
+      const [copied, setCopied] = React.useState(false)
+      return (
+        <div>
+          <span>{language || 'code'}</span>
+          <button
+            aria-label="Copy code"
+            onClick={() => navigator.clipboard.writeText(code).then(() => setCopied(true))}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          <pre>{code}</pre>
+        </div>
+      )
+    },
+  }
+})
 
 vi.mock('next/dynamic', () => ({
-  default: (factory: () => Promise<{ default: React.ComponentType<any> }>) =>
-    factory().then(m => m.default),
-}))
-
-vi.mock('./CodeBlock', () => ({
-  CodeBlock: ({ language, code }: { language: string; code: string }) => {
-    const [copied, setCopied] = React.useState(false)
-    return (
-      <div>
-        <span>{language || 'code'}</span>
-        <button
-          aria-label="Copy code"
-          onClick={() => navigator.clipboard.writeText(code).then(() => setCopied(true))}
-        >
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-        <pre>{code}</pre>
-      </div>
-    )
+  default: (factory: () => Promise<any>) => {
+    let _resolved: any = null
+    factory().then((mod: any) => {
+      _resolved = typeof mod === 'function' ? mod : (mod.default || mod.CodeBlock)
+    })
+    return function ResolvedDynamic(props: any) {
+      if (!_resolved) return null
+      return <_resolved {...props} />
+    }
   },
 }))
 
-import React from 'react'
 import { Markdown } from './Markdown'
 
 afterEach(cleanup)
@@ -143,10 +154,13 @@ describe('Markdown', () => {
     expect(hr).toBeInTheDocument()
   })
 
-  it('renders code block with language', () => {
+  it('renders code block with language', async () => {
     const { container } = render(<Markdown content={"```python\nprint('hi')\n```"} />)
+    await waitFor(() => {
+      const pre = container.querySelector('pre')
+      expect(pre).toBeInTheDocument()
+    })
     const pre = container.querySelector('pre')
-    expect(pre).toBeInTheDocument()
     expect(pre?.textContent).toContain("print('hi')")
     expect(container.textContent).toContain('python')
   })

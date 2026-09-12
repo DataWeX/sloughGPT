@@ -5,6 +5,7 @@ import React from 'react'
 const mockPathname = '/chat'
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
+  useRouter: () => ({ push: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn() }),
 }))
 
 vi.mock('next/link', () => ({ default: ({ children, href, className }: any) => <a href={href} className={className}>{children}</a> }))

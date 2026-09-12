@@ -82,8 +82,7 @@ describe('AuditTrailPage', () => {
 
   it('shows filter input', async () => {
     render(<AuditTrailPage />)
-    await screen.findByText('Audit Trail')
-    expect(screen.getByPlaceholderText(/filter/i)).toBeTruthy()
+    expect(await screen.findByPlaceholderText(/filter/i)).toBeTruthy()
   })
 
   it('filters activities', async () => {
