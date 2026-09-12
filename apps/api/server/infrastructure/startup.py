@@ -515,14 +515,30 @@ class StartupOrchestrator:
         task = asyncio.create_task(asyncio.to_thread(_load_and_register))
         task.add_done_callback(self._on_model_load_done)
 
+        # Report progress to staged loader
+        from infrastructure.staged_loader import get_staged_loader
+        loader = get_staged_loader()
+        loader.set_model_progress(0.1, "Starting model load...")
+        STARTUP_PHASE.update(
+            phase="loading_model", step=4, total=9, message="Loading model weights..."
+        )
+
     def _on_model_load_done(self, task: asyncio.Task):
+        # Report progress to staged loader
+        from infrastructure.staged_loader import get_staged_loader
+        loader = get_staged_loader()
+
         try:
             task.result()
+            loader.set_model_progress(1.0, "Model loaded successfully")
         except asyncio.CancelledError:
             logger.debug("Model load task cancelled (server shutting down)", extra={"tag": "START"})
+            loader.set_model_progress(0.0, "Model load cancelled")
             return
         except Exception as e:
-            logger.error("Model load task failed: %s", e, exc_info=True, extra={"tag": "START"})
+            logger.error("Model load task failed: %s", e, extra={"tag": "START"})
+            loader.set_model_progress(0.0, f"Model load failed: {e}")
+            return
 
         # Sync to persistent model catalog
         try:

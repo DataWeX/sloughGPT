@@ -430,6 +430,10 @@ export function useLiveStatus() {
     startupStage: health?.startup_stage ?? 'unknown',
     /** Elapsed seconds since startup began */
     startupElapsed: health?.startup_elapsed ?? 0,
+    /** Model load progress (0.0 to 1.0) */
+    startupModelProgress: health?.startup_model_progress ?? 0,
+    /** Model load progress message */
+    startupModelProgressMessage: health?.startup_model_progress_message ?? '',
   }
 }
 

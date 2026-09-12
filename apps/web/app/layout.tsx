@@ -7,16 +7,11 @@ import { MODE_STORAGE_KEY, THEME_IDS, THEME_STORAGE_KEY, PALETTE_IDS, PALETTE_ST
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 import WebVitals from '@/components/WebVitals'
+import { StartupOverlay } from '@/components/startup/StartupOverlay'
 
 const rubik = localFont({
   src: '../public/fonts/outfit-latin.woff2',
   variable: '--font-rubik',
-  display: 'swap',
-})
-
-const lato = localFont({
-  src: '../public/fonts/outfit-latin.woff2',
-  variable: '--font-lato',
   display: 'swap',
 })
 
@@ -47,13 +42,14 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${rubik.variable} ${lato.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${rubik.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
       </head>
       <body className="font-sans antialiased" suppressHydrationWarning>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapInline }} />
         <WebVitals />
         <ErrorLifecycle />
+        <StartupOverlay />
         <ErrorBoundary>
           <Providers>{children}</Providers>
         </ErrorBoundary>
