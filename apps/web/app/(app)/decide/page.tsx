@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea, Input } from '@sloughgpt/strui'
-import { chatController } from '@/lib/chat-controller'
+import { generateTool } from '@/lib/tools-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -29,37 +29,18 @@ export default function DecidePage() {
     setResult('')
 
     try {
-      const prompt = `Help me decide. Create a pro/con table for each option, then give a recommendation.
-
-Question: ${question}
-
-Option A: ${optionA}${notesA ? `\nNotes: ${notesA}` : ''}
-
-Option B: ${optionB}${notesB ? `\nNotes: ${notesB}` : ''}
-
-Format:
-## Option A: ${optionA}
-### Pros
-- ...
-### Cons
-- ...
-
-## Option B: ${optionB}
-### Pros
-- ...
-### Cons
-- ...
-
-## Recommendation
-...`
-
-      let response = ''
-      for await (const event of chatController.stream(prompt, { max_tokens: 800 })) {
-        if (event.token) {
-          response += event.token
-          setResult(response)
-        }
-      }
+      await generateTool(
+        'decide',
+        { question, option_a: optionA, option_b: optionB, notes_a: notesA, notes_b: notesB },
+        {
+          onToken: (token) => setResult(token),
+          onError: (msg) => {
+            _log.error('Decision failed', { error: msg })
+            addToast('Failed to analyze — is a model loaded?', 'error')
+          },
+        },
+        { max_tokens: 800 },
+      )
     } catch (err) {
       _log.error('Decision failed', { error: err instanceof Error ? err.message : String(err) })
       addToast('Failed to analyze — is a model loaded?', 'error')

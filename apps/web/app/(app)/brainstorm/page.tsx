@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea } from '@sloughgpt/strui'
-import { chatController } from '@/lib/chat-controller'
+import { generateTool } from '@/lib/tools-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -43,28 +43,32 @@ export default function BrainstormPage() {
     setIsGenerating(true)
 
     try {
-      const conversationHistory = [...messages, userMsg]
-        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-        .join('\n')
-
-      const prompt = `You are a creative brainstorming partner. Respond with ideas in bullet points, not essays. Be concise and creative.\n\n${conversationHistory}\nAssistant:`
-
-      let result = ''
-      for await (const event of chatController.stream(prompt, { max_tokens: 500 })) {
-        if (event.token) {
-          result += event.token
-          setMessages((prev) => {
-            const updated = [...prev]
-            const lastMsg = updated[updated.length - 1]
-            if (lastMsg?.role === 'assistant') {
-              lastMsg.content = result
-            } else {
-              updated.push({ role: 'assistant', content: result })
-            }
-            return updated
-          })
-        }
+      const history = [...messages, userMsg]
+      const updateAssistant = (result: string) => {
+        setMessages((prev) => {
+          const updated = [...prev]
+          const lastMsg = updated[updated.length - 1]
+          if (lastMsg?.role === 'assistant') {
+            lastMsg.content = result
+          } else {
+            updated.push({ role: 'assistant', content: result })
+          }
+          return updated
+        })
       }
+
+      await generateTool(
+        'brainstorm',
+        { history },
+        {
+          onToken: (token) => updateAssistant(token),
+          onError: (msg) => {
+            _log.error('Brainstorm failed', { error: msg })
+            addToast('Brainstorming failed — is a model loaded?', 'error')
+          },
+        },
+        { max_tokens: 500 },
+      )
     } catch (err) {
       _log.error('Brainstorm failed', { error: err instanceof Error ? err.message : String(err) })
       addToast('Brainstorming failed — is a model loaded?', 'error')

@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea } from '@sloughgpt/strui'
-import { chatController } from '@/lib/chat-controller'
+import { generateTool } from '@/lib/tools-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -11,12 +11,12 @@ const _log = logger.child('rewrite')
 
 type Action = 'grammar' | 'shorter' | 'friendlier' | 'professional' | 'sound-like-me'
 
-const ACTIONS: { id: Action; label: string; prompt: string }[] = [
-  { id: 'grammar', label: 'Fix Grammar', prompt: 'Fix spelling and grammar in this text. Output ONLY the corrected text:' },
-  { id: 'shorter', label: 'Make Shorter', prompt: 'Make this text more concise. Output ONLY the shorter version:' },
-  { id: 'friendlier', label: 'Make Friendlier', prompt: 'Rewrite this in a friendly, casual tone. Output ONLY the rewritten text:' },
-  { id: 'professional', label: 'Make Professional', prompt: 'Rewrite this in a professional tone. Output ONLY the rewritten text:' },
-  { id: 'sound-like-me', label: 'Sound Like Me', prompt: 'Rewrite this to sound more natural and personal. Output ONLY the rewritten text:' },
+const ACTIONS: { id: Action; label: string }[] = [
+  { id: 'grammar', label: 'Fix Grammar' },
+  { id: 'shorter', label: 'Make Shorter' },
+  { id: 'friendlier', label: 'Make Friendlier' },
+  { id: 'professional', label: 'Make Professional' },
+  { id: 'sound-like-me', label: 'Sound Like Me' },
 ]
 
 export default function RewritePage() {
@@ -35,16 +35,18 @@ export default function RewritePage() {
     setRewritten('')
 
     try {
-      const actionConfig = ACTIONS.find((a) => a.id === action)!
-      const prompt = `${actionConfig.prompt}\n\n${original}`
-
-      let result = ''
-      for await (const event of chatController.stream(prompt, { max_tokens: 500 })) {
-        if (event.token) {
-          result += event.token
-          setRewritten(result)
-        }
-      }
+      await generateTool(
+        'rewrite',
+        { text: original, action },
+        {
+          onToken: (token) => setRewritten(token),
+          onError: (msg) => {
+            _log.error('Rewrite failed', { error: msg })
+            addToast('Rewrite failed — is a model loaded?', 'error')
+          },
+        },
+        { max_tokens: 500 },
+      )
     } catch (err) {
       _log.error('Rewrite failed', { error: err instanceof Error ? err.message : String(err) })
       addToast('Rewrite failed — is a model loaded?', 'error')

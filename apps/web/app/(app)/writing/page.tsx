@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea } from '@sloughgpt/strui'
-import { chatController } from '@/lib/chat-controller'
+import { generateTool } from '@/lib/tools-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -38,23 +38,6 @@ export default function WritingAssistantPage() {
   const addToast = useToastStore((s) => s.addToast)
   const outputRef = useRef<HTMLTextAreaElement>(null)
 
-  const buildPrompt = useCallback((text: string, action: 'write' | 'rewrite' | 'shorter' | 'funnier') => {
-    const toneLabel = TONES.find((t) => t.id === tone)?.label
-    const typeLabel = TYPES.find((t) => t.id === type)?.label
-
-    if (action === 'write') {
-      return `Write a ${toneLabel.toLowerCase()} ${typeLabel.toLowerCase()} based on this: "${text}"\n\nJust output the ${typeLabel.toLowerCase()} directly, no explanation.`
-    }
-    if (action === 'rewrite') {
-      return `Rewrite this ${typeLabel.toLowerCase()} in a different way, keeping the same ${toneLabel.toLowerCase()} tone:\n\n${text}\n\nJust output the rewritten ${typeLabel.toLowerCase()}.`
-    }
-    if (action === 'shorter') {
-      return `Make this shorter while keeping the ${toneLabel.toLowerCase()} tone:\n\n${text}\n\nJust output the shorter version.`
-    }
-    // funnier
-    return `Make this funnier while keeping it a ${typeLabel.toLowerCase()}:\n\n${text}\n\nJust output the funnier version.`
-  }, [tone, type])
-
   const generate = useCallback(async (action: 'write' | 'rewrite' | 'shorter' | 'funnier') => {
     if (!input.trim()) {
       addToast('Write something first', 'info')
@@ -64,24 +47,28 @@ export default function WritingAssistantPage() {
     setIsGenerating(true)
     setOutput('')
 
-    try {
-      const prompt = action === 'write' ? input : output || input
-      const fullPrompt = buildPrompt(prompt, action)
+    const text = action === 'write' ? input : output || input
 
-      let result = ''
-      for await (const event of chatController.stream(fullPrompt, { max_tokens: 500 })) {
-        if (event.token) {
-          result += event.token
-          setOutput(result)
-        }
-      }
+    try {
+      await generateTool(
+        'writing',
+        { text, action, tone, type },
+        {
+          onToken: (token) => setOutput(token),
+          onError: (msg) => {
+            _log.error('Generation failed', { error: msg })
+            addToast('Failed to generate — is a model loaded?', 'error')
+          },
+        },
+        { max_tokens: 500 },
+      )
     } catch (err) {
       _log.error('Generation failed', { error: err instanceof Error ? err.message : String(err) })
       addToast('Failed to generate — is a model loaded?', 'error')
     } finally {
       setIsGenerating(false)
     }
-  }, [input, buildPrompt, addToast])
+  }, [input, output, tone, type, addToast])
 
   const copyToClipboard = useCallback(() => {
     if (output) {

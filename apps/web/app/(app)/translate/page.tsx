@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea, Select } from '@sloughgpt/strui'
-import { chatController } from '@/lib/chat-controller'
+import { generateTool } from '@/lib/tools-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -32,15 +32,18 @@ export default function TranslatePage() {
     setTarget('')
 
     try {
-      const prompt = `Translate the following text to ${targetLang}. Output ONLY the translation, no explanation:\n\n${source}`
-
-      let result = ''
-      for await (const event of chatController.stream(prompt, { max_tokens: 500 })) {
-        if (event.token) {
-          result += event.token
-          setTarget(result)
-        }
-      }
+      await generateTool(
+        'translate',
+        { text: source, target_lang: targetLang },
+        {
+          onToken: (token) => setTarget(token),
+          onError: (msg) => {
+            _log.error('Translation failed', { error: msg })
+            addToast('Translation failed — is a model loaded?', 'error')
+          },
+        },
+        { max_tokens: 500 },
+      )
     } catch (err) {
       _log.error('Translation failed', { error: err instanceof Error ? err.message : String(err) })
       addToast('Translation failed — is a model loaded?', 'error')
