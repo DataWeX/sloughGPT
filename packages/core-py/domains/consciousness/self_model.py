@@ -156,6 +156,31 @@ class SelfModel:
 
         return " ".join(parts)
 
+    def clear_episodes(self) -> int:
+        """Clear all episodes.
+
+        Returns:
+            Number of episodes that were cleared.
+        """
+        count = len(self.episodes)
+        self.episodes = []
+        return count
+
+    def reset_beliefs(self) -> dict[str, float]:
+        """Reset self-beliefs to defaults.
+
+        Returns:
+            The new default beliefs.
+        """
+        self.self_beliefs = {
+            "competence": 0.7,
+            "helpfulness": 0.8,
+            "creativity": 0.5,
+            "accuracy": 0.6,
+            "empathy": 0.4,
+        }
+        return dict(self.self_beliefs)
+
     def get_belief(self, key: str) -> float:
         return self.self_beliefs.get(key, 0.0)
 

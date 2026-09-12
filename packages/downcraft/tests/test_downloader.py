@@ -1,10 +1,14 @@
 """Tests for downcraft.download.http — HTTP download with resume."""
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
+
+# Ensure local conftest is importable
+sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft.download.http import (
     _part_path,

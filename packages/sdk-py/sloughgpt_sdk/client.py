@@ -942,6 +942,90 @@ class SloughGPTClient:
         response = self._request("PATCH", url)
         return _unwrap_response(response.json())
 
+    def get_training_analytics(self) -> Dict[str, Any]:
+        """Get aggregated training analytics for charts and summaries."""
+        response = self._request("GET", "/settings/training/analytics")
+        return _unwrap_response(response.json())
+
+    # ============ Docstore ============
+
+    def list_docstore_docs(self, collection: str) -> List[Dict[str, Any]]:
+        """List all documents in a docstore collection."""
+        response = self._request("GET", f"/docstore/{collection}")
+        return _unwrap_response(response.json())
+
+    def get_docstore_doc(self, collection: str, doc_id: str) -> Dict[str, Any]:
+        """Get a single document from a docstore collection."""
+        response = self._request("GET", f"/docstore/{collection}/{doc_id}")
+        return _unwrap_response(response.json())
+
+    def put_docstore_doc(self, collection: str, doc_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Put (create/update) a document in a docstore collection."""
+        response = self._request("PUT", f"/docstore/{collection}/{doc_id}", json=data)
+        return _unwrap_response(response.json())
+
+    def patch_docstore_doc(self, collection: str, doc_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Patch (partial update) a document in a docstore collection."""
+        response = self._request("PATCH", f"/docstore/{collection}/{doc_id}", json=data)
+        return _unwrap_response(response.json())
+
+    def delete_docstore_doc(self, collection: str, doc_id: str) -> Dict[str, Any]:
+        """Delete a document from a docstore collection."""
+        response = self._request("DELETE", f"/docstore/{collection}/{doc_id}")
+        return _unwrap_response(response.json())
+
+    def clear_docstore_collection(self, collection: str) -> Dict[str, Any]:
+        """Clear all documents from a docstore collection."""
+        response = self._request("DELETE", f"/docstore/{collection}")
+        return _unwrap_response(response.json())
+
+    def bulk_put_docstore(self, collection: str, docs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Bulk put documents into a docstore collection."""
+        response = self._request("POST", f"/docstore/{collection}/bulk", json=docs)
+        return _unwrap_response(response.json())
+
+    # ============ Collections ============
+
+    def list_collections(self) -> List[Dict[str, Any]]:
+        """List all collections/pipelines."""
+        response = self._request("GET", "/collections")
+        return _unwrap_response(response.json())
+
+    def get_collection(self, collection_id: str) -> Dict[str, Any]:
+        """Get a single collection/pipeline."""
+        response = self._request("GET", f"/collections/{collection_id}")
+        return _unwrap_response(response.json())
+
+    def create_collection(self, name: str, **kwargs: Any) -> Dict[str, Any]:
+        """Create a new collection/pipeline."""
+        response = self._request("POST", "/collections/create", json={"name": name, **kwargs})
+        return _unwrap_response(response.json())
+
+    def delete_collection(self, collection_id: str) -> Dict[str, Any]:
+        """Delete a collection/pipeline."""
+        response = self._request("DELETE", f"/collections/{collection_id}")
+        return _unwrap_response(response.json())
+
+    def run_collection(self, collection_id: str, **kwargs: Any) -> Dict[str, Any]:
+        """Run a collection/pipeline."""
+        response = self._request("POST", "/collections/run", json={"pipeline_id": collection_id, **kwargs})
+        return _unwrap_response(response.json())
+
+    def collect_from_collection(self, collection_id: str, **kwargs: Any) -> Dict[str, Any]:
+        """Collect data from a collection/pipeline."""
+        response = self._request("POST", f"/collections/{collection_id}/collect", json=kwargs)
+        return _unwrap_response(response.json())
+
+    def get_collection_records(self, collection_id: str) -> List[Dict[str, Any]]:
+        """Get records from a collection/pipeline."""
+        response = self._request("GET", f"/collections/{collection_id}/records")
+        return _unwrap_response(response.json())
+
+    def get_collection_stats(self) -> Dict[str, Any]:
+        """Get collection/pipeline stats."""
+        response = self._request("GET", "/collections/stats")
+        return _unwrap_response(response.json())
+
     # ============ Benchmark ============
 
     def run_benchmark(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -1562,6 +1646,74 @@ class AsyncSloughGPTClient:
         qs = "&".join(f"{k}={v}" for k, v in params.items())
         url = f"/settings/training/auto-train/config{f'?{qs}' if qs else ''}"
         return _unwrap_response(await self._request("PATCH", url))
+
+    async def get_training_analytics(self) -> Dict[str, Any]:
+        """Get aggregated training analytics for charts and summaries."""
+        return _unwrap_response(await self._request("GET", "/settings/training/analytics"))
+
+    # ── Docstore ────────────────────────────────────────────────────────
+
+    async def list_docstore_docs(self, collection: str) -> List[Dict[str, Any]]:
+        """List all documents in a docstore collection."""
+        return _unwrap_response(await self._request("GET", f"/docstore/{collection}"))
+
+    async def get_docstore_doc(self, collection: str, doc_id: str) -> Dict[str, Any]:
+        """Get a single document from a docstore collection."""
+        return _unwrap_response(await self._request("GET", f"/docstore/{collection}/{doc_id}"))
+
+    async def put_docstore_doc(self, collection: str, doc_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Put (create/update) a document in a docstore collection."""
+        return _unwrap_response(await self._request("PUT", f"/docstore/{collection}/{doc_id}", json=data))
+
+    async def patch_docstore_doc(self, collection: str, doc_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Patch (partial update) a document in a docstore collection."""
+        return _unwrap_response(await self._request("PATCH", f"/docstore/{collection}/{doc_id}", json=data))
+
+    async def delete_docstore_doc(self, collection: str, doc_id: str) -> Dict[str, Any]:
+        """Delete a document from a docstore collection."""
+        return _unwrap_response(await self._request("DELETE", f"/docstore/{collection}/{doc_id}"))
+
+    async def clear_docstore_collection(self, collection: str) -> Dict[str, Any]:
+        """Clear all documents from a docstore collection."""
+        return _unwrap_response(await self._request("DELETE", f"/docstore/{collection}"))
+
+    async def bulk_put_docstore(self, collection: str, docs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Bulk put documents into a docstore collection."""
+        return _unwrap_response(await self._request("POST", f"/docstore/{collection}/bulk", json=docs))
+
+    # ── Collections ─────────────────────────────────────────────────────
+
+    async def list_collections(self) -> List[Dict[str, Any]]:
+        """List all collections/pipelines."""
+        return _unwrap_response(await self._request("GET", "/collections"))
+
+    async def get_collection(self, collection_id: str) -> Dict[str, Any]:
+        """Get a single collection/pipeline."""
+        return _unwrap_response(await self._request("GET", f"/collections/{collection_id}"))
+
+    async def create_collection(self, name: str, **kwargs: Any) -> Dict[str, Any]:
+        """Create a new collection/pipeline."""
+        return _unwrap_response(await self._request("POST", "/collections/create", json={"name": name, **kwargs}))
+
+    async def delete_collection(self, collection_id: str) -> Dict[str, Any]:
+        """Delete a collection/pipeline."""
+        return _unwrap_response(await self._request("DELETE", f"/collections/{collection_id}"))
+
+    async def run_collection(self, collection_id: str, **kwargs: Any) -> Dict[str, Any]:
+        """Run a collection/pipeline."""
+        return _unwrap_response(await self._request("POST", f"/collections/run", json={"pipeline_id": collection_id, **kwargs}))
+
+    async def collect_from_collection(self, collection_id: str, **kwargs: Any) -> Dict[str, Any]:
+        """Collect data from a collection/pipeline."""
+        return _unwrap_response(await self._request("POST", f"/collections/{collection_id}/collect", json=kwargs))
+
+    async def get_collection_records(self, collection_id: str) -> List[Dict[str, Any]]:
+        """Get records from a collection/pipeline."""
+        return _unwrap_response(await self._request("GET", f"/collections/{collection_id}/records"))
+
+    async def get_collection_stats(self) -> Dict[str, Any]:
+        """Get collection/pipeline stats."""
+        return _unwrap_response(await self._request("GET", "/collections/stats"))
 
     async def __aenter__(self):
         return self

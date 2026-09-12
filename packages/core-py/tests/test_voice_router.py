@@ -56,9 +56,11 @@ def _mock_backend(**overrides):
     """Create a MagicMock that behaves like _TTSBackend."""
     b = MagicMock()
     b.load.return_value = overrides.get("load_return", False)
-    b._model_id = overrides.get("model_id", None)
     b._error = overrides.get("error", None)
-    b.generate.return_value = overrides.get("generate_return", b"")
+    gen = overrides.get("generate_return", None)
+    if gen is not None and not isinstance(gen, tuple):
+        gen = (gen, 24000)
+    b.generate.return_value = gen
     return b
 
 
@@ -68,7 +70,7 @@ def _mock_backend(**overrides):
 
 class TestVoiceStatus:
     def test_status_when_unavailable(self):
-        backend = _mock_backend(load_return=False, error="transformers not available")
+        backend = _mock_backend(load_return=False, error="engine load failed")
         client = TestClient(_app_with_backend(backend))
         resp = client.get("/voice/status")
         assert resp.status_code == 200
@@ -77,13 +79,13 @@ class TestVoiceStatus:
         assert data["model"] is None
 
     def test_status_when_available(self):
-        backend = _mock_backend(load_return=True, model_id="suno/bark-small")
+        backend = _mock_backend(load_return=True)
         client = TestClient(_app_with_backend(backend))
         resp = client.get("/voice/status")
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["server_tts"] is True
-        assert data["model"] == "suno/bark-small"
+        assert data["model"] == "native-numpy"
 
 
 class TestTextToSpeech:
@@ -130,7 +132,7 @@ class TestTextToSpeech:
         resp = client.post("/voice/tts", json={"text": "Hello world"})
         assert resp.status_code == 200
         data = resp.json()
-        assert data["backend"] == "hf-model"
+        assert data["backend"] == "native-numpy"
         assert data["sample_rate"] == 24000
         assert data["duration_ms"] == 1000
         assert len(data["audio"]) > 0

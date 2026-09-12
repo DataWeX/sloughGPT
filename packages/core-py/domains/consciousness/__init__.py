@@ -109,6 +109,26 @@ class ConsciousnessEngine:
         """Generate a self-reflection."""
         return self.self_model.reflect()
 
+    def clear_episodes(self) -> int:
+        """Clear all episodes from the self-model.
+
+        Returns:
+            Number of episodes that were cleared.
+        """
+        count = self.self_model.clear_episodes()
+        self.save()
+        return count
+
+    def reset_beliefs(self) -> dict[str, float]:
+        """Reset self-beliefs to defaults.
+
+        Returns:
+            The new default beliefs.
+        """
+        beliefs = self.self_model.reset_beliefs()
+        self.save()
+        return beliefs
+
 
 _module_lock = threading.Lock()
 _instance: ConsciousnessEngine | None = None

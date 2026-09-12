@@ -1,10 +1,14 @@
 """Tests for downcraft.__init__ — top-level download API."""
 
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
+
+# Ensure local conftest is importable
+sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft import download
 from conftest import RangeHandler, _range_url

@@ -11,6 +11,9 @@ from unittest.mock import patch
 
 import pytest
 
+# Ensure local conftest is importable
+sys.path.insert(0, str(Path(__file__).parent))
+
 from downcraft import __main__ as cli
 from conftest import RangeHandler, _range_url
 
@@ -81,7 +84,7 @@ class TestUrl:
         RangeHandler.payloads["/cli.bin"] = content
         dest = tmp_path / "cli.bin"
         cli.cmd_url(
-            type("A", (), {"url": _range_url(range_server, "/cli.bin"), "dest": str(dest)})
+            type("A", (), {"url": _range_url(range_server, "/cli.bin"), "dest": str(dest), "compressed": False})
         )
         out = capsys.readouterr().out
         assert "Done" in out
@@ -92,6 +95,6 @@ class TestUrl:
         dest = str(Path("/tmp/nonexistent_cli_out.bin"))
         with pytest.raises(SystemExit) as exc:
             cli.cmd_url(
-                type("A", (), {"url": "http://127.0.0.1:1/missing", "dest": dest})
+                type("A", (), {"url": "http://127.0.0.1:1/missing", "dest": dest, "compressed": False})
             )
         assert exc.value.code == 1

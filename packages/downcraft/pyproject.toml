@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov"]
+compress = ["lz4>=4.0"]
 
 [project.urls]
 Homepage = "https://github.com/anomalyco/sloughGPT"

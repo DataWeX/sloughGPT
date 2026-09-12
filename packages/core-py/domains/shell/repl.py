@@ -1693,170 +1693,71 @@ class ShellREPL(LinuxCommandsMixin):
                 self._print("""
   Most-used commands (help <cmd> for details, help for full list):
 
-  models / load / unload  Model management
-  souls / switch        Soul personality management
-  gen / chat / ai       Inference and natural language
-  health / status       System health and info
-  boot / shutdown       Shell lifecycle
-  api                   API server lifecycle (start/stop/status)
-  svc                   Service management
-  devices / lsdev       AI device nodes (/dev/llm, /dev/embedding, /dev/knowledge)
-  asm                   Virtual machine
-  remember / recall     Knowledge base
-  datasets / tokenizer  Data and tokenizer utilities
-  procs / kill / bg / fg  Process management
-  py                    Shell utilities
-  cd / pwd / echo / ls / cat / mkdir / rm / touch / cp / mv / head / tail / wc   Filesystem operations
-  history / fc          Command history
+  chat / gen / ai      Inference and natural language
+  models / load         Model management
+  souls                 Soul personality management
+  train / ops           Training and operations
+  datasets / knowledge  Data management
+  checkpoints           Training checkpoints
+  agents                Multi-agent orchestration
+  status / metrics      System health and info
+  logs / events         System logs and events
+  api                   API server lifecycle
+  ps / kill             Process management
+  py                    Python expressions
+  ls / cat / grep / find  File operations
+  cd / pwd / echo       Navigation
+  history / alias       Shell features
   help <cmd>            Help for a specific command
-  exit / q / quit       Exit shell
+  exit                  Exit shell
 
   Pipe features: |  &  >  >>  $(...)  $?  $VAR
 """)
                 return
             cmd_help = {
                 "help": "  help [cmd]  — Show this help or help for a specific command",
-                "exit": "  exit | q | quit  — Exit the shell",
+                "exit": "  exit  — Exit the shell",
                 "cd": '  cd [dir]  — Change directory (default: ~, - for previous)',
                 "pwd": "  pwd  — Print working directory",
                 "echo": "  echo [text...]  — Print text to stdout",
-                "ls": "  ls [dir]  — List directory contents (VFS-aware: shows /dev/*, /proc/*)",
-                "cat": "  cat <file>  — Print file contents (VFS-aware: reads /dev/*, /proc/*)",
-                "mkdir": "  mkdir <dir>  — Create a directory",
-                "rm": "  rm [-rf] <path>  — Remove files/directories (permission-gated)",
-                "touch": "  touch <file> [file...]  — Create empty files or update timestamps",
-                "cp": "  cp <src> <dst>  — Copy files/directories",
-                "mv": "  mv <src> <dst>  — Move or rename files",
-                "head": "  head [-n N] [-c N] [-q] <file>  — Output first N lines/bytes",
-                "tail": "  tail [-n N] [-c N] [-q] <file>  — Output last N lines/bytes",
-                "wc": "  wc [-l] [-w] [-c] [-m] [-L] <file>  — Count lines/words/chars/longest",
-                "grep": "  grep [-i] [-v] <pattern> [file]  — Search for patterns (VFS-aware, supports pipes)",
-                "sort": "  sort [-r] [-n] [-u] [file]  — Sort lines (supports pipes)",
-                "uniq": "  uniq [-c] [-d] [-u] [-f N] [-s N] [file]  — Remove adjacent duplicates",
-                "find": "  find [dir] [-name pattern] [-type f|d] [-maxdepth N]  — Search for files",
-                "tee": "  tee [-a] <file>  — Copy stdin to file and stdout",
-                "xargs": "  xargs [-n N] <cmd>  — Build and execute command from stdin",
-                "chmod": "  chmod <mode> <file>  — Change file permissions (octal)",
-                "du": "  du [-h] [path...]  — Estimate disk usage",
-                "diff": "  diff [-u] [-w] [-q] <file1> <file2>  — Compare files",
-                "stat": "  stat [-c FMT] <path>  — Display file metadata (%n %s %f %F %A %m %x %u %g %h)",
-                "cut": "  cut -f<N> [-d<delim>] [file]  — Cut fields from lines (supports pipes)",
-                "tr": "  tr [-d] [-s] [-c] [-t] <set1> [set2]  — Translate/delete/squeeze chars",
-                "seq": "  seq [first [inc]] last  — Generate number sequence",
-                "nl": "  nl [file]  — Number lines of a file or piped input",
-                "fold": "  fold [-w width] [-s] [file]  — Wrap long lines (-s: break at spaces)",
-                "tac": "  tac [file]  — Reverse lines (cat backwards)",
-                "env": "  env  — Print environment variables",
-                "printenv": "  printenv  — Print environment variables",
-                "yes": "  yes [string]  — Repeatedly output a line",
-                "realpath": "  realpath <path>  — Resolve path to absolute",
-                "dirname": "  dirname <path>  — Strip last component from file path",
-                "basename": "  basename <path> [suffix]  — Strip directory from file path",
-                "nproc": "  nproc  — Print number of CPUs",
-                "hostname": "  hostname  — Print system hostname",
-                "uname": "  uname [-a] [-srm]  — Print system information",
-                "shuf": "  shuf [file]  — Shuffle lines randomly",
-                "rev": "  rev [file]  — Reverse characters in each line",
-                "paste": "  paste [-d DELIM] [-s] <file1> [file2 ...]  — Merge lines side by side",
-                "comm": "  comm [-1] [-2] [-3] <file1> <file2>  — Compare sorted files (-1/-2/-3 suppress)",
-                "column": "  column [-t] [-s SEP] [file]  — Display input in columns",
-                "test": "  test <expr>  — Evaluate conditional expression (sets $? 0=true 1=false)",
-                "[": "  [ <expr> ]  — Synonym for test",
-                "printf": "  printf <format> [args...]  — Format and print data (%s %d %f \\n \\t)",
-                "expand": "  expand [-t N] [file]  — Convert tabs to spaces (default 8)",
-                "unexpand": "  unexpand [-t N] [file]  — Convert spaces to tabs (default 8)",
-                "id": "  id  — Print user identity",
-                "logname": "  logname  — Print login name",
-                "mktemp": "  mktemp [-d]  — Create a temporary file or directory",
-                "who": "  who  — Show who is logged on",
-                "od": "  od [-A base] [-t type] <file>  — Dump file (o/x/d/n address, o/x/d/c/u data)",
-                "join": "  join [-1 F] [-2 F] [-t C] [-a F] [-e STR] <f1> <f2>  — Join files on field",
-                "history": "  history [n]  — Show command history (last n entries, default 20)",
-                "fc": "  fc [-l] [n]  — List history, or re-run command by number (fc 42)",
+                "ls": "  ls [dir]  — List directory contents",
+                "cat": "  cat <file>  — Print file contents",
+                "head": "  head [-n N] <file>  — Output first N lines",
+                "tail": "  tail [-n N] <file>  — Output last N lines",
+                "grep": "  grep [-i] [-v] <pattern> [file]  — Search for patterns",
+                "find": "  find [dir] [-name pattern] [-type f|d]  — Search for files",
+                "history": "  history [n]  — Show command history",
                 "alias": "  alias [name=cmd]  — List or set aliases",
                 "unalias": "  unalias <name>  — Remove an alias",
-                "export": "  export [NAME=VALUE]  — Set/show env vars (POSIX-style)",
-                "set": '  set [name=value]  — Set/show env vars. $VAR, ${VAR}, and NAME=VALUE cmd supported',
-                "source": "  source <file> | . <file>  — Execute commands from a file",
-                "which": "  which <command>  — Locate a command",
-                "type": "  type <command>  — Describe a command",
-                "tsort": "  tsort [file]  — Topological sort of dependency pairs",
-                "df": "  df [-h] [path]  — Report disk space usage",
-                "readlink": "  readlink [-f] <path>  — Resolve symbolic link",
-                "file": "  file [-b] [-i] <file>  — Determine file type",
-                "timeout": "  timeout [-s SIG] SEC CMD  — Run with time limit",
-                "watch": "  watch [-n SEC] CMD  — Repeat command and display",
-                "sleep": "  sleep [SUFFIX]  — Sleep (suffixes: s/m/h/d)",
-                "type": "  type <command> [...]  — Show command type",
-                "read": "  read [-p PROMPT] VAR  — Read input into variable",
-                "pushd": "  pushd [DIR]  — Push directory onto stack",
-                "popd": "  popd  — Pop directory from stack",
-                "dirs": "  dirs [-v]  — Display directory stack",
-                "strings": "  strings [-n N] <file>  — Extract printable strings from binary",
-                "base64": "  base64 [-d] [file]  — Base64 encode or decode",
-                "cksum": "  cksum <file>...  — Compute CRC checksum",
-                "split": "  split [-l N] [-b N] [-d] [file] [prefix]  — Split file into pieces",
-
-                "procs": "  procs  — List running training jobs",
-                "ps": "  ps  — List kernel processes (AI workloads)",
-                "kill": "  kill <id>  — Stop a training job by ID",
-                "train": "  train [dataset]  — Start training or list datasets",
-                "bg": "  bg | jobs  — List background shell processes",
-                "jobs": "  bg | jobs  — List background shell processes",
-                "fg": "  fg <id>  — Bring a background process to foreground (wait for completion)",
-                "models": "  models  — List available models (tab-completes names)",
-                "load": "  load <name>  — Load a model (tab-completes names)",
-                "unload": "  unload  — Unload the current model",
-                "souls": "  souls  — List available souls (tab-completes names)",
-                "switch": "  switch <name>  — Switch to a soul (tab-completes names)",
-                "whoami": "  whoami  — Show current soul",
-                "uptime": "  uptime  — How long Dait has been running",
-                "health": "  health  — Quick API health check (colored status output)",
-                "status": "  status  — Detailed system status (model, soul, server)",
-                "metrics": "  metrics  — Show CPU/memory/disk metrics from server",
-                "datasets": "  datasets  — List datasets (tab-completes names)",
-                "knowledge": "  knowledge [query]  — List/search knowledge base entries",
-                "checkpoints": "  checkpoints  — List training checkpoints (tab-completes names)",
-                "finetuned": "  finetuned  — List fine-tuned models (load <name> | rm <name>)",
-                "protect": "  protect <model>  — Protect model files from accidental deletion (read-only + manifest)",
-                "unprotect": "  unprotect <model>  — Remove protection from a model's files",
-                "gen": "  gen <prompt>  — Generate text via inference",
-                "tokenizer": "  tokenizer  — Show tokenizer vocabulary stats",
-                "py": '  py <expr>  — Evaluate a Python expression. E.g. py 2 + 2, py [i*2 for i in range(5)]',
-
-
-                "ai": '  ai <query>  — LLM-powered NL interpretation. E.g. ai "show me running jobs"',
-                "agents": "  agents <goal>  — Multi-agent orchestration. E.g. agents 'research and write about X'",
-                "tutorial": "  tutorial  — Interactive walkthrough of shell features",
-
-                "remember": "  remember <fact>  — Store a fact in the knowledge base (also piped input)",
-                "recall": "  recall <query>  — Search the knowledge base",
-                "boot": "  boot  — Boot the shell (kernel + init services)",
-                "shutdown": "  shutdown  — Halt all services and kernel",
-                "svc": "  svc [list|start|stop|restart|status] [name]  — Manage init services",
-                "devices": "  devices | lsdev  — List AI device nodes (/dev/*)",
-                "lsdev": "  devices | lsdev  — List AI device nodes (/dev/*)",
-                "asm": '  asm [file.asm] | asm --test | asm --list  — Assemble and run VM programs',
-                "vmrun": '  vmrun [--admin|--kernel] [--steps=N] [--debug] <file|name>  — Run x86 assembly in virtual PC with RBAC. Built-in: hello, count, counter',
-                "vmperms": "  vmperms  — Show x86 VM RBAC permission matrix (role×perm)",
-                "permit": "  permit <cmd> [--persist]  — Grant permission for a blocked command",
-                "deny": "  deny <cmd> [--persist]  — Revoke a previously granted permission",
-                "permissions": "  permissions  — Show current permission policy and granted commands",
-                "api": "  api [start|stop|status|restart]  — Manage the API server lifecycle",
                 "chat": "  chat [msg] | chat /reset  — Multi-turn chat session",
+                "gen": "  gen <prompt>  — Generate text via inference",
+                "ai": '  ai <query>  — LLM-powered NL interpretation',
+                "models": "  models  — List available models",
+                "load": "  load <name>  — Load a model",
+                "train": "  train [dataset]  — Start training or list datasets",
+                "ops": "  ops  — List active operations",
+                "operations": "  ops  — List active operations",
+                "datasets": "  datasets  — List datasets",
+                "knowledge": "  knowledge [query]  — List/search knowledge base",
+                "checkpoints": "  checkpoints  — List training checkpoints",
+                "souls": "  souls  — List available souls",
+                "agents": "  agents <goal>  — Multi-agent orchestration",
+                "status": "  status  — Detailed system status",
+                "metrics": "  metrics  — Show CPU/memory/disk metrics",
+                "events": "  events [filter] [n]  — Show recent events",
+                "logs": "  logs [-l LEVEL] [-f]  — View logs",
+                "api": "  api [start|stop|status]  — Manage API server",
+                "kill": "  kill <id>  — Stop a training job",
+                "ps": "  ps  — List kernel processes",
+                "py": "  py <expr>  — Evaluate Python expression",
+                "permit": "  permit <cmd>  — Grant permission for blocked command",
+                "deny": "  deny <cmd>  — Revoke permission",
+                "permissions": "  permissions  — Show permission policy",
                 "confirm": "  confirm [on|off]  — Toggle auto-download confirmation",
-                "events": "  events [filter] [n]  — Show recent EventBus events",
-                "note": '  note [new|list|show|edit|delete|search|today|export]  — Development journal',
-                "read": "  read [-p prompt] VARNAME  — Read stdin into a variable",
-                "logs": '  logs [-l LEVEL] [-s SOURCE] [-n LINES] [-f] [--stats] [-e FILE] [--explain] [--last]  — View logs. --explain: AI analysis of errors',
-                "console": '  logs  — Alias for "logs"',
-                "tui": '  tui  — Launch three-pane TUI (console logs + shell output + input line)',
+                "protect": "  protect <model>  — Protect model files",
+                "unprotect": "  unprotect <model>  — Remove protection",
+                "tui": "  tui  — Launch three-pane TUI",
                 "clear": "  clear  — Clear the terminal screen",
-                "sleep": "  sleep <seconds>  — Sleep for N seconds (default 1)",
-                "date": '  date [-u] [+format]  — Show current date and time',
-                "cal": "  cal [[month] year]  — Show a calendar",
-                "ln": "  ln [-s] <target> <link_name>  — Create hard or symbolic links",
-                "render": "  render [sphere|cube|plane|light|mat|cam|go|neural|clear|preset]  — Path tracer + neural scene",
             }
             if args in cmd_help:
                 self._print(cmd_help[args])
@@ -1905,202 +1806,76 @@ Most common commands (help [cmd] for details, help for full list):
                 self._print(f"  Unknown command: {args}")
             return
         self._print(f"""
-{_C_CYAN}Built-in commands:{_C_RESET}
-  help [cmd]             Show this help or help for a specific command
-  exit / q / quit         Exit the shell
+{_C_CYAN}Navigation:{_C_RESET}
   cd [dir]               Change directory (default: ~, - for previous)
   pwd                    Print working directory
   echo [text...]         Print text to stdout
-  ls [dir]               List directory contents (VFS-aware)
-  cat <file>             Print file contents (VFS-aware)
-  mkdir <dir>            Create a directory
-  rm [-rf] <path>        Remove files/directories
-  touch <file>           Create empty file or update timestamp
-  cp <src> <dst>         Copy files/directories
-  mv <src> <dst>         Move or rename files
-  head [-N] <file>       Output first N lines (VFS-aware)
-  tail [-N] <file>       Output last N lines (VFS-aware)
-  wc <file>              Count lines/words/chars (VFS-aware)
-  grep [-i] [-v] [-c] [-l] [-n] [-w] [-A/-B/-C N] <pattern> [file]
-                           Search for pattern in file or pipe (VFS-aware)
-  sort [-rnu] [file]     Sort lines (supports pipes)
-  uniq [file]            Remove adjacent duplicate lines (supports pipes)
+
+{_C_CYAN}File operations:{_C_RESET}
+  ls [dir]               List directory contents
+  cat <file>             Print file contents
+  head [-N] <file>       Output first N lines
+  tail [-N] <file>       Output last N lines
+  grep [-i] [-v] <pattern> [file]
+                         Search for pattern in file or pipe
   find [dir] -name <p>   Search for files by name pattern
-  tee [-a] <file>        Copy stdin to file and stdout
-  chmod <mode> <file>    Change file permissions (octal)
-  du [-h] [path...]      Estimate disk usage
-  diff <file1> <file2>   Compare files line by line
-  stat <path>            Display file metadata
-  nl [file]              Number lines of a file or piped input
-  fold [-w w] [file]     Wrap long lines at a specified width
-  tac [file]             Reverse lines (cat backwards)
-  env / printenv         Print environment variables
-  yes [string]           Repeatedly output a line
-  realpath <path>        Resolve path to absolute
-  dirname <path>         Strip last component from file path
-  basename <path> [suf]  Strip directory from file path
-  nproc                  Print number of CPUs
-  hostname               Print system hostname
-  uname [-a]             Print system information
-  shuf [file]            Shuffle lines randomly (piped input)
-  rev [file]             Reverse characters in each line
-  paste <f1> [f2 ...]    Merge lines of files side by side
-  comm <f1> <f2>         Compare two sorted files line by line
-  test <expr>            Evaluate conditional expression ($? 0=true 1=false)
-  printf <fmt> [args..]  Format and print data (%s %d %f \n \t)
-  expand [file]          Convert tabs to spaces (piped input)
-  unexpand [file]        Convert spaces to tabs (piped input)
-  cut [-d d] [-f n]      Cut fields from each line
-  tr [-d] <set> [rep]    Translate or delete characters
-  seq [first] [last]     Print a sequence of numbers
-  xargs [cmd]            Build command lines from stdin
-  sleep <sec>            Pause for N seconds
-  date [+fmt]            Print date/time (strftime format)
-  cal [month] [year]     Print a calendar
-  ln [-s] <target> <name> Create a link
-  read <var>             Read a line from stdin into a variable
-  clear                  Clear the terminal screen
-  id                     Print user identity
-  logname                Print login name
-  mktemp [-d]            Create a temporary file or directory
-  who                    Show who is logged on
-  od [-x] <file>         Dump file in octal/hex format
-  join <f1> <f2>         Join lines on a common field
-  history [n]             Show command history
-  fc [-l] [n]             List history, or re-run command #n (fc 42)
-  alias [name=cmd]        List or set aliases
-  unalias <name>          Remove an alias
-  export [NAME=VALUE]     Set/show env vars (POSIX-style)
-  set [name=value]        Set/show environment variables ($VAR expansion)
-  source <file> / .       Execute commands from a file
-  py <expr>               Evaluate a Python expression
-  watch <sec> <cmd>       Run command repeatedly every N seconds
 
-{_C_CYAN}Knowledge:{_C_RESET}
-  remember <fact>         Store a fact in the knowledge base
-  recall <query>          Search the knowledge base
-
-{_C_CYAN}Scripting:{_C_RESET}
-  which <cmd>             Locate a command
-  type <cmd>              Describe a command
-
-{_C_CYAN}Process management:{_C_RESET}
-  procs / ps              List running training jobs
-  kill <id>               Stop a training job
-  train [dataset]         Start training (or list datasets)
-  train status            Show training job status
-  train follow <id>       Stream live training progress
-  train stop <id>         Stop a training job
-  train distill <ds>      Distill teacher into student
-  train hf <model> <ds>   HuggingFace fine-tuning
-  train auto [soul]       Auto-train with SloNet
-  train load <cp>         Load a checkpoint
-  train del <cp>          Delete a checkpoint
-  bg / jobs               List background shell processes
-  fg <id>                 Bring a background process to foreground
-
-{_C_CYAN}Init system:{_C_RESET}
-  boot                    Boot the shell (kernel + services)
-  shutdown                Halt all services + kernel
-  svc                     Service manager: list, start, stop, restart, status
-
-{_C_CYAN}Devices:{_C_RESET}
-  devices / lsdev         List AI device nodes (/dev/*)
-
-{_C_CYAN}Model management:{_C_RESET}
-  models                  List available models (tab-completes names)
-  load <name>             Load a model (tab-completes names)
-  unload                  Unload the current model
-
-{_C_CYAN}Souls:{_C_RESET}
-  souls                   List available souls (tab-completes names)
-  switch <name>           Switch to a soul (tab-completes names)
-  whoami                  Show current soul
-
-{_C_CYAN}System:{_C_RESET}
-  health                  Quick health check (colored status)
-  status                  Detailed system status
-  events                  Show recent system events
-  metrics                 CPU/memory/disk metrics
-  uptime                  How long Dait has been running
+{_C_CYAN}AI/ML:{_C_RESET}
+  chat [msg]             Multi-turn chat session
+  gen <prompt>           Generate text
+  ai <query>             LLM-powered NL interpretation
+  models                 List available models
+  load <name>            Load a model
+  train [dataset]        Start training or list datasets
+  ops / operations       List active operations
 
 {_C_CYAN}Data:{_C_RESET}
-  datasets                List datasets (tab-completes names)
-  knowledge               List knowledge base entries
+  datasets               List datasets
+  knowledge [query]      List/search knowledge base
+  checkpoints            List training checkpoints
 
-{_C_CYAN}Training:{_C_RESET}
-  checkpoints             List training checkpoints (tab-completes names)
-  finetuned               List fine-tuned models (load <name> | rm <name>)
+{_C_CYAN}Souls:{_C_RESET}
+  souls                  List available souls
+  agents <goal>          Multi-agent orchestration
 
-{_C_CYAN}Inference:{_C_RESET}
-  gen <prompt>            Generate text
-  tokenizer               Show tokenizer stats
+{_C_CYAN}System:{_C_RESET}
+  status                 Detailed system status
+  metrics                CPU/memory/disk metrics
+  events                 Show recent events
+  logs [-f]              View logs
+  api [start|stop]       Manage API server
+  ps                     List kernel processes
+  kill <id>              Stop a training job
+
+{_C_CYAN}Permissions:{_C_RESET}
+  permit <cmd>           Grant permission for blocked command
+  deny <cmd>             Revoke permission
+  permissions            Show permission policy
+  confirm [on|off]       Toggle auto-download confirmation
+  protect <model>        Protect model files
+  unprotect <model>      Remove protection
 
 {_C_CYAN}Shell features:{_C_RESET}
   <cmd> | <cmd>           Pipeline: output of first feeds second
   <cmd> &                 Background: run without blocking
-  <cmd> && <cmd>          Chain: run next only if previous succeeded ($?=0)
-  <cmd> || <cmd>          Chain: run next only if previous failed ($?!=0)
+  <cmd> && <cmd>          Chain: run next only if previous succeeded
+  <cmd> || <cmd>          Chain: run next only if previous failed
   <cmd> ; <cmd>           Chain: run next regardless of exit code
   <cmd> > <file>          Redirect output to file (overwrite)
-  <cmd> > /dev/llm        Redirect output to AI device (write)
   <cmd> >> <file>         Redirect output to file (append)
-  /dev/llm                AI device node: write prompt, read response
-  /dev/null               Discard output: <cmd> > /dev/null
-  /dev/random             Random tokens: cat /dev/random
-  /dev/embedding          Compute embeddings: echo text > /dev/embedding
-  /dev/knowledge          Knowledge base: read/write facts
-  tutorial                Interactive shell tutorial
-  read                    Read input from stdin (for scripts)
-  protect <file>          Mark file as read-only
-  unprotect <file>        Remove read-only protection
-  api <method> <url>      Make an HTTP API request
-  chat                    Start an interactive AI chat session
-  logs [n]                Show recent log entries
-  console                 Show console output
-  tui                     Launch the TUI interface
-  ops / operations        Show active operations (training, inference)
-
-{_C_CYAN}Permissions:{_C_RESET}
-  permit <cmd>            Grant permission for a blocked command (this session)
-  permit <cmd> --persist  Grant and save to disk (survives restart)
-  permit --all-dangerous  Allow all dangerous commands at once
-  deny <cmd>              Revoke a previously granted permission
-  permissions             Show current policy (safe/elevated/dangerous/critical)
-
-Virtual machine:
-  asm [file.asm]          Assemble and run a VM program (.text + .data sections)
-  asm --test              Run VM self-tests
-  vmrun [--admin|--kernel] [--steps=N] [--debug] <file|name>
-                          Run x86 assembly in X86VirtualSystem with RBAC
-                          Built-in names: hello, count, counter
-  vmrun --list            List available built-in x86 programs
-  vmperms                 Show x86 VM RBAC permission matrix
-  time <cmd>              Show command execution time
-  $?                      Exit code of last command
-  ai <query>              LLM-powered natural language interpretation
-  agents <goal>           Multi-agent orchestration (researcher + writer + critic)
-  $(cmd)                  Command substitution: inline output of cmd
+  history [n]             Show command history
+  alias [name=cmd]        List or set aliases
+  unalias <name>          Remove an alias
   py <expr>               Evaluate Python expression
-  $VAR / ${{VAR}}           Environment variable expansion
-  NAME=VALUE cmd          Inline env var (set for single command)
-  \\\\h \\\\w \\\\t \\\\u \\\\#    PS1 escapes: host, cwd, time, user, cmd#
-
-{_C_CYAN}Development:{_C_RESET}
-  note [new|list|show|edit|delete|search|today|export]  — Dev journal
-  confirm [on|off]       Toggle auto-download confirmation
-  render [sphere|cube|plane|light|mat|cam|go|neural|clear|preset]  — Path tracer
+  tui                     Launch the TUI interface
+  clear                   Clear the terminal screen
+  exit                    Exit the shell
 Examples:
-  health
   models | head
   gen hello > output.txt
-  time load gpt2
   ai show me running training jobs
-  set PS1=$  ;  echo $HOME
-  alias ll=procs
-  source setup.sh
   py 2 + 2
-"""[:-1])
+""")
 
     def _cmd_exit(self, args: str = "") -> None:
         self._running = False
@@ -3011,23 +2786,67 @@ Examples:
         self._print(f"  Job {job_id} still running after {max_polls} polls — detached")
 
     def _cmd_models(self, args: str = "") -> None:
-        """List available models."""
+        """Manage models. Subcommands:
+  models             — list available models
+  models list        — list available models
+  models load <name> — load a model
+  models unload      — unload current model
+  models status      — show current model status"""
         if not self._require_api("models"):
             return
-        try:
-            models = self._spinner_call("Fetching models", lambda: self.cmds.models(), ok_msg=None)
-            if not models:
-                self._print("  No models available")
+        parts = args.strip().split(maxsplit=1)
+        subcmd = parts[0] if parts else ""
+        model_name = parts[1].strip() if len(parts) > 1 else ""
+        if subcmd == "list" or not subcmd:
+            try:
+                models = self._spinner_call("Fetching models", lambda: self.cmds.models(), ok_msg=None)
+                if not models:
+                    self._print("  No models available")
+                    return
+                rows = []
+                for m in models:
+                    name = m.get("name", m.get("id", "?"))
+                    mtype = m.get("type", m.get("backend", ""))
+                    status = "loaded" if m.get("loaded") else ""
+                    rows.append([name, mtype, status])
+                self._table(rows, ["Model", "Type", "Status"])
+            except Exception as e:
+                self._print(self._format_error(e, "models"))
+        elif subcmd == "load":
+            if not model_name:
+                self._print("  Usage: models load <model_name>")
                 return
-            rows = []
-            for m in models:
-                name = m.get("name", m.get("id", "?"))
-                mtype = m.get("type", m.get("backend", ""))
-                status = "loaded" if m.get("loaded") else ""
-                rows.append([name, mtype, status])
-            self._table(rows, ["Model", "Type", "Status"])
-        except Exception as e:
-            self._print(self._format_error(e, "models"))
+            try:
+                result = self._spinner_call(f"Loading {model_name}", lambda: self.cmds.load_model(model_name), "Done")
+                if isinstance(result, dict) and "error" in result:
+                    self._print(f"  Error: {result['error']}")
+                else:
+                    self._print(f"  Loaded {model_name}")
+            except Exception as e:
+                self._print(self._format_error(e, "models load"))
+        elif subcmd == "unload":
+            try:
+                result = self._spinner_call("Unloading model", lambda: self.cmds.unload_model(), "Done")
+                if isinstance(result, dict) and "error" in result:
+                    self._print(f"  Error: {result['error']}")
+                else:
+                    self._print("  Model unloaded")
+            except Exception as e:
+                self._print(self._format_error(e, "models unload"))
+        elif subcmd == "status":
+            try:
+                status = self._spinner_call("Checking status", lambda: self.cmds.model_status(), ok_msg=None)
+                if isinstance(status, dict):
+                    loaded = status.get("loaded", False)
+                    model_type = status.get("type", "unknown")
+                    self._print(f"  Loaded: {loaded}")
+                    self._print(f"  Type: {model_type}")
+                else:
+                    self._print("  Status unavailable")
+            except Exception as e:
+                self._print(self._format_error(e, "models status"))
+        else:
+            self._print("  Usage: models [list|load <name>|unload|status]")
 
     def _cmd_souls(self, args: str = "") -> None:
         """List available souls."""
@@ -3135,33 +2954,86 @@ Examples:
             self._print(self._dump_json(result))
 
     def _cmd_chat(self, args: str = "") -> None:
-        """Multi-turn chat. Starts a session on first message. 'chat /reset' clears history."""
-        if not args:
-            self._print("  Usage: chat <message>")
+        """Multi-turn chat with streaming. Subcommands:
+  chat <message>       — send a message (streams token by token)
+  chat                 — enter interactive mode
+  chat /reset          — clear history and session
+  chat /status         — show session info"""
+        if not self._require_api("chat"):
             return
-        if args == "/reset":
+        parts = args.strip().split(maxsplit=1)
+        subcmd = parts[0] if parts else ""
+        rest = parts[1] if len(parts) > 1 else ""
+        if subcmd == "/reset":
             self._chat_session_id = None
             self._chat_history = []
             self._print("  [session cleared]")
             return
-        if not self._require_api("chat"):
+        if subcmd == "/status":
+            if self._chat_session_id:
+                self._print(f"  Session: {self._chat_session_id[:8]}...")
+                self._print(f"  Messages: {len(self._chat_history)}")
+            else:
+                self._print("  No active session")
             return
+        if not subcmd:
+            self._cmd_chat_interactive()
+            return
+        self._chat_send(subcmd + (" " + rest if rest else ""))
+
+    def _cmd_chat_interactive(self) -> None:
+        """Interactive chat mode — type messages, /quit to exit."""
         if not self._chat_session_id:
             import uuid
             self._chat_session_id = str(uuid.uuid4())
             self._chat_history = []
             self._print("  [new session]")
-        self._chat_history.append({"role": "user", "content": args})
-        result = self._spinner_call("Thinking", lambda: self.cmds.chat(self._chat_history), "Done")
-        if isinstance(result, dict) and "message" in result:
-            text = result["message"]
-            text = text.replace("<think>", "").replace("</think>", "")
-            self._print(f"\n  {text.strip()}\n")
-            self._chat_history.append({"role": "assistant", "content": text})
-        elif isinstance(result, dict) and "error" in result:
-            self._print(f"  Error: {result['error']}")
-        else:
-            self._print(self._dump_json(result))
+        self._print("  Interactive chat mode. Type /quit to exit.\n")
+        try:
+            while True:
+                try:
+                    user_input = input("  you> ")
+                except (EOFError, KeyboardInterrupt):
+                    self._print("\n  [exiting chat]")
+                    return
+                if not user_input.strip():
+                    continue
+                if user_input.strip() in ("/quit", "/exit"):
+                    self._print("  [exiting chat]")
+                    return
+                if user_input.strip() == "/reset":
+                    self._chat_session_id = None
+                    self._chat_history = []
+                    self._print("  [session cleared]")
+                    continue
+                self._chat_send(user_input.strip())
+        except KeyboardInterrupt:
+            self._print("\n  [exiting chat]")
+
+    def _chat_send(self, message: str) -> None:
+        """Send a single chat message with streaming."""
+        if not self._chat_session_id:
+            import uuid
+            self._chat_session_id = str(uuid.uuid4())
+            self._chat_history = []
+            self._print("  [new session]")
+        self._chat_history.append({"role": "user", "content": message})
+        collected = []
+        try:
+            for token in self.cmds.chat_stream(self._chat_history, self._chat_session_id):
+                if isinstance(token, dict) and "error" in token:
+                    self._print(f"\n  Error: {token['error']}")
+                    return
+                if token:
+                    collected.append(token)
+                    sys.stdout.write(token)
+                    sys.stdout.flush()
+        except Exception as e:
+            self._print(f"\n  Error: {e}")
+            return
+        full = "".join(collected).strip()
+        self._print("")
+        self._chat_history.append({"role": "assistant", "content": full})
 
     # ── LLM-powered NL interpreter ──────────────────────────────────
 
@@ -4739,138 +4611,42 @@ _shell_commands = {
     "echo": ShellREPL._cmd_echo,
     "ls": ShellREPL._cmd_ls,
     "cat": ShellREPL._cmd_cat,
-    "mkdir": ShellREPL._cmd_mkdir,
-    "rm": ShellREPL._cmd_rm,
-    "touch": ShellREPL._cmd_touch,
-    "cp": ShellREPL._cmd_cp,
-    "mv": ShellREPL._cmd_mv,
     "head": ShellREPL._cmd_head,
     "tail": ShellREPL._cmd_tail,
-    "wc": ShellREPL._cmd_wc,
     "grep": ShellREPL._cmd_grep,
-    "sort": ShellREPL._cmd_sort,
-    "uniq": ShellREPL._cmd_uniq,
     "find": ShellREPL._cmd_find,
-    "tee": ShellREPL._cmd_tee,
-    "xargs": ShellREPL._cmd_xargs,
-    "time": ShellREPL._cmd_time,
-    "chmod": ShellREPL._cmd_chmod,
-    "du": ShellREPL._cmd_du,
-    "diff": ShellREPL._cmd_diff,
-    "stat": ShellREPL._cmd_stat,
-    "cut": ShellREPL._cmd_cut,
-    "tr": ShellREPL._cmd_tr,
-    "seq": ShellREPL._cmd_seq,
-    "nl": ShellREPL._cmd_nl,
-    "fold": ShellREPL._cmd_fold,
-    "tac": ShellREPL._cmd_tac,
-    "env": ShellREPL._cmd_env,
-    "printenv": ShellREPL._cmd_env,
-    "yes": ShellREPL._cmd_yes,
-    "realpath": ShellREPL._cmd_realpath,
-    "dirname": ShellREPL._cmd_dirname,
-    "basename": ShellREPL._cmd_basename,
-    "nproc": ShellREPL._cmd_nproc,
-    "hostname": ShellREPL._cmd_hostname,
-    "uname": ShellREPL._cmd_uname,
-    "shuf": ShellREPL._cmd_shuf,
-    "rev": ShellREPL._cmd_rev,
-    "paste": ShellREPL._cmd_paste,
-    "comm": ShellREPL._cmd_comm,
-    "column": ShellREPL._cmd_column,
-    "test": ShellREPL._cmd_test,
-    "[": ShellREPL._cmd_test,
-    "printf": ShellREPL._cmd_printf,
-    "expand": ShellREPL._cmd_expand,
-    "unexpand": ShellREPL._cmd_unexpand,
-    "id": ShellREPL._cmd_id,
-    "logname": ShellREPL._cmd_logname,
-    "mktemp": ShellREPL._cmd_mktemp,
-    "who": ShellREPL._cmd_who,
-    "od": ShellREPL._cmd_od,
-    "join": ShellREPL._cmd_join,
-    "sed": ShellREPL._cmd_sed,
-    "awk": ShellREPL._cmd_awk,
-    "which": ShellREPL._cmd_which,
-    "expr": ShellREPL._cmd_expr,
-    "eval": ShellREPL._cmd_eval,
-    "wait": ShellREPL._cmd_wait,
-    "trap": ShellREPL._cmd_trap,
-    "local": ShellREPL._cmd_local,
-    "exec": ShellREPL._cmd_exec,
-    "type": ShellREPL._cmd_type,
-    "tsort": ShellREPL._cmd_tsort,
-    "df": ShellREPL._cmd_df,
-    "readlink": ShellREPL._cmd_readlink,
-    "file": ShellREPL._cmd_file,
-    "export": ShellREPL._cmd_export,
-    "timeout": ShellREPL._cmd_timeout,
-    "watch": ShellREPL._cmd_watch,
-    "pushd": ShellREPL._cmd_pushd,
-    "popd": ShellREPL._cmd_popd,
-    "dirs": ShellREPL._cmd_dirs,
-    "strings": ShellREPL._cmd_strings,
-    "base64": ShellREPL._cmd_base64,
-    "cksum": ShellREPL._cmd_cksum,
-    "split": ShellREPL._cmd_split,
+    "clear": ShellREPL._cmd_clear,
     "history": ShellREPL._cmd_history,
-    "fc": ShellREPL._cmd_fc,
     "alias": ShellREPL._cmd_alias,
     "unalias": ShellREPL._cmd_unalias,
-    "set": ShellREPL._cmd_set,
-    "source": ShellREPL._cmd_source,
-    ".": ShellREPL._cmd_source,
     "py": ShellREPL._cmd_py,
-    "procs": ShellREPL._cmd_procs,
-    "ps": ShellREPL._cmd_ps,
-    "kill": ShellREPL._cmd_kill,
-    "bg": ShellREPL._cmd_bg,
-    "jobs": ShellREPL._cmd_bg,
-    "fg": ShellREPL._cmd_fg,
+    "chat": ShellREPL._cmd_chat,
+    "gen": ShellREPL._cmd_gen,
+    "ai": ShellREPL._cmd_ai,
+    "models": ShellREPL._cmd_models,
     "load": ShellREPL._cmd_load,
-    "uptime": ShellREPL._cmd_uptime,
-    "status": ShellREPL._cmd_status,
-    "events": ShellREPL._cmd_events,
-    "metrics": ShellREPL._cmd_metrics,
     "train": ShellREPL._cmd_train,
     "ops": ShellREPL._cmd_ops,
     "operations": ShellREPL._cmd_ops,
-    "gen": ShellREPL._cmd_gen,
-    "chat": ShellREPL._cmd_chat,
-    "ai": ShellREPL._cmd_ai,
-    "models": ShellREPL._cmd_models,
-    "souls": ShellREPL._cmd_souls,
     "datasets": ShellREPL._cmd_datasets,
     "knowledge": ShellREPL._cmd_knowledge,
     "checkpoints": ShellREPL._cmd_checkpoints,
+    "souls": ShellREPL._cmd_souls,
     "agents": ShellREPL._cmd_agents,
-    "tutorial": ShellREPL._cmd_tutorial,
-    "read": ShellREPL._cmd_read,
-    "render": ShellREPL._cmd_render,
-    "protect": ShellREPL._cmd_protect,
-    "unprotect": ShellREPL._cmd_unprotect,
-    "boot": ShellREPL._cmd_boot,
-    "shutdown": ShellREPL._cmd_shutdown,
-    "svc": ShellREPL._cmd_svc,
-    "devices": ShellREPL._cmd_lsdev,
-    "lsdev": ShellREPL._cmd_lsdev,
-    "asm": ShellREPL._cmd_asm,
-    "vmrun": ShellREPL._cmd_vmrun,
-    "vmperms": ShellREPL._cmd_vmperms,
+    "status": ShellREPL._cmd_status,
+    "metrics": ShellREPL._cmd_metrics,
+    "events": ShellREPL._cmd_events,
+    "logs": ShellREPL._cmd_logs,
+    "api": ShellREPL._cmd_api,
+    "kill": ShellREPL._cmd_kill,
+    "ps": ShellREPL._cmd_ps,
     "permit": ShellREPL._cmd_permit,
     "deny": ShellREPL._cmd_deny,
     "permissions": ShellREPL._cmd_permissions,
     "confirm": ShellREPL._cmd_confirm,
-    "note": ShellREPL._cmd_note,
-    "api": ShellREPL._cmd_api,
-    "logs": ShellREPL._cmd_logs,
-    "console": ShellREPL._cmd_logs,
+    "protect": ShellREPL._cmd_protect,
+    "unprotect": ShellREPL._cmd_unprotect,
     "tui": ShellREPL._cmd_tui,
-    "clear": ShellREPL._cmd_clear,
-    "sleep": ShellREPL._cmd_sleep,
-    "date": ShellREPL._cmd_date,
-    "cal": ShellREPL._cmd_cal,
-    "ln": ShellREPL._cmd_ln,
 }
 ShellREPL.COMMANDS = _shell_commands
 del _shell_commands

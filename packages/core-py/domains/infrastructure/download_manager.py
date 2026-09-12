@@ -1,106 +1,46 @@
 """
-Download Manager — generic orchestration for pluggable download backends.
+Download Manager — simplified orchestration using downcraft as foundation.
 
-Delegates source-specific logic (cache resolution, file listing, download
-execution) to a ``DownloadBackend`` implementation.  This module handles
-only scheduling, progress tracking, cancellation, and stale cleanup.
+Delegates core download logic (resume, compression, integrity) to downcraft.
+This module handles only scheduling, progress tracking, cancellation, and stale cleanup.
 
-The default backend is ``HFDownloadBackend`` (HuggingFace models), but any
-``DownloadBackend`` implementation can be injected via ``set_backend()``.
+downcraft provides:
+- Cross-session resume via HTTP Range headers
+- LZ4 compression support (optional)
+- SHA-256 integrity verification
+- Atomic file writes (no corrupt files on crash)
+
+This module adds:
+- Async scheduling with CancelManager integration
+- Progress tracking with callbacks
+- Statistics collection
+- Stale download cleanup
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger("slo.infrastructure.download_manager")
 
 # ---------------------------------------------------------------------------
-# Backend (pluggable)
+# Try to import downcraft, fallback to None
 # ---------------------------------------------------------------------------
 
-_backend = None
-_backend_lock = threading.Lock()
-
-
-def get_backend():
-    """Return the current download backend, lazily initializing the HF default."""
-    global _backend
-    if _backend is None:
-        with _backend_lock:
-            if _backend is None:
-                try:
-                    from domains.infrastructure.hf_hub import HFDownloadBackend
-                    _backend = HFDownloadBackend()
-                except ImportError:
-                    from domains.infrastructure.download_backend import DownloadBackend
-                    _backend = _NullBackend()
-    return _backend
-
-
-def set_backend(backend) -> None:
-    """Override the download backend (for testing or alternative sources)."""
-    global _backend
-    with _backend_lock:
-        _backend = backend
-
-
-def reset_backend() -> None:
-    """Reset to default (HF) backend."""
-    global _backend
-    with _backend_lock:
-        _backend = None
-
-
-class _NullBackend:
-    """Fallback when no backend is available — all operations are no-ops."""
-
-    def is_cached(self, resource_id, deep_check=False):
-        return False
-
-    def get_cache_dir(self, resource_id):
-        return ""
-
-    def estimate_total(self, resource_id):
-        return 0
-
-    def list_files(self, resource_id):
-        return []
-
-    def download(self, resource_id, on_progress, on_file_complete):
-        return {"status": "failed", "error": "no backend configured"}
-
-    def cleanup(self, resource_id):
-        return False
-
-    def list_incomplete(self):
-        return []
-
-
-# ---------------------------------------------------------------------------
-# Module-level convenience — delegate to backend
-# ---------------------------------------------------------------------------
-
-
-def is_download_complete(model_id: str, deep_check: bool = False) -> bool:
-    """Check if a model is fully cached on disk."""
-    return get_backend().is_cached(model_id, deep_check=deep_check)
-
-
-def cleanup_incomplete(model_id: str) -> bool:
-    """Remove an incomplete/partial download."""
-    return get_backend().cleanup(model_id)
-
-
-def list_incomplete_models() -> List[str]:
-    """Scan cache and return resource IDs with incomplete downloads."""
-    return get_backend().list_incomplete()
+_downcraft = None
+try:
+    import downcraft
+    _downcraft = downcraft
+except ImportError:
+    logger.debug("downcraft not available, downloads will use fallback")
 
 
 # ---------------------------------------------------------------------------
@@ -177,14 +117,52 @@ class DownloadStats:
 
 
 # ---------------------------------------------------------------------------
-# DownloadManager — generic orchestration
+# Module-level convenience
+# ---------------------------------------------------------------------------
+
+
+def is_download_complete(model_id: str, deep_check: bool = False) -> bool:
+    """Check if a model is fully cached on disk."""
+    if _downcraft is None:
+        return False
+    # Check if the file exists and is complete
+    dest = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt")) / model_id
+    return dest.exists() and dest.stat().st_size > 0
+
+
+def cleanup_incomplete(model_id: str) -> bool:
+    """Remove an incomplete/partial download."""
+    if _downcraft is None:
+        return False
+    # Remove .sgpart file if it exists
+    dest = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt")) / model_id
+    part = dest.with_suffix(dest.suffix + ".sgpart")
+    if part.exists():
+        part.unlink()
+        return True
+    return False
+
+
+def list_incomplete_models() -> List[str]:
+    """Scan cache and return resource IDs with incomplete downloads."""
+    if _downcraft is None:
+        return []
+    # List .sgpart files
+    cache_dir = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt"))
+    if not cache_dir.exists():
+        return []
+    return [f.stem for f in cache_dir.glob("*.sgpart")]
+
+
+# ---------------------------------------------------------------------------
+# DownloadManager — simplified with downcraft
 # ---------------------------------------------------------------------------
 
 
 class DownloadManager:
     """Download manager singleton.
 
-    Orchestrates downloads via a pluggable ``DownloadBackend``.
+    Uses downcraft for core download logic (resume, compression, integrity).
     Handles scheduling, progress tracking, cancellation, and stale cleanup.
     """
 
@@ -216,7 +194,7 @@ class DownloadManager:
 
     def is_cached(self, model_id: str) -> bool:
         """Whether the resource is fully cached on disk (survives restart)."""
-        return get_backend().is_cached(model_id)
+        return is_download_complete(model_id)
 
     def cancel(self, model_id: str) -> bool:
         with self._lock:
@@ -226,7 +204,6 @@ class DownloadManager:
                 task = self._tasks.pop(model_id, None)
                 if task and not task.done():
                     task.cancel()
-                get_backend().on_cancel(model_id)
                 return True
             return False
 
@@ -269,19 +246,15 @@ class DownloadManager:
             return entry is not None and entry.status == DownloadStatus.PAUSED
 
     def verify(self, model_id: str) -> Dict[str, Any]:
-        """Verify integrity of a cached resource.
-
-        Checks that all expected files exist, have correct sizes,
-        and match checksums where available.
-
-        Returns dict with:
-            - valid: bool
-            - files_checked: int
-            - files_valid: int
-            - errors: list of error strings
-        """
-        backend = get_backend()
-        return backend.verify(model_id)
+        """Verify integrity of a cached resource."""
+        dest = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt")) / model_id
+        valid = dest.exists() and dest.stat().st_size > 0
+        return {
+            "valid": valid,
+            "files_checked": 1 if valid else 0,
+            "files_valid": 1 if valid else 0,
+            "errors": [] if valid else ["File not found or empty"],
+        }
 
     def get_stats(self) -> Dict[str, Any]:
         """Get cumulative download statistics."""
@@ -343,25 +316,44 @@ class DownloadManager:
     async def download(
         self,
         model_id: str,
+        url: str,
+        dest: str | Path = "",
         total_bytes_hint: int = 0,
+        checksum: str = "",
+        compressed: bool = False,
         max_retries: int = 3,
     ) -> Dict[str, Any]:
-        """Download a resource via the configured backend.
+        """Download a resource using downcraft.
 
-        Registers with CancelManager so downloads appear in /operations.
-        Retries up to ``max_retries`` times on failure with exponential backoff.
+        Args:
+            model_id: Unique identifier for the download.
+            url: HTTP/HTTPS URL to download from.
+            dest: Local destination path (default: ~/.cache/sloughgpt/{model_id}).
+            total_bytes_hint: Expected total bytes (0 = auto-detect).
+            checksum: SHA-256 hex string to verify after download.
+            compressed: If True, expect LZ4-compressed response.
+            max_retries: Number of retry attempts on failure.
+
+        Returns:
+            Dict with status, model_id, elapsed_seconds, etc.
         """
-        backend = get_backend()
+        if _downcraft is None:
+            return {"status": "failed", "model_id": model_id, "error": "downcraft not installed"}
 
-        if backend.is_cached(model_id):
+        if is_download_complete(model_id):
             return {"status": "already_cached", "model_id": model_id}
-
-        backend.prepare_download(model_id)
 
         if self.is_downloading(model_id):
             return {"status": "already_downloading", "model_id": model_id}
 
-        total_est = backend.estimate_total(model_id) or total_bytes_hint
+        # Resolve destination
+        if not dest:
+            cache_dir = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt"))
+            dest = cache_dir / model_id
+        else:
+            dest = Path(dest)
+
+        total_est = total_bytes_hint
 
         self._set_progress(
             model_id,
@@ -382,7 +374,7 @@ class DownloadManager:
         mgr.start(op_id)
 
         task = asyncio.create_task(
-            self._download_worker(model_id, total_est, cancel_event, max_retries)
+            self._download_worker(model_id, url, dest, total_est, checksum, compressed, cancel_event, max_retries)
         )
         self._tasks[model_id] = task
 
@@ -419,177 +411,18 @@ class DownloadManager:
                 logger.debug("Failed to record download error event: %s", exc)
             return {"status": "failed", "model_id": model_id, "error": str(e)}
 
-    async def download_with(
-        self,
-        model_id: str,
-        backend,
-        total_bytes_hint: int = 0,
-    ) -> Dict[str, Any]:
-        """Download a resource using a specific backend.
-
-        Unlike ``download()`` which uses the global backend, this method
-        uses the provided backend directly.  Useful for external downloads
-        or when switching backends per-request.
-        """
-        if backend.is_cached(model_id):
-            return {"status": "already_cached", "model_id": model_id}
-
-        backend.prepare_download(model_id)
-
-        if self.is_downloading(model_id):
-            return {"status": "already_downloading", "model_id": model_id}
-
-        total_est = backend.estimate_total(model_id) or total_bytes_hint
-
-        self._set_progress(
-            model_id,
-            status=DownloadStatus.QUEUED,
-            total_bytes=total_est,
-            started_at=time.time(),
-        )
-        self._notify_callbacks(model_id)
-
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
-        mgr = get_cancel_manager()
-        cancel_event = threading.Event()
-        op_id = mgr.register(
-            op_type=OpType.DOWNLOAD,
-            label=f"download:{model_id}",
-            cancel_fn=lambda: cancel_event.set(),
-        )
-        mgr.start(op_id)
-
-        task = asyncio.create_task(
-            self._download_worker_with(model_id, backend, total_est, cancel_event)
-        )
-        self._tasks[model_id] = task
-
-        try:
-            result = await task
-            if result.get("status") == "complete":
-                mgr.finish(op_id)
-            elif result.get("status") == "cancelled":
-                mgr.finish(op_id, "cancelled")
-            else:
-                mgr.finish(op_id, result.get("error", "unknown"))
-            return result
-        except asyncio.CancelledError:
-            self._set_progress(model_id, status=DownloadStatus.CANCELLED)
-            mgr.finish(op_id, "cancelled")
-            return {"status": "cancelled", "model_id": model_id}
-        except Exception as e:
-            self._set_progress(
-                model_id,
-                status=DownloadStatus.FAILED,
-                error=str(e),
-            )
-            self._notify_callbacks(model_id)
-            mgr.finish(op_id, str(e))
-            return {"status": "failed", "model_id": model_id, "error": str(e)}
-
-    async def _download_worker_with(
-        self,
-        model_id: str,
-        backend,
-        total_bytes_hint: int,
-        cancel_event: Optional[threading.Event] = None,
-    ) -> Dict[str, Any]:
-        """Run a download using a specific backend."""
-        with self._lock:
-            entry = self._downloads.get(model_id)
-            if entry and entry.status == DownloadStatus.CANCELLED:
-                return {"status": "cancelled", "model_id": model_id}
-        self._set_progress(model_id, status=DownloadStatus.DOWNLOADING)
-        self._notify_callbacks(model_id)
-        start_time = time.time()
-
-        def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
-            try:
-                with self._lock:
-                    cur = self._downloads.get(mid)
-                    if cur and cur.status == DownloadStatus.CANCELLED:
-                        return
-                pct = (downloaded / total * 100) if total > 0 else 0
-                self._set_progress(
-                    mid,
-                    bytes_downloaded=downloaded,
-                    total_bytes=total,
-                    speed_bytes_per_sec=speed,
-                    percentage=pct,
-                    status=DownloadStatus.DOWNLOADING,
-                )
-                self._notify_callbacks(mid)
-            except Exception as e:
-                logger.warning("download_manager: progress callback failed", extra={
-                    "model_id": mid, "error": str(e),
-                })
-
-        def _file_cb(mid: str, fpath: str):
-            try:
-                self._set_progress(mid, current_file=fpath)
-                self._notify_callbacks(mid)
-            except Exception as e:
-                logger.warning("download_manager: file callback failed", extra={
-                    "model_id": mid, "file": fpath, "error": str(e),
-                })
-
-        def _do_download():
-            def _cancel_check():
-                if cancel_event and cancel_event.is_set():
-                    raise InterruptedError("Download cancelled")
-
-            def _progress_cb_inner(mid, downloaded, total, speed):
-                _cancel_check()
-                _progress_cb(mid, downloaded, total, speed)
-
-            if backend.supports_compression(model_id):
-                backend.download_compressed(model_id, _progress_cb_inner, _file_cb)
-            else:
-                backend.download(model_id, _progress_cb_inner, _file_cb)
-
-        await asyncio.to_thread(_do_download)
-
-        with self._lock:
-            entry = self._downloads.get(model_id)
-            if entry and entry.status == DownloadStatus.CANCELLED:
-                return {"status": "cancelled", "model_id": model_id}
-
-        elapsed = time.time() - start_time
-        cache_dir = backend.get_cache_dir(model_id)
-        self._set_progress(
-            model_id,
-            status=DownloadStatus.COMPLETE,
-            completed_at=time.time(),
-            percentage=100.0,
-        )
-        self._notify_callbacks(model_id)
-
-        # Record statistics
-        with self._lock:
-            entry = self._downloads.get(model_id)
-            bytes_downloaded = entry.bytes_downloaded if entry else 0
-            speed = entry.speed_bytes_per_sec if entry else 0
-        self._record_download_complete(model_id, bytes_downloaded, elapsed, speed)
-
-        logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, cache_dir)
-        return {
-            "status": "complete",
-            "model_id": model_id,
-            "cache_dir": cache_dir,
-            "elapsed_seconds": round(elapsed, 1),
-        }
-
     async def _download_worker(
         self,
         model_id: str,
+        url: str,
+        dest: Path,
         total_bytes_hint: int,
+        checksum: str,
+        compressed: bool,
         cancel_event: Optional[threading.Event] = None,
         max_retries: int = 3,
     ):
-        """Run the backend download in a thread executor, updating progress.
-
-        Retries up to ``max_retries`` times on failure with exponential backoff.
-        """
+        """Run the downcraft download in a thread executor, updating progress."""
         with self._lock:
             entry = self._downloads.get(model_id)
             if entry and entry.status == DownloadStatus.CANCELLED:
@@ -610,34 +443,25 @@ class DownloadManager:
         except Exception as exc:
             logger.debug("Failed to record download start event: %s", exc)
 
-        def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
+        def _progress_cb(bytes_done: int, total: int, speed: float):
             try:
                 with self._lock:
-                    cur = self._downloads.get(mid)
+                    cur = self._downloads.get(model_id)
                     if cur and cur.status == DownloadStatus.CANCELLED:
                         return
-                pct = (downloaded / total * 100) if total > 0 else 0
+                pct = (bytes_done / total * 100) if total > 0 else 0
                 self._set_progress(
-                    mid,
-                    bytes_downloaded=downloaded,
+                    model_id,
+                    bytes_downloaded=bytes_done,
                     total_bytes=total,
                     speed_bytes_per_sec=speed,
                     percentage=pct,
                     status=DownloadStatus.DOWNLOADING,
                 )
-                self._notify_callbacks(mid)
+                self._notify_callbacks(model_id)
             except Exception as e:
                 logger.warning("download_manager: progress callback failed", extra={
-                    "model_id": mid, "error": str(e),
-                })
-
-        def _file_cb(mid: str, fpath: str):
-            try:
-                self._set_progress(mid, current_file=fpath)
-                self._notify_callbacks(mid)
-            except Exception as e:
-                logger.warning("download_manager: file callback failed", extra={
-                    "model_id": mid, "file": fpath, "error": str(e),
+                    "model_id": model_id, "error": str(e),
                 })
 
         last_error = None
@@ -649,20 +473,24 @@ class DownloadManager:
                     return {"status": "cancelled", "model_id": model_id}
 
             def _do_download():
-                backend = get_backend()
-
                 def _cancel_check():
                     if cancel_event and cancel_event.is_set():
                         raise InterruptedError("Download cancelled")
 
-                def _progress_cb_inner(mid, downloaded, total, speed):
+                def _progress_inner(bytes_done, total, speed):
                     _cancel_check()
-                    _progress_cb(mid, downloaded, total, speed)
+                    _progress_cb(bytes_done, total, speed)
 
-                if backend.supports_compression(model_id):
-                    backend.download_compressed(model_id, _progress_cb_inner, _file_cb)
-                else:
-                    backend.download(model_id, _progress_cb_inner, _file_cb)
+                # Use downcraft for the actual download
+                result = downcraft.download(
+                    url=url,
+                    dest=dest,
+                    expected_size=total_bytes_hint,
+                    checksum=checksum,
+                    on_progress=_progress_inner,
+                    compressed=compressed,
+                )
+                return result
 
             try:
                 await asyncio.to_thread(_do_download)
@@ -703,7 +531,6 @@ class DownloadManager:
                 return {"status": "cancelled", "model_id": model_id}
 
         elapsed = time.time() - start_time
-        cache_dir = get_backend().get_cache_dir(model_id)
         self._set_progress(
             model_id,
             status=DownloadStatus.COMPLETE,
@@ -725,7 +552,7 @@ class DownloadManager:
         except Exception:
             pass
 
-        logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, cache_dir,
+        logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, dest,
             extra={
                 "op": "download.complete",
                 "dur_ms": int(elapsed * 1000),
@@ -735,7 +562,7 @@ class DownloadManager:
         return {
             "status": "complete",
             "model_id": model_id,
-            "cache_dir": cache_dir,
+            "dest": str(dest),
             "elapsed_seconds": round(elapsed, 1),
         }
 

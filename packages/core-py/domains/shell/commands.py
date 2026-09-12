@@ -305,6 +305,58 @@ class ShellCommands:
         return _api_post("/chat", {"messages": messages})
 
     @staticmethod
+    def chat_stream(messages: list[dict[str, str]], session_id: str = "", max_tokens: int = 512, temperature: float = 0.7):
+        """Stream a chat response token by token. Yields tokens as they arrive."""
+        import requests
+        try:
+            payload = {
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            if session_id:
+                payload["session_id"] = session_id
+            with requests.post(
+                f"{get_api_base()}/api/v1/inference/chat",
+                json=payload,
+                stream=True,
+                timeout=(5, 300),
+            ) as r:
+                if r.status_code != 200:
+                    yield {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+                    return
+                for line in r.iter_lines(decode_unicode=True):
+                    if not line or not line.startswith("data: "):
+                        continue
+                    data = line[6:]
+                    if data == "[DONE]":
+                        return
+                    try:
+                        import json
+                        obj = json.loads(data)
+                        if obj.get("done"):
+                            return
+                        token = obj.get("token", "")
+                        if token:
+                            yield token
+                    except Exception:
+                        continue
+        except requests.ConnectionError:
+            yield {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
+        except requests.Timeout:
+            yield {"error": "Request timed out", "error_type": "Timeout"}
+        except Exception as e:
+            yield {"error": str(e), "error_type": type(e).__name__}
+
+    @staticmethod
+    def model_status() -> dict[str, Any]:
+        """Get current model status."""
+        result = _api_get("/info")
+        if isinstance(result, dict):
+            return result.get("data", result).get("model", result)
+        return {"loaded": False}
+
+    @staticmethod
     def system_metrics() -> dict[str, Any]:
         """System metrics (CPU, memory, disk)."""
         result = _api_get("/system/metrics")

@@ -1,14 +1,18 @@
 """
-HTTP downloader with byte-level resume via Range headers.
+HTTP downloader with byte-level resume via Range headers and optional LZ4 compression.
 
 Key design:
 - Each file is downloaded to a ``.sgpart`` temp path, then atomically renamed
   to the final name on completion (no corrupt files on crash).
 - On resume, the existing ``.sgpart`` file size is sent as the Range header.
 - Cleans up stale ``.sgpart`` files for a clean start when no state tracks them.
+- Optional LZ4 compression: server sends compressed, client decompresses on-the-fly.
+- Auto-detects already-compressed content to skip double compression.
+- Checksum-based skip: avoids re-downloading identical files.
 """
 
 import hashlib
+import io
 import logging
 import os
 import re
@@ -24,6 +28,17 @@ CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB
 MAX_RETRIES = 3
 RETRY_DELAY = 2.0
 
+# File extensions that are already compressed (skip double compression)
+COMPRESSED_EXTENSIONS = {
+    ".zip", ".gz", ".bz2", ".xz", ".lz4", ".zst", ".lz", ".br", ".tgz",
+    ".tar.gz", ".tar.bz2", ".tar.xz", ".7z", ".rar", ".cab",
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif",  # image formats
+    ".mp3", ".mp4", ".avi", ".mkv", ".mov", ".webm",  # media formats
+    ".woff", ".woff2", ".ttf", ".otf",  # font formats
+    ".pyc", ".pyo", ".class",  # compiled
+    ".exe", ".dll", ".so", ".dylib",  # binaries
+}
+
 
 class DownloadError(Exception):
     """Raised when a download fails permanently."""
@@ -38,6 +53,35 @@ def _resolve_range_start(part_path: Path) -> int:
     if part_path.exists():
         return part_path.stat().st_size
     return 0
+
+
+def _is_already_compressed(url: str, headers: dict) -> bool:
+    """Check if content is likely already compressed based on URL and headers."""
+    # Check Content-Encoding header
+    content_encoding = headers.get("Content-Encoding", "").lower()
+    if content_encoding in ("gzip", "br", "zstd", "lz4", "deflate"):
+        return True
+
+    # Check Content-Type header
+    content_type = headers.get("Content-Type", "").lower()
+    compressed_types = {
+        "application/zip", "application/gzip", "application/x-bzip2",
+        "application/x-xz", "application/x-lz4", "application/zstd",
+        "image/jpeg", "image/png", "image/gif", "image/webp",
+        "audio/mpeg", "video/mp4", "video/webm",
+        "font/woff", "font/woff2",
+    }
+    for ct in compressed_types:
+        if ct in content_type:
+            return True
+
+    # Check file extension in URL
+    url_path = url.split("?")[0].lower()
+    for ext in COMPRESSED_EXTENSIONS:
+        if url_path.endswith(ext):
+            return True
+
+    return False
 
 
 def _validate_content_range(
@@ -63,6 +107,80 @@ def _validate_content_range(
     return True
 
 
+def _is_compressed_response(headers: dict) -> bool:
+    """Check if server response indicates LZ4 compression."""
+    content_type = headers.get("Content-Type", "")
+    content_encoding = headers.get("Content-Encoding", "")
+    return content_type == "application/x-lz4" or content_encoding == "lz4"
+
+
+def _verify_checksum(file_path: Path, expected: str) -> bool:
+    """Verify SHA-256 checksum of a file."""
+    if not file_path.exists():
+        return False
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for block in iter(lambda: f.read(CHUNK_SIZE), b""):
+            hasher.update(block)
+    return hasher.hexdigest() == expected
+
+
+def get_file_size(url: str) -> Optional[int]:
+    """Get file size from server without downloading.
+
+    Returns file size in bytes, or None if unknown.
+    """
+    try:
+        resp = requests.head(url, timeout=10, allow_redirects=True)
+        resp.raise_for_status()
+        content_length = resp.headers.get("Content-Length")
+        if content_length and content_length.isdigit():
+            return int(content_length)
+    except Exception:
+        pass
+    return None
+
+
+def estimate_download_size(url: str) -> dict:
+    """Estimate download size and compression savings.
+
+    Returns dict with:
+        - total_bytes: Total file size
+        - is_compressed: Whether content is already compressed
+        - estimated_savings: Estimated bandwidth savings from compression
+    """
+    try:
+        resp = requests.head(url, timeout=10, allow_redirects=True)
+        resp.raise_for_status()
+
+        total_bytes = 0
+        content_length = resp.headers.get("Content-Length")
+        if content_length and content_length.isdigit():
+            total_bytes = int(content_length)
+
+        is_compressed = _is_already_compressed(url, resp.headers)
+
+        # Estimate savings: if not compressed, LZ4 typically saves 30-50%
+        estimated_savings = 0
+        if not is_compressed and total_bytes > 0:
+            estimated_savings = int(total_bytes * 0.4)  # conservative 40% estimate
+
+        return {
+            "total_bytes": total_bytes,
+            "is_compressed": is_compressed,
+            "estimated_savings": estimated_savings,
+            "content_type": resp.headers.get("Content-Type", "unknown"),
+            "content_encoding": resp.headers.get("Content-Encoding", "none"),
+        }
+    except Exception as e:
+        return {
+            "total_bytes": 0,
+            "is_compressed": False,
+            "estimated_savings": 0,
+            "error": str(e),
+        }
+
+
 def download_file(
     url: str,
     dest: Path,
@@ -70,6 +188,8 @@ def download_file(
     checksum: str = "",
     on_chunk: Optional[Callable[[int, int], None]] = None,
     on_complete: Optional[Callable[[Path], None]] = None,
+    compressed: bool = False,
+    skip_if_exists: bool = True,
 ) -> Path:
     """Download a single file with resume support.
 
@@ -82,6 +202,8 @@ def download_file(
                   ``total_bytes`` may be 0 if the server provides no
                   Content-Length and *expected_size* was not given.
         on_complete: Called with final path after successful download.
+        compressed: If True, expect LZ4-compressed response and decompress on-the-fly.
+        skip_if_exists: If True and checksum provided, skip download if file exists with matching checksum.
 
     Returns:
         The final destination path on success.
@@ -89,6 +211,17 @@ def download_file(
     Raises:
         DownloadError: If the download fails permanently (after retries).
     """
+    # Skip download if file exists with matching checksum
+    if skip_if_exists and checksum and dest.exists():
+        if _verify_checksum(dest, checksum):
+            logger.info("Skipping %s (checksum matches)", dest.name)
+            if on_chunk:
+                size = dest.stat().st_size
+                on_chunk(size, size)
+            if on_complete:
+                on_complete(dest)
+            return dest
+
     part = _part_path(dest)
     resume_at = _resolve_range_start(part)
     headers: dict = {}
@@ -136,14 +269,25 @@ def download_file(
                 total += resume_at
 
             dest.parent.mkdir(parents=True, exist_ok=True)
-            with open(part, mode) as f:
-                for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
-                    if not chunk:
-                        continue
-                    f.write(chunk)
-                    if on_chunk:
-                        bytes_done = part.stat().st_size
-                        on_chunk(bytes_done, max(bytes_done, total))
+
+            # Auto-detect compression: skip if content is already compressed
+            content_is_compressed = _is_already_compressed(url, resp.headers)
+            server_has_lz4 = _is_compressed_response(resp.headers)
+
+            # Decide whether to decompress
+            should_decompress = False
+            if compressed and server_has_lz4:
+                # Explicitly requested LZ4 and server is sending it
+                should_decompress = True
+            elif content_is_compressed:
+                # Content is already compressed (gzip, zstd, etc.) - don't decompress
+                should_decompress = False
+                logger.info("Content already compressed, skipping LZ4 decompression for %s", dest.name)
+
+            if should_decompress:
+                _download_compressed(resp, part, mode, total, on_chunk)
+            else:
+                _download_raw(resp, part, mode, total, on_chunk)
 
             if checksum:
                 hasher = hashlib.sha256()
@@ -185,3 +329,67 @@ def download_file(
                 raise DownloadError(f"Failed to download {dest.name} after {MAX_RETRIES} attempts: {e}") from e
 
     raise DownloadError(f"Failed to download {dest.name}")
+
+
+def _download_raw(
+    resp: requests.Response,
+    part: Path,
+    mode: str,
+    total: int,
+    on_chunk: Optional[Callable[[int, int], None]],
+) -> None:
+    """Download raw (uncompressed) data."""
+    with open(part, mode) as f:
+        for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
+            if not chunk:
+                continue
+            f.write(chunk)
+            if on_chunk:
+                bytes_done = part.stat().st_size
+                on_chunk(bytes_done, max(bytes_done, total))
+
+
+def _download_compressed(
+    resp: requests.Response,
+    part: Path,
+    mode: str,
+    total: int,
+    on_chunk: Optional[Callable[[int, int], None]],
+) -> None:
+    """Download LZ4-compressed data and decompress on-the-fly."""
+    from downcraft.download.compress import decompress_stream
+
+    # Read all compressed data
+    compressed_data = resp.read()
+
+    # Decompress to file
+    src = io.BytesIO(compressed_data)
+    with open(part, mode) as dst:
+        decompress_stream(src, dst, verify_header=True)
+
+    if on_chunk:
+        bytes_done = part.stat().st_size
+        on_chunk(bytes_done, max(bytes_done, total))
+
+
+def download_compressed(
+    url: str,
+    dest: Path,
+    expected_size: int = 0,
+    checksum: str = "",
+    on_chunk: Optional[Callable[[int, int], None]] = None,
+    on_complete: Optional[Callable[[Path], None]] = None,
+) -> Path:
+    """Download a compressed file with resume support.
+
+    Convenience wrapper that sets compressed=True.
+    """
+    return download_file(
+        url,
+        dest,
+        expected_size=expected_size,
+        checksum=checksum,
+        on_chunk=on_chunk,
+        on_complete=on_complete,
+        compressed=True,
+    )

@@ -29,3 +29,21 @@ class TestPluginsRouter:
         data = response.json()
         assert "data" in data
         assert "plugins" in data["data"]
+
+    def test_enable_plugin(self, client):
+        response = client.post("/plugins/test-plugin/enable")
+        assert response.status_code == 200
+        data = response.json()
+        assert "data" in data
+
+    def test_disable_plugin(self, client):
+        response = client.post("/plugins/test-plugin/disable")
+        assert response.status_code == 200
+        data = response.json()
+        assert "data" in data
+
+    def test_reload_plugins(self, client):
+        response = client.post("/plugins/reload")
+        assert response.status_code == 200
+        data = response.json()
+        assert "data" in data

@@ -1,7 +1,13 @@
 """Tests for downcraft.resolver — link extraction from ad-heavy pages."""
 
 import base64
+import sys
+from pathlib import Path
+
 import pytest
+
+# Ensure local conftest is importable
+sys.path.insert(0, str(Path(__file__).parent))
 
 from downcraft.resolve.scraper import (
     _collect_urls_from_dict,
