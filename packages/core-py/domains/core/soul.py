@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
-    from domains.soul.hd_memory import HDMemoryStore
+    from domain.soul._internal.hd_memory import HDMemoryStore
 
 import numpy as np
 
@@ -172,7 +172,7 @@ class SloEngine:
             self._working_memory = None
 
         try:
-            from domains.soul.cognitive import SentimentAnalyzer
+            from domain.soul._internal.cognitive import SentimentAnalyzer
 
             self._sentiment_analyzer = SentimentAnalyzer()
         except Exception as exc:
@@ -182,7 +182,7 @@ class SloEngine:
     def _init_hd_memory(self) -> None:
         """Initialize hyperdimensional memory store."""
         try:
-            from domains.soul.hd_memory import HDMemoryStore
+            from domain.soul._internal.hd_memory import HDMemoryStore
 
             self._hd_memory = HDMemoryStore(dim=10000, max_items=1000)
             logger.debug("HD Memory initialized")

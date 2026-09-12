@@ -40,6 +40,10 @@
       "eslint --fix",
       "prettier --write"
     ],
+    "*.py": [
+      "ruff check --fix",
+      "ruff format"
+    ],
     "*.{json,md}": [
       "prettier --write"
     ]

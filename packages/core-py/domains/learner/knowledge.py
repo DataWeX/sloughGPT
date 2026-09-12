@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``knowledge`` package."""
+"""Backward-compatibility shim — imports from the new ``domain.knowledge`` package."""
 
-from knowledge import (
+from domain.knowledge import (
     KnowledgeFact,
     KnowledgeMemory,
     KnowledgeIngestor,

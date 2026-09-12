@@ -5,7 +5,7 @@ import time
 import pytest
 from pathlib import Path
 
-from domain.memory._internal.memory_config import MemoryConfig
+from domain.memory._internal.config import MemoryConfig
 from domain.memory._internal.task_memory import (
     TASK_REMEMBER,
     TASK_STORE,

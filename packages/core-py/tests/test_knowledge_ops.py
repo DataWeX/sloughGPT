@@ -10,7 +10,7 @@ from pathlib import Path
 @pytest.fixture(autouse=True)
 def isolated_knowledge_paths(tmp_path, monkeypatch):
     """Keep KnowledgeMemory persistence off the real data dir."""
-    from domains.learner import knowledge as K
+    from domain.knowledge._internal import knowledge as K
     monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
     monkeypatch.setattr(K, "VISITED_PATH", tmp_path / "visited.json")
     monkeypatch.setattr(K, "ENTRIES_PATH", tmp_path / "entries.json")
@@ -21,7 +21,7 @@ def isolated_knowledge_paths(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_file_index_single_file():
-    from domains.learner.knowledge_ops import FileIndex
+    from domain.knowledge._internal.knowledge_ops import FileIndex
     idx = FileIndex()
     with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='.') as f:
         f.write("def train_model(data):\n    model = create_model()\n    model.fit(data)\n    return model\n")
@@ -34,7 +34,7 @@ def test_file_index_single_file():
 
 
 def test_file_index_directory():
-    from domains.learner.knowledge_ops import FileIndex
+    from domain.knowledge._internal.knowledge_ops import FileIndex
     idx = FileIndex()
     with tempfile.TemporaryDirectory() as tmpdir:
         for i in range(3):
@@ -46,7 +46,7 @@ def test_file_index_directory():
 
 
 def test_file_index_search():
-    from domains.learner.knowledge_ops import FileIndex
+    from domain.knowledge._internal.knowledge_ops import FileIndex
     idx = FileIndex()
     with tempfile.TemporaryDirectory() as tmpdir:
         Path(tmpdir, "ml.py").write_text("def train_neural_network(data):\n    model = NeuralNet()\n    model.fit(data)\n")
@@ -60,7 +60,7 @@ def test_file_index_search():
 
 
 def test_file_index_ignores_junk():
-    from domains.learner.knowledge_ops import FileIndex
+    from domain.knowledge._internal.knowledge_ops import FileIndex
     idx = FileIndex()
     with tempfile.TemporaryDirectory() as tmpdir:
         Path(tmpdir, "__pycache__").mkdir()
@@ -71,7 +71,7 @@ def test_file_index_ignores_junk():
 
 
 def test_file_index_skips_large_files():
-    from domains.learner.knowledge_ops import FileIndex
+    from domain.knowledge._internal.knowledge_ops import FileIndex
     idx = FileIndex()
     with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
         f.write("x = 1\n" * 200_000)  # > 500KB
@@ -82,7 +82,7 @@ def test_file_index_skips_large_files():
 
 
 def test_file_index_custom_embedder():
-    from domains.learner.knowledge_ops import FileIndex
+    from domain.knowledge._internal.knowledge_ops import FileIndex
 
     class _Embedder:
         def embed(self, text):
@@ -98,12 +98,12 @@ def test_file_index_custom_embedder():
 
 
 def test_file_index_missing_file_returns_zero():
-    from domains.learner.knowledge_ops import FileIndex
+    from domain.knowledge._internal.knowledge_ops import FileIndex
     assert FileIndex().index_file("/nonexistent/file.py") == 0
 
 
 def test_file_index_tiny_file_returns_zero():
-    from domains.learner.knowledge_ops import FileIndex
+    from domain.knowledge._internal.knowledge_ops import FileIndex
     idx = FileIndex()
     with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
         f.write("x = 1\n")
@@ -114,7 +114,7 @@ def test_file_index_tiny_file_returns_zero():
 
 
 def test_file_index_extension_filter():
-    from domains.learner.knowledge_ops import FileIndex
+    from domain.knowledge._internal.knowledge_ops import FileIndex
     idx = FileIndex()
     with tempfile.TemporaryDirectory() as tmpdir:
         Path(tmpdir, "a.py").write_text("def a():\n    pass\n")
@@ -128,7 +128,7 @@ def test_file_index_extension_filter():
 # ---------------------------------------------------------------------------
 
 def test_duplicate_detector_exact():
-    from domains.learner.knowledge_ops import DuplicateDetector
+    from domain.knowledge._internal.knowledge_ops import DuplicateDetector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
@@ -143,7 +143,7 @@ def test_duplicate_detector_exact():
 
 
 def test_duplicate_detector_different():
-    from domains.learner.knowledge_ops import DuplicateDetector
+    from domain.knowledge._internal.knowledge_ops import DuplicateDetector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
@@ -157,14 +157,14 @@ def test_duplicate_detector_different():
 
 
 def test_duplicate_detector_empty_store():
-    from domains.learner.knowledge_ops import DuplicateDetector
+    from domain.knowledge._internal.knowledge_ops import DuplicateDetector
     dup = DuplicateDetector()
     is_dup, best, score = dup.check("anything")
     assert is_dup is False
 
 
 def test_duplicate_detector_clusters():
-    from domains.learner.knowledge_ops import DuplicateDetector
+    from domain.knowledge._internal.knowledge_ops import DuplicateDetector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
@@ -185,14 +185,14 @@ def test_duplicate_detector_clusters():
 
 
 def test_find_clusters_store_without_entries():
-    from domains.learner.knowledge_ops import DuplicateDetector
+    from domain.knowledge._internal.knowledge_ops import DuplicateDetector
     dup = DuplicateDetector()
     dup.load_from_store(object())
     assert dup.find_clusters() == []
 
 
 def test_find_clusters_single_entry():
-    from domains.learner.knowledge_ops import DuplicateDetector
+    from domain.knowledge._internal.knowledge_ops import DuplicateDetector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
     store = InMemoryVectorStore(dimension=384)
     store.upsert_sync([VectorEntry(id="f1", vector=simple_embed("x"), text="x", metadata={})])
@@ -202,7 +202,7 @@ def test_find_clusters_single_entry():
 
 
 def test_find_clusters_skips_visited_inner():
-    from domains.learner.knowledge_ops import DuplicateDetector
+    from domain.knowledge._internal.knowledge_ops import DuplicateDetector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry
     v0 = [1.0, 0.0] + [0.0] * 382
     v1 = [0.0, 1.0] + [0.0] * 382
@@ -225,7 +225,7 @@ def test_find_clusters_skips_visited_inner():
 # ---------------------------------------------------------------------------
 
 def test_auto_categorizer():
-    from domains.learner.knowledge_ops import AutoCategorizer
+    from domain.knowledge._internal.knowledge_ops import AutoCategorizer
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
@@ -253,28 +253,28 @@ def test_auto_categorizer():
 
 
 def test_auto_categorizer_empty():
-    from domains.learner.knowledge_ops import AutoCategorizer
+    from domain.knowledge._internal.knowledge_ops import AutoCategorizer
     cat = AutoCategorizer()
     topic = cat.categorize("anything")
     assert topic == "general"
 
 
 def test_auto_categorizer_load_no_entries():
-    from domains.learner.knowledge_ops import AutoCategorizer
+    from domain.knowledge._internal.knowledge_ops import AutoCategorizer
     cat = AutoCategorizer()
     cat.load_from_store(object())
     assert cat.categorize("anything") == "general"
 
 
 def test_auto_categorizer_empty_topic_centroid():
-    from domains.learner.knowledge_ops import AutoCategorizer
+    from domain.knowledge._internal.knowledge_ops import AutoCategorizer
     cat = AutoCategorizer(min_score=0.99)
     cat._topic_examples = {"empty": [], "code": ["python code"]}
     assert cat.categorize("zzz qqq wwww", embed_fn=lambda t: [1.0] * 384) == "general"
 
 
 def test_auto_categorizer_low_score_returns_general():
-    from domains.learner.knowledge_ops import AutoCategorizer
+    from domain.knowledge._internal.knowledge_ops import AutoCategorizer
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
     store = InMemoryVectorStore(dimension=384)
     store.upsert_sync([VectorEntry(id="f1", vector=simple_embed("python code"), text="python code", metadata={"topic": "code"})])
@@ -284,7 +284,7 @@ def test_auto_categorizer_low_score_returns_general():
 
 
 def test_auto_categorizer_suggest():
-    from domains.learner.knowledge_ops import AutoCategorizer
+    from domain.knowledge._internal.knowledge_ops import AutoCategorizer
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
@@ -301,12 +301,12 @@ def test_auto_categorizer_suggest():
 
 
 def test_suggest_topics_no_examples():
-    from domains.learner.knowledge_ops import AutoCategorizer
+    from domain.knowledge._internal.knowledge_ops import AutoCategorizer
     assert AutoCategorizer().suggest_topics("x") == []
 
 
 def test_suggest_topics_empty_topic_centroid():
-    from domains.learner.knowledge_ops import AutoCategorizer
+    from domain.knowledge._internal.knowledge_ops import AutoCategorizer
     cat = AutoCategorizer()
     cat._topic_examples = {"empty": [], "code": ["python code"]}
     out = cat.suggest_topics("python")
@@ -319,7 +319,7 @@ def test_suggest_topics_empty_topic_centroid():
 # ---------------------------------------------------------------------------
 
 def test_gap_detector():
-    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
@@ -339,21 +339,21 @@ def test_gap_detector():
 
 
 def test_gap_detector_empty():
-    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
     gap = KnowledgeGapDetector()
     gaps = gap.find_gaps()
     assert gaps == []
 
 
 def test_gap_detector_load_no_entries():
-    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
     gap = KnowledgeGapDetector()
     gap.load_from_store(object())
     assert gap.find_gaps() == []
 
 
 def test_gap_detector_zero_total():
-    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
     gap = KnowledgeGapDetector()
     gap._store = object()
     gap._topic_counts = {"x": 0}
@@ -361,7 +361,7 @@ def test_gap_detector_zero_total():
 
 
 def test_gap_detector_rare_and_adequate():
-    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
     store = InMemoryVectorStore(dimension=384)
     entries = [VectorEntry(id="r0", vector=simple_embed("rare"), text="rare", metadata={"topic": "rare"})]
@@ -379,7 +379,7 @@ def test_gap_detector_rare_and_adequate():
 
 
 def test_find_sparse_regions():
-    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry
     store = InMemoryVectorStore(dimension=384)
     entries = []
@@ -395,7 +395,7 @@ def test_find_sparse_regions():
 
 
 def test_find_sparse_regions_too_few():
-    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry
     store = InMemoryVectorStore(dimension=384)
     store.upsert_sync([VectorEntry(id="e", vector=[0.0] * 384, text="t", metadata={})])
@@ -405,7 +405,7 @@ def test_find_sparse_regions_too_few():
 
 
 def test_find_sparse_regions_no_entries():
-    from domains.learner.knowledge_ops import KnowledgeGapDetector
+    from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
     gap = KnowledgeGapDetector()
     gap.load_from_store(object())
     assert gap.find_sparse_regions() == []
@@ -416,9 +416,9 @@ def test_find_sparse_regions_no_entries():
 # ---------------------------------------------------------------------------
 
 def test_smart_context_injector():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
-    from domains.learner.knowledge import KnowledgeMemory
+    from domain.knowledge._internal.knowledge import KnowledgeMemory
 
     # Use a fresh in-memory store to avoid persistence issues
     mem = KnowledgeMemory.__new__(KnowledgeMemory)
@@ -430,7 +430,7 @@ def test_smart_context_injector():
     mem._vector_store = store
     mem._embed_fn = None
 
-    from domains.learner.knowledge import KnowledgeFact
+    from domain.knowledge._internal.knowledge import KnowledgeFact
     mem.add_fact(KnowledgeFact(content="Training neural networks requires labeled data for supervised learning", topic="ml", source="test"))
     mem.add_fact(KnowledgeFact(content="Python programming language is used for web development", topic="code", source="test"))
 
@@ -440,7 +440,7 @@ def test_smart_context_injector():
 
 
 def test_smart_context_injector_empty():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     injector = SmartContextInjector(None)
     ctx = injector.get_context("anything")
     assert ctx == ""
@@ -455,19 +455,19 @@ class _CtxMem:
 
 
 def test_get_context_no_results():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     injector = SmartContextInjector(_CtxMem([]), min_score=0.5)
     assert injector.get_context("q") == ""
 
 
 def test_get_context_all_filtered():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     injector = SmartContextInjector(_CtxMem([{"content": "x", "score": 0.1}]), min_score=0.5)
     assert injector.get_context("q") == ""
 
 
 def test_get_context_overflow_break():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     results = [
         {"content": "short", "score": 0.9},
         {"content": "y" * 100, "score": 0.8},
@@ -479,14 +479,14 @@ def test_get_context_overflow_break():
 
 
 def test_get_context_parts_empty():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     results = [{"content": "y" * 100, "score": 0.9}]
     injector = SmartContextInjector(_CtxMem(results), min_score=0.5)
     assert injector.get_context("q", max_chars=10) == ""
 
 
 def test_get_context_for_system_with_and_without():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     injector = SmartContextInjector(_CtxMem([]), min_score=0.5)
     assert injector.get_context_for_system("q", "SYSTEM") == "SYSTEM"
     injector2 = SmartContextInjector(_CtxMem([{"content": "fact", "score": 0.9}]), min_score=0.5)
@@ -496,19 +496,19 @@ def test_get_context_for_system_with_and_without():
 
 
 def test_should_inject_no_memory():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     assert SmartContextInjector(None).should_inject("q") is False
 
 
 def test_should_inject_no_results():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     assert SmartContextInjector(_CtxMem([])).should_inject("q") is False
 
 
 def test_smart_context_should_inject():
-    from domains.learner.knowledge_ops import SmartContextInjector
+    from domain.knowledge._internal.knowledge_ops import SmartContextInjector
     from domains.inference.vector_store import InMemoryVectorStore
-    from domains.learner.knowledge import KnowledgeMemory, KnowledgeFact
+    from domain.knowledge._internal.knowledge import KnowledgeMemory, KnowledgeFact
     import threading
 
     mem = KnowledgeMemory.__new__(KnowledgeMemory)
@@ -535,7 +535,7 @@ def test_smart_context_should_inject():
 
 def _fresh_memory():
     """Create a KnowledgeMemory with a fresh in-memory store (no disk persistence)."""
-    from domains.learner.knowledge import KnowledgeMemory
+    from domain.knowledge._internal.knowledge import KnowledgeMemory
     from domains.inference.vector_store import InMemoryVectorStore
     import threading
     mem = KnowledgeMemory.__new__(KnowledgeMemory)
@@ -548,7 +548,7 @@ def _fresh_memory():
 
 
 def test_bulk_processor():
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
 
     mem = _fresh_memory()
     bp = BulkProcessor(mem)
@@ -565,7 +565,7 @@ def test_bulk_processor():
 
 
 def test_bulk_processor_dedup():
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
 
     mem = _fresh_memory()
     bp = BulkProcessor(mem)
@@ -580,7 +580,7 @@ def test_bulk_processor_dedup():
 
 
 def test_bulk_processor_empty():
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
 
     mem = _fresh_memory()
     bp = BulkProcessor(mem)
@@ -589,13 +589,13 @@ def test_bulk_processor_empty():
 
 
 def test_bulk_processor_no_memory():
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
     report = BulkProcessor(None).ingest_texts(["a", "b"])
     assert report == {"added": 0, "skipped": 0, "errors": 2}
 
 
 def test_bulk_processor_short_texts_skipped():
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
     mem = _fresh_memory()
     bp = BulkProcessor(mem)
     report = bp.ingest_texts(["", "tiny", "a reasonably long valid piece of text"], dedup_threshold=0.99)
@@ -604,7 +604,7 @@ def test_bulk_processor_short_texts_skipped():
 
 
 def test_bulk_processor_progress_callback():
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
     mem = _fresh_memory()
     bp = BulkProcessor(mem)
     calls = []
@@ -616,7 +616,7 @@ def test_bulk_processor_progress_callback():
 
 
 def test_bulk_processor_exact_dup_add_fact_false():
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
     mem = _fresh_memory()
     bp = BulkProcessor(mem)
     text = "quantum computing uses qubits for parallel processing"
@@ -626,7 +626,7 @@ def test_bulk_processor_exact_dup_add_fact_false():
 
 
 def test_bulk_processor_error():
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
     mem = _fresh_memory()
 
     def bad_embed(text):
@@ -645,25 +645,25 @@ class TestChunkingStrategies:
     """Tests for document chunking functions."""
 
     def test_chunk_by_fixed_size_basic(self):
-        from domains.learner.knowledge import chunk_by_fixed_size
+        from domain.knowledge._internal.knowledge import chunk_by_fixed_size
         text = "A" * 1000
         chunks = chunk_by_fixed_size(text, chunk_size=300)
         assert len(chunks) >= 3
         assert all(len(c) <= 300 for c in chunks)
 
     def test_chunk_by_fixed_size_short_text(self):
-        from domains.learner.knowledge import chunk_by_fixed_size
+        from domain.knowledge._internal.knowledge import chunk_by_fixed_size
         text = "Short text"
         chunks = chunk_by_fixed_size(text, chunk_size=500)
         assert chunks == [text]
 
     def test_chunk_by_fixed_size_empty(self):
-        from domains.learner.knowledge import chunk_by_fixed_size
+        from domain.knowledge._internal.knowledge import chunk_by_fixed_size
         assert chunk_by_fixed_size("") == []
         assert chunk_by_fixed_size("  ") == []
 
     def test_chunk_by_fixed_size_overlap(self):
-        from domains.learner.knowledge import chunk_by_fixed_size
+        from domain.knowledge._internal.knowledge import chunk_by_fixed_size
         text = "A" * 1000
         chunks = chunk_by_fixed_size(text, chunk_size=300, overlap=50)
         assert len(chunks) >= 3
@@ -673,7 +673,7 @@ class TestChunkingStrategies:
             assert prev_end in chunks[i] or len(chunks[i]) > 0
 
     def test_chunk_by_paragraph_basic(self):
-        from domains.learner.knowledge import chunk_by_paragraph
+        from domain.knowledge._internal.knowledge import chunk_by_paragraph
         text = ("First paragraph with enough content to exceed the merge threshold. "
                 "This makes it long enough to be its own chunk.\n\n"
                 "Second paragraph also with enough content to stay separate. "
@@ -682,18 +682,18 @@ class TestChunkingStrategies:
         assert len(chunks) >= 2
 
     def test_chunk_by_paragraph_single(self):
-        from domains.learner.knowledge import chunk_by_paragraph
+        from domain.knowledge._internal.knowledge import chunk_by_paragraph
         text = "Single paragraph without breaks."
         chunks = chunk_by_paragraph(text)
         assert len(chunks) == 1
 
     def test_chunk_by_paragraph_empty(self):
-        from domains.learner.knowledge import chunk_by_paragraph
+        from domain.knowledge._internal.knowledge import chunk_by_paragraph
         assert chunk_by_paragraph("") == []
         assert chunk_by_paragraph("  ") == []
 
     def test_chunk_by_heading_basic(self):
-        from domains.learner.knowledge import chunk_by_heading
+        from domain.knowledge._internal.knowledge import chunk_by_heading
         text = ("# Title\n"
                 "Content under title that is long enough to be its own chunk section.\n"
                 "More content to make it substantial.\n"
@@ -704,17 +704,17 @@ class TestChunkingStrategies:
         assert len(chunks) >= 2
 
     def test_chunk_by_heading_no_headings(self):
-        from domains.learner.knowledge import chunk_by_heading
+        from domain.knowledge._internal.knowledge import chunk_by_heading
         text = "No headings here. Just plain text."
         chunks = chunk_by_heading(text)
         assert len(chunks) >= 1
 
     def test_chunk_by_heading_empty(self):
-        from domains.learner.knowledge import chunk_by_heading
+        from domain.knowledge._internal.knowledge import chunk_by_heading
         assert chunk_by_heading("") == []
 
     def test_chunk_by_semantic_basic(self):
-        from domains.learner.knowledge import chunk_by_semantic
+        from domain.knowledge._internal.knowledge import chunk_by_semantic
         text = ("Python is a language. It is used for web development. "
                 "JavaScript is also popular. It runs in browsers. "
                 "Rust is a systems language. It focuses on safety.")
@@ -722,25 +722,25 @@ class TestChunkingStrategies:
         assert len(chunks) >= 1
 
     def test_chunk_by_semantic_short(self):
-        from domains.learner.knowledge import chunk_by_semantic
+        from domain.knowledge._internal.knowledge import chunk_by_semantic
         text = "Short text."
         chunks = chunk_by_semantic(text)
         assert len(chunks) == 1
 
     def test_chunk_text_auto_strategy(self):
-        from domains.learner.knowledge import chunk_text
+        from domain.knowledge._internal.knowledge import chunk_text
         text = "# Heading\nSome content.\n\nAnother paragraph."
         chunks = chunk_text(text, strategy="auto")
         assert len(chunks) >= 1
 
     def test_chunk_text_explicit_strategy(self):
-        from domains.learner.knowledge import chunk_text
+        from domain.knowledge._internal.knowledge import chunk_text
         text = "A" * 1000
         chunks = chunk_text(text, strategy="fixed", chunk_size=300)
         assert len(chunks) >= 3
 
     def test_chunk_text_unknown_strategy(self):
-        from domains.learner.knowledge import chunk_text
+        from domain.knowledge._internal.knowledge import chunk_text
         with pytest.raises(ValueError, match="Unknown strategy"):
             chunk_text("text", strategy="nonexistent")
 
@@ -751,7 +751,7 @@ class TestChunkingStrategies:
 
 def test_bulk_processor_persists_once_per_batch(monkeypatch):
     """Ingesting N texts rewrites the store once, not once per fact."""
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
     mem = _fresh_memory()
     saves = []
     monkeypatch.setattr(mem, "_save_entries", lambda: saves.append(1))
@@ -768,7 +768,7 @@ def test_bulk_processor_persists_once_per_batch(monkeypatch):
 
 def test_bulk_processor_embeds_once_per_text(monkeypatch):
     """Each text is embedded once (dedup check reuses the same vector)."""
-    from domains.learner.knowledge_ops import BulkProcessor
+    from domain.knowledge._internal.knowledge_ops import BulkProcessor
     mem = _fresh_memory()
     calls = []
     monkeypatch.setattr(mem, "_get_embedding",
