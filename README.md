@@ -95,6 +95,21 @@ sloughGPT/
 └── scripts/                   # Build, deploy, benchmarks
 ```
 
+## Consciousness System
+
+SloughGPT includes a consciousness system with 26 pages for monitoring and managing AI self-awareness:
+
+| Feature | Description |
+|---------|-------------|
+| Dashboard | Main consciousness overview with health metrics |
+| Training | Consciousness training controls and progress |
+| Playground | Interactive experimentation with qualia and beliefs |
+| Analytics | Trend analysis and statistics |
+| Benchmark | Performance benchmarking tools |
+| API Explorer | Interactive API testing interface |
+
+Access the consciousness UI at `http://localhost:3000/consciousness/dashboard` after starting the web UI.
+
 ## API Endpoints
 
 Start the server and visit `http://localhost:8000/docs` for the full interactive API reference.
@@ -108,12 +123,14 @@ Core endpoints:
 | `POST` | `/inference/generate` | Text generation |
 | `POST` | `/inference/generate/stream` | Streaming generation (SSE) |
 | `POST` | `/training/start` | Start training (SSE progress) |
-| `POST` | `/training/start` | HuggingFace fine-tuning |
 | `GET` | `/health` | Server and model health |
 | `GET` | `/models` | List available models |
 | `GET` | `/souls` | List available souls |
 | `POST` | `/souls/switch` | Switch active soul |
 | `GET` | `/datasets` | List datasets |
+| `GET` | `/consciousness/status` | Get consciousness status |
+| `POST` | `/consciousness/reflect` | Trigger self-reflection |
+| `GET` | `/consciousness/health` | Consciousness health check |
 
 ## Development
 

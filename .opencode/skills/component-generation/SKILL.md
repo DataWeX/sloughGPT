@@ -11,6 +11,30 @@ description: Generate React components that match the existing @sloughgpt/strui 
 - Scaffolding feature components
 - Any time a new `.tsx` file is created in `apps/web/`
 
+## Existing Pages Reference
+
+The web app has the following page directories under `apps/web/app/(app)/`:
+
+| Directory | Description |
+|-----------|-------------|
+| `chat/` | Main chat interface |
+| `training/` | Model training interface |
+| `models/` | Model management |
+| `datasets/` | Dataset management |
+| `consciousness/` | Consciousness system (26 pages) |
+| `agents/` | Agent management |
+| `souls/` | Personality management |
+| `settings/` | Application settings |
+| `benchmark/` | Performance benchmarking |
+| `monitoring/` | System monitoring |
+| `brainstorm/` | AI brainstorming assistant |
+| `decide/` | Decision-making helper |
+| `explain/` | Simple explanations |
+| `rewrite/` | Text rewriting & polish |
+| `translate/` | Text translation |
+| `wellness/` | Wellness & relaxation |
+| `writing/` | Writing assistant |
+
 ## Framework Stack
 
 | Layer | Technology |

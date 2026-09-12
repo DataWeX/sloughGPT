@@ -27,6 +27,19 @@ Write the test first. Watch it fail. Write minimal code to pass.
 
 **Flow:** `tsc` → `test:changed` → commit → `test` before push.
 
+## Test Coverage Status
+
+| Component | Coverage | Tests |
+|-----------|----------|-------|
+| Consciousness pages | 100% | 26 page tests |
+| Consciousness components | 100% | 5 component tests |
+| Consciousness hooks | 100% | 6 hook tests |
+| Consciousness lib | 100% | 3 lib tests |
+| Navigation | 100% | 8 tests |
+| Hooks/Lib | 95%+ | 1793 tests |
+| Features/Chat | 95%+ | 1467 tests |
+| Tools pages | 100% | 7 page tests |
+
 ## The Iron Law
 
 ```
