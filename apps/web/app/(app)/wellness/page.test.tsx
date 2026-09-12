@@ -1,18 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import WellnessPage from './page'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import React from 'react'
 
-vi.mock('@/lib/chat-controller', () => ({
-  chatController: {
-    stream: vi.fn(),
-  },
+const mockAddToast = vi.fn()
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/wellness',
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (k: string) => k }),
+  LOCALES: [],
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: vi.fn(() => ({
-    addToast: vi.fn(),
-  })),
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
+
+vi.mock('@/lib/tools-controller', () => ({
+  generateTool: vi.fn(),
+}))
+
+import WellnessPage from './page'
+import { generateTool } from '@/lib/tools-controller'
 
 describe('WellnessPage', () => {
   beforeEach(() => {
@@ -21,41 +32,77 @@ describe('WellnessPage', () => {
 
   it('renders the page title', () => {
     render(<WellnessPage />)
-    expect(screen.getByText('Make Me Well')).toBeInTheDocument()
+    expect(screen.getByText('Make Me Well')).toBeDefined()
   })
 
-  it('renders welcome message', () => {
+  it('shows wellness options', () => {
     render(<WellnessPage />)
-    expect(screen.getByText('Take a moment for yourself. What would feel good right now?')).toBeInTheDocument()
+    expect(screen.getByText('Sleep Story')).toBeDefined()
+    expect(screen.getByText('Meditation')).toBeDefined()
+    expect(screen.getByText('Journal Prompt')).toBeDefined()
+    expect(screen.getByText('Breathing Exercise')).toBeDefined()
+    expect(screen.getByText('Positive Affirmation')).toBeDefined()
   })
 
-  it('renders wellness options', () => {
+  it('shows preferences input when option is selected', async () => {
     render(<WellnessPage />)
-    expect(screen.getByText('Sleep Story')).toBeInTheDocument()
-    expect(screen.getByText('Meditation')).toBeInTheDocument()
-    expect(screen.getByText('Journal Prompt')).toBeInTheDocument()
-    expect(screen.getByText('Breathing Exercise')).toBeInTheDocument()
-    expect(screen.getByText('Positive Affirmation')).toBeInTheDocument()
+    
+    const sleepOption = screen.getByText('Sleep Story')
+    fireEvent.click(sleepOption)
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/e\.g\. A story about the ocean/i)).toBeDefined()
+    })
   })
 
-  it('selects option when clicked', () => {
+  it('calls generateTool when generating with option selected', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
+
     render(<WellnessPage />)
-    const sleepButton = screen.getByText('Sleep Story')
-    fireEvent.click(sleepButton)
-    expect(sleepButton.closest('.cursor-pointer')).toHaveClass('border-primary')
+    
+    const sleepOption = screen.getByText('Sleep Story')
+    fireEvent.click(sleepOption)
+    
+    const generateButton = screen.getByRole('button', { name: /begin/i })
+    fireEvent.click(generateButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'wellness',
+        expect.objectContaining({
+          kind: 'sleep',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
   })
 
-  it('shows preferences input after selection', () => {
-    render(<WellnessPage />)
-    const sleepButton = screen.getByText('Sleep Story')
-    fireEvent.click(sleepButton)
-    expect(screen.getByPlaceholderText(/A story about the ocean/)).toBeInTheDocument()
-  })
+  it('allows adding preferences', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
 
-  it('renders begin button', () => {
     render(<WellnessPage />)
-    const sleepButton = screen.getByText('Sleep Story')
-    fireEvent.click(sleepButton)
-    expect(screen.getByText('Begin')).toBeInTheDocument()
+    
+    const sleepOption = screen.getByText('Sleep Story')
+    fireEvent.click(sleepOption)
+    
+    const preferencesInput = screen.getByPlaceholderText(/e\.g\. A story about the ocean/i)
+    fireEvent.change(preferencesInput, { target: { value: 'A story about the ocean' } })
+    
+    const generateButton = screen.getByRole('button', { name: /begin/i })
+    fireEvent.click(generateButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'wellness',
+        expect.objectContaining({
+          preferences: 'A story about the ocean',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
   })
 })

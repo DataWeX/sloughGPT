@@ -1,18 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import WritingAssistantPage from './page'
+import React from 'react'
 
-vi.mock('@/lib/chat-controller', () => ({
-  chatController: {
-    stream: vi.fn(),
-  },
+const mockAddToast = vi.fn()
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/writing',
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (k: string) => k }),
+  LOCALES: [],
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: vi.fn(() => ({
-    addToast: vi.fn(),
-  })),
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
+
+vi.mock('@/lib/tools-controller', () => ({
+  generateTool: vi.fn(),
+}))
+
+import WritingAssistantPage from './page'
+import { generateTool } from '@/lib/tools-controller'
 
 describe('WritingAssistantPage', () => {
   beforeEach(() => {
@@ -21,49 +32,99 @@ describe('WritingAssistantPage', () => {
 
   it('renders the page title', () => {
     render(<WritingAssistantPage />)
-    expect(screen.getByText('Writing Assistant')).toBeInTheDocument()
+    expect(screen.getByText('Writing Assistant')).toBeDefined()
   })
 
-  it('renders tone buttons', () => {
+  it('has tone selection buttons', () => {
     render(<WritingAssistantPage />)
-    expect(screen.getByText('Friendly')).toBeInTheDocument()
-    expect(screen.getByText('Professional')).toBeInTheDocument()
-    expect(screen.getByText('Funny')).toBeInTheDocument()
-    expect(screen.getByText('Short')).toBeInTheDocument()
-    expect(screen.getByText('Detailed')).toBeInTheDocument()
+    expect(screen.getByText('Friendly')).toBeDefined()
+    expect(screen.getByText('Professional')).toBeDefined()
+    expect(screen.getByText('Funny')).toBeDefined()
+    expect(screen.getByText('Short')).toBeDefined()
+    expect(screen.getByText('Detailed')).toBeDefined()
   })
 
-  it('renders type buttons', () => {
+  it('has type selection buttons', () => {
     render(<WritingAssistantPage />)
-    expect(screen.getByText('Email')).toBeInTheDocument()
-    expect(screen.getByText('Social Post')).toBeInTheDocument()
-    expect(screen.getByText('Story')).toBeInTheDocument()
-    expect(screen.getByText('Poem')).toBeInTheDocument()
-    expect(screen.getByText('Letter')).toBeInTheDocument()
-    expect(screen.getByText('Note')).toBeInTheDocument()
+    expect(screen.getByText('Email')).toBeDefined()
+    expect(screen.getByText('Social Post')).toBeDefined()
+    expect(screen.getByText('Story')).toBeDefined()
+    expect(screen.getByText('Poem')).toBeDefined()
+    expect(screen.getByText('Letter')).toBeDefined()
+    expect(screen.getByText('Note')).toBeDefined()
   })
 
-  it('renders the input textarea', () => {
+  it('has a textarea for input', () => {
     render(<WritingAssistantPage />)
-    expect(screen.getByPlaceholderText('Tell me what you want to write about...')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/tell me what you want to write about/i)).toBeDefined()
   })
 
-  it('renders the Write button', () => {
+  it('shows toast when clicking write with empty input', async () => {
     render(<WritingAssistantPage />)
-    expect(screen.getByText('Write')).toBeInTheDocument()
+    
+    const writeButton = screen.getByRole('button', { name: /^Write$/i })
+    fireEvent.click(writeButton)
+
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Write something first', 'info')
+    })
   })
 
-  it('selects tone when clicked', () => {
+  it('calls generateTool when writing with input', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
+
     render(<WritingAssistantPage />)
+    
+    const inputTextarea = screen.getByPlaceholderText(/tell me what you want to write about/i)
+    fireEvent.change(inputTextarea, { target: { value: 'Write a professional email about...' } })
+    
+    const writeButton = screen.getByRole('button', { name: /^Write$/i })
+    fireEvent.click(writeButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'writing',
+        expect.objectContaining({
+          text: 'Write a professional email about...',
+          action: 'write',
+          tone: 'professional',
+          type: 'email',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
+  })
+
+  it('allows changing tone and type', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
+
+    render(<WritingAssistantPage />)
+    
     const friendlyButton = screen.getByText('Friendly')
     fireEvent.click(friendlyButton)
-    expect(friendlyButton.closest('button')).toHaveClass('bg-primary')
-  })
+    
+    const storyButton = screen.getByText('Story')
+    fireEvent.click(storyButton)
+    
+    const inputTextarea = screen.getByPlaceholderText(/tell me what you want to write about/i)
+    fireEvent.change(inputTextarea, { target: { value: 'Write a story about...' } })
+    
+    const writeButton = screen.getByRole('button', { name: /^Write$/i })
+    fireEvent.click(writeButton)
 
-  it('selects type when clicked', () => {
-    render(<WritingAssistantPage />)
-    const emailButton = screen.getByText('Email')
-    fireEvent.click(emailButton)
-    expect(emailButton.closest('button')).toHaveClass('bg-primary')
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'writing',
+        expect.objectContaining({
+          tone: 'friendly',
+          type: 'story',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
   })
 })

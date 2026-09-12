@@ -71,7 +71,7 @@ export async function listTools(): Promise<ToolProfile[]> {
 }
 
 /**
- * Stream a tool generation through the backend. Battches tokens and calls
+ * Stream a tool generation through the backend. Batches tokens and calls
  * `onToken` with appended deltas; resolves when the stream completes or
  * rejects on a hard error.
  */

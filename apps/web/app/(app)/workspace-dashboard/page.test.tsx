@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
 
 const mockApiGet = vi.fn()
 
@@ -67,28 +67,32 @@ describe('WorkspaceDashboardPage', () => {
 
   it('displays KPI stats', async () => {
     render(<WorkspaceDashboardPage />)
-    await screen.findByText('Workspace Dashboard')
-    expect(screen.getAllByText('Members').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText('Members').length).toBeGreaterThanOrEqual(1)
+    })
     expect(screen.getAllByText('Datasets').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Training Jobs').length).toBeGreaterThanOrEqual(1)
   })
 
   it('displays health status', async () => {
     render(<WorkspaceDashboardPage />)
-    await screen.findByText('Workspace Dashboard')
-    expect(screen.getAllByText(/healthy/i).length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText(/healthy/i).length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('displays recent activity section', async () => {
     render(<WorkspaceDashboardPage />)
-    await screen.findByText('Workspace Dashboard')
-    expect(screen.getAllByText(/recent activity/i).length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText(/recent activity/i).length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('displays training progress', async () => {
     render(<WorkspaceDashboardPage />)
-    await screen.findByText('Workspace Dashboard')
-    expect(screen.getAllByText(/running/i).length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText(/running/i).length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('shows members count', async () => {

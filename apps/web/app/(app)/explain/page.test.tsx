@@ -1,18 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import ExplainPage from './page'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import React from 'react'
 
-vi.mock('@/lib/chat-controller', () => ({
-  chatController: {
-    stream: vi.fn(),
-  },
+const mockAddToast = vi.fn()
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/explain',
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (k: string) => k }),
+  LOCALES: [],
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: vi.fn(() => ({
-    addToast: vi.fn(),
-  })),
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
+
+vi.mock('@/lib/tools-controller', () => ({
+  generateTool: vi.fn(),
+}))
+
+import ExplainPage from './page'
+import { generateTool } from '@/lib/tools-controller'
 
 describe('ExplainPage', () => {
   beforeEach(() => {
@@ -21,36 +32,86 @@ describe('ExplainPage', () => {
 
   it('renders the page title', () => {
     render(<ExplainPage />)
-    expect(screen.getByText('Explain Things Simply')).toBeInTheDocument()
+    expect(screen.getByText('Explain Things Simply')).toBeDefined()
   })
 
-  it('renders the topic input', () => {
+  it('has a textarea for topic input', () => {
     render(<ExplainPage />)
-    expect(screen.getByPlaceholderText('e.g. How does the internet work?')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/e\.g\. How does the internet work/i)).toBeDefined()
   })
 
-  it('renders difficulty buttons', () => {
+  it('has difficulty selection buttons', () => {
     render(<ExplainPage />)
-    expect(screen.getByText('Simple')).toBeInTheDocument()
-    expect(screen.getByText('Normal')).toBeInTheDocument()
-    expect(screen.getByText('Detailed')).toBeInTheDocument()
+    expect(screen.getByText('Simple')).toBeDefined()
+    expect(screen.getByText('Normal')).toBeDefined()
+    expect(screen.getByText('Detailed')).toBeDefined()
   })
 
-  it('renders the explain button', () => {
+  it('has an explain button', () => {
     render(<ExplainPage />)
-    expect(screen.getByText('Explain')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /explain/i })).toBeDefined()
   })
 
-  it('explain button is disabled when no input', () => {
+  it('shows toast when submitting empty form', async () => {
     render(<ExplainPage />)
-    const explainButton = screen.getByText('Explain')
-    expect(explainButton).toBeDisabled()
+    
+    const explainButton = screen.getByRole('button', { name: /explain/i })
+    fireEvent.click(explainButton)
+
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Type something to explain', 'info')
+    })
   })
 
-  it('selects difficulty when clicked', () => {
+  it('calls generateTool when topic is provided', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
+
     render(<ExplainPage />)
+    
+    const topicInput = screen.getByPlaceholderText(/e\.g\. How does the internet work/i)
+    fireEvent.change(topicInput, { target: { value: 'How does the internet work?' } })
+    
+    const explainButton = screen.getByRole('button', { name: /explain/i })
+    fireEvent.click(explainButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'explain',
+        expect.objectContaining({
+          topic: 'How does the internet work?',
+          difficulty: 'normal',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
+  })
+
+  it('allows changing difficulty', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
+
+    render(<ExplainPage />)
+    
     const simpleButton = screen.getByText('Simple')
     fireEvent.click(simpleButton)
-    expect(simpleButton.closest('button')).toHaveClass('bg-primary')
+    
+    const topicInput = screen.getByPlaceholderText(/e\.g\. How does the internet work/i)
+    fireEvent.change(topicInput, { target: { value: 'Test topic' } })
+    
+    const explainButton = screen.getByRole('button', { name: /explain/i })
+    fireEvent.click(explainButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'explain',
+        expect.objectContaining({
+          difficulty: 'simple',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
   })
 })

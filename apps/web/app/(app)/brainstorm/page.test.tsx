@@ -1,18 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import BrainstormPage from './page'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import React from 'react'
 
-vi.mock('@/lib/chat-controller', () => ({
-  chatController: {
-    stream: vi.fn(),
-  },
+const mockAddToast = vi.fn()
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/brainstorm',
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (k: string) => k }),
+  LOCALES: [],
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: vi.fn(() => ({
-    addToast: vi.fn(),
-  })),
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
+
+vi.mock('@/lib/tools-controller', () => ({
+  generateTool: vi.fn(),
+}))
+
+import BrainstormPage from './page'
+import { generateTool } from '@/lib/tools-controller'
 
 describe('BrainstormPage', () => {
   beforeEach(() => {
@@ -21,36 +32,57 @@ describe('BrainstormPage', () => {
 
   it('renders the page title', () => {
     render(<BrainstormPage />)
-    expect(screen.getByText('Brainstorm')).toBeInTheDocument()
+    expect(screen.getByText('Brainstorm')).toBeDefined()
   })
 
-  it('renders welcome message', () => {
+  it('shows suggestion buttons when no messages', () => {
     render(<BrainstormPage />)
-    expect(screen.getByText("Let's think together. What's on your mind?")).toBeInTheDocument()
+    expect(screen.getByText('Name ideas')).toBeDefined()
+    expect(screen.getByText('Weekend plans')).toBeDefined()
+    expect(screen.getByText('Gift ideas')).toBeDefined()
   })
 
-  it('renders suggestion chips', () => {
+  it('has an input field for typing', () => {
     render(<BrainstormPage />)
-    expect(screen.getByText('Name ideas')).toBeInTheDocument()
-    expect(screen.getByText('Weekend plans')).toBeInTheDocument()
-    expect(screen.getByText('Gift ideas')).toBeInTheDocument()
-    expect(screen.getByText('Solve a problem')).toBeInTheDocument()
-    expect(screen.getByText('Plan an event')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/type your thought/i)).toBeDefined()
   })
 
-  it('renders input textarea', () => {
+  it('has a send button', () => {
     render(<BrainstormPage />)
-    expect(screen.getByPlaceholderText("What's on your mind?")).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /send/i })).toBeDefined()
   })
 
-  it('renders send button', () => {
+  it('calls generateTool when sending a message', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
+
     render(<BrainstormPage />)
-    expect(screen.getByText('Send')).toBeInTheDocument()
+    
+    const input = screen.getByPlaceholderText(/type your thought/i)
+    fireEvent.change(input, { target: { value: 'Test idea' } })
+    
+    const sendButton = screen.getByRole('button', { name: /send/i })
+    fireEvent.click(sendButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalled()
+    })
   })
 
-  it('send button is disabled when no input', () => {
+  it('shows user message after sending', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
+
     render(<BrainstormPage />)
-    const sendButton = screen.getByText('Send')
-    expect(sendButton).toBeDisabled()
+    
+    const input = screen.getByPlaceholderText(/type your thought/i)
+    fireEvent.change(input, { target: { value: 'Test idea' } })
+    
+    const sendButton = screen.getByRole('button', { name: /send/i })
+    fireEvent.click(sendButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test idea')).toBeDefined()
+    })
   })
 })

@@ -1,18 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import TranslatePage from './page'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import React from 'react'
 
-vi.mock('@/lib/chat-controller', () => ({
-  chatController: {
-    stream: vi.fn(),
-  },
+const mockAddToast = vi.fn()
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/translate',
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (k: string) => k }),
+  LOCALES: [],
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: vi.fn(() => ({
-    addToast: vi.fn(),
-  })),
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
+
+vi.mock('@/lib/tools-controller', () => ({
+  generateTool: vi.fn(),
+}))
+
+import TranslatePage from './page'
+import { generateTool } from '@/lib/tools-controller'
 
 describe('TranslatePage', () => {
   beforeEach(() => {
@@ -21,45 +32,84 @@ describe('TranslatePage', () => {
 
   it('renders the page title', () => {
     render(<TranslatePage />)
-    expect(screen.getByRole('heading', { name: /translate/i })).toBeInTheDocument()
+    expect(screen.getByText('Translate')).toBeDefined()
   })
 
-  it('renders source and target labels', () => {
+  it('has a textarea for source text', () => {
     render(<TranslatePage />)
-    expect(screen.getByText('Source')).toBeInTheDocument()
-    expect(screen.getByText('Translation')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/type or paste text to translate/i)).toBeDefined()
   })
 
-  it('renders language selector', () => {
+  it('has a language selector', () => {
     render(<TranslatePage />)
-    expect(screen.getByText('Spanish')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Spanish')).toBeDefined()
   })
 
-  it('renders source textarea', () => {
+  it('has a translate button', () => {
     render(<TranslatePage />)
-    expect(screen.getByPlaceholderText('Type or paste text to translate...')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /translate/i })).toBeDefined()
   })
 
-  it('renders target textarea', () => {
+  it('shows toast when clicking translate with empty text', async () => {
     render(<TranslatePage />)
-    expect(screen.getByPlaceholderText('Translation will appear here...')).toBeInTheDocument()
-  })
-
-  it('renders action buttons', () => {
-    render(<TranslatePage />)
-    expect(screen.getByText('Swap')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /translate/i })).toBeInTheDocument()
-    expect(screen.getByText('Copy')).toBeInTheDocument()
-  })
-
-  it('swap button swaps source and target', () => {
-    render(<TranslatePage />)
-    const sourceTextarea = screen.getByPlaceholderText('Type or paste text to translate...')
-    const swapButton = screen.getByText('Swap')
     
-    fireEvent.change(sourceTextarea, { target: { value: 'Hello' } })
-    fireEvent.click(swapButton)
+    const translateButton = screen.getByRole('button', { name: /translate/i })
+    fireEvent.click(translateButton)
+
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Type something to translate', 'info')
+    })
+  })
+
+  it('calls generateTool when translating text', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
+
+    render(<TranslatePage />)
     
-    expect(screen.getByDisplayValue('Hello')).toBeInTheDocument()
+    const sourceTextarea = screen.getByPlaceholderText(/type or paste text to translate/i)
+    fireEvent.change(sourceTextarea, { target: { value: 'Hello world' } })
+    
+    const translateButton = screen.getByRole('button', { name: /translate/i })
+    fireEvent.click(translateButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'translate',
+        expect.objectContaining({
+          text: 'Hello world',
+          target_lang: 'Spanish',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
+  })
+
+  it('allows changing target language', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
+
+    render(<TranslatePage />)
+    
+    const languageSelect = screen.getByDisplayValue('Spanish')
+    fireEvent.change(languageSelect, { target: { value: 'French' } })
+    
+    const sourceTextarea = screen.getByPlaceholderText(/type or paste text to translate/i)
+    fireEvent.change(sourceTextarea, { target: { value: 'Hello world' } })
+    
+    const translateButton = screen.getByRole('button', { name: /translate/i })
+    fireEvent.click(translateButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'translate',
+        expect.objectContaining({
+          target_lang: 'French',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
   })
 })

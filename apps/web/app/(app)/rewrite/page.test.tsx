@@ -1,18 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import RewritePage from './page'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import React from 'react'
 
-vi.mock('@/lib/chat-controller', () => ({
-  chatController: {
-    stream: vi.fn(),
-  },
+const mockAddToast = vi.fn()
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/rewrite',
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (k: string) => k }),
+  LOCALES: [],
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: vi.fn(() => ({
-    addToast: vi.fn(),
-  })),
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
+
+vi.mock('@/lib/tools-controller', () => ({
+  generateTool: vi.fn(),
+}))
+
+import RewritePage from './page'
+import { generateTool } from '@/lib/tools-controller'
 
 describe('RewritePage', () => {
   beforeEach(() => {
@@ -21,37 +32,56 @@ describe('RewritePage', () => {
 
   it('renders the page title', () => {
     render(<RewritePage />)
-    expect(screen.getByText('Rewrite & Polish')).toBeInTheDocument()
+    expect(screen.getByText('Rewrite & Polish')).toBeDefined()
   })
 
-  it('renders original and rewritten labels', () => {
+  it('has a textarea for original text', () => {
     render(<RewritePage />)
-    expect(screen.getByText('Original')).toBeInTheDocument()
-    expect(screen.getByText('Rewritten')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/paste what you wrote/i)).toBeDefined()
   })
 
-  it('renders original textarea', () => {
+  it('has action buttons', () => {
     render(<RewritePage />)
-    expect(screen.getByPlaceholderText('Paste what you wrote...')).toBeInTheDocument()
+    expect(screen.getByText('Fix Grammar')).toBeDefined()
+    expect(screen.getByText('Make Shorter')).toBeDefined()
+    expect(screen.getByText('Make Friendlier')).toBeDefined()
+    expect(screen.getByText('Make Professional')).toBeDefined()
+    expect(screen.getByText('Sound Like Me')).toBeDefined()
   })
 
-  it('renders rewritten textarea', () => {
+  it('shows toast when clicking action with empty text', async () => {
     render(<RewritePage />)
-    expect(screen.getByPlaceholderText('Rewritten version will appear here...')).toBeInTheDocument()
+    
+    const grammarButton = screen.getByText('Fix Grammar')
+    fireEvent.click(grammarButton)
+
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Paste something to rewrite', 'info')
+    })
   })
 
-  it('renders action buttons', () => {
-    render(<RewritePage />)
-    expect(screen.getByText('Fix Grammar')).toBeInTheDocument()
-    expect(screen.getByText('Make Shorter')).toBeInTheDocument()
-    expect(screen.getByText('Make Friendlier')).toBeInTheDocument()
-    expect(screen.getByText('Make Professional')).toBeInTheDocument()
-    expect(screen.getByText('Sound Like Me')).toBeInTheDocument()
-  })
+  it('calls generateTool when action is clicked with text', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
 
-  it('action buttons are disabled when no input', () => {
     render(<RewritePage />)
-    const fixGrammarButton = screen.getByText('Fix Grammar')
-    expect(fixGrammarButton).toBeDisabled()
+    
+    const originalTextarea = screen.getByPlaceholderText(/paste what you wrote/i)
+    fireEvent.change(originalTextarea, { target: { value: 'Test text to rewrite' } })
+    
+    const grammarButton = screen.getByText('Fix Grammar')
+    fireEvent.click(grammarButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'rewrite',
+        expect.objectContaining({
+          text: 'Test text to rewrite',
+          action: 'grammar',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
   })
 })

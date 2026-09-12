@@ -90,7 +90,7 @@ export default function TranslatePage() {
               <label className="text-xs font-medium text-muted-foreground">Translation</label>
               <Select
                 value={targetLang}
-                onChange={(e) => setTargetLang(e.target.value)}
+                onValueChange={setTargetLang}
                 className="w-40 h-7 text-xs"
               >
                 {LANGUAGES.map((lang) => (

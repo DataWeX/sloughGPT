@@ -55,6 +55,7 @@ INFRASTRUCTURE_FILE = "packages/core-py/tests/test_training_infrastructure.py"
 WORKFLOW_INTEGRATION_FILE = "packages/core-py/tests/test_training_integration.py"
 ROBUSTNESS_FILE = "packages/core-py/tests/test_training_robustness.py"
 QUALITY_METHODS_FILE = "packages/core-py/tests/test_training_quality_methods.py"
+CHECKPOINT_EXPORT_FILE = "packages/core-py/tests/test_training_checkpoint_export.py"
 
 
 def run_pytest(args: list[str], label: str) -> tuple[bool, float]:
@@ -144,6 +145,12 @@ def main():
         pytest_args = [QUALITY_METHODS_FILE, "-v" if args.verbose else "-q"]
         ok, dur = run_pytest(pytest_args, "Quality & Methods Tests")
         results.append({"suite": "quality_methods", "passed": ok, "duration_s": dur})
+
+    # Checkpoint and export tests
+    if args.local or args.all:
+        pytest_args = [CHECKPOINT_EXPORT_FILE, "-v" if args.verbose else "-q"]
+        ok, dur = run_pytest(pytest_args, "Checkpoint & Export Tests")
+        results.append({"suite": "checkpoint_export", "passed": ok, "duration_s": dur})
 
     # Journey tests (servers required)
     if args.journeys or args.all:

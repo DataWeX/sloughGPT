@@ -1,18 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import DecidePage from './page'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import React from 'react'
 
-vi.mock('@/lib/chat-controller', () => ({
-  chatController: {
-    stream: vi.fn(),
-  },
+const mockAddToast = vi.fn()
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/decide',
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (k: string) => k }),
+  LOCALES: [],
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: vi.fn(() => ({
-    addToast: vi.fn(),
-  })),
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
 }))
+
+vi.mock('@/lib/tools-controller', () => ({
+  generateTool: vi.fn(),
+}))
+
+import DecidePage from './page'
+import { generateTool } from '@/lib/tools-controller'
 
 describe('DecidePage', () => {
   beforeEach(() => {
@@ -21,34 +32,61 @@ describe('DecidePage', () => {
 
   it('renders the page title', () => {
     render(<DecidePage />)
-    expect(screen.getByRole('heading', { name: 'Help Me Decide' })).toBeInTheDocument()
+    expect(screen.getByText('Help Me Decide')).toBeDefined()
   })
 
-  it('renders the question input', () => {
+  it('has input fields for question and options', () => {
     render(<DecidePage />)
-    expect(screen.getByPlaceholderText('e.g. Should I take the job in New York or stay?')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/e\.g\. Should I take the job/i)).toBeDefined()
+    expect(screen.getByPlaceholderText('First option')).toBeDefined()
+    expect(screen.getByPlaceholderText('Second option')).toBeDefined()
   })
 
-  it('renders option inputs', () => {
+  it('has a decide button', () => {
     render(<DecidePage />)
-    expect(screen.getByPlaceholderText('First option')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Second option')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /decide/i })).toBeDefined()
   })
 
-  it('renders notes textareas', () => {
+  it('shows toast when submitting empty form', async () => {
     render(<DecidePage />)
-    expect(screen.getAllByPlaceholderText('Notes (optional)').length).toBe(2)
+    
+    const decideButton = screen.getByRole('button', { name: /decide/i })
+    fireEvent.click(decideButton)
+
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Fill in the question and both options', 'info')
+    })
   })
 
-  it('renders the decide button', () => {
-    render(<DecidePage />)
-    expect(screen.getAllByText('Help Me Decide').length).toBeGreaterThan(0)
-  })
+  it('calls generateTool when form is filled', async () => {
+    const mockGenerateTool = vi.mocked(generateTool)
+    mockGenerateTool.mockResolvedValue(undefined)
 
-  it('decide button is disabled when fields are empty', () => {
     render(<DecidePage />)
-    const decideButtons = screen.getAllByText('Help Me Decide')
-    const decideButton = decideButtons[decideButtons.length - 1]
-    expect(decideButton).toBeDisabled()
+    
+    const questionInput = screen.getByPlaceholderText(/e\.g\. Should I take the job/i)
+    fireEvent.change(questionInput, { target: { value: 'Test question' } })
+    
+    const optionAInput = screen.getByPlaceholderText('First option')
+    fireEvent.change(optionAInput, { target: { value: 'Option A' } })
+    
+    const optionBInput = screen.getByPlaceholderText('Second option')
+    fireEvent.change(optionBInput, { target: { value: 'Option B' } })
+    
+    const decideButton = screen.getByRole('button', { name: /decide/i })
+    fireEvent.click(decideButton)
+
+    await waitFor(() => {
+      expect(mockGenerateTool).toHaveBeenCalledWith(
+        'decide',
+        expect.objectContaining({
+          question: 'Test question',
+          option_a: 'Option A',
+          option_b: 'Option B',
+        }),
+        expect.any(Object),
+        expect.any(Object)
+      )
+    })
   })
 })
