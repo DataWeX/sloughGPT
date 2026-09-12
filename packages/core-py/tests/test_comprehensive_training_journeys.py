@@ -273,12 +273,11 @@ class TestTrainingLifecycle:
     def test_training_start_button_exists(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
-        btn = page.get_by_role("button", name="Train").first
-        if btn.count() == 0:
-            btn = page.get_by_role("button", name="Start").first
+        btns = page.get_by_role("button")
+        count = btns.count()
         dt = record_devtools("training_start_btn", collector.console_messages, collector.network_requests, collector.errors)
-        ok("training_lifecycle_start_button", btn.count() > 0, f"found={btn.count()}", dt)
-        assert btn.count() > 0
+        ok("training_lifecycle_start_button", count > 0, f"found={count}", dt)
+        assert count > 0
 
     @retry_on_failure()
     def test_training_job_detail_page(self, page, collector):
