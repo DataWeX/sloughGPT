@@ -3,8 +3,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 
-const mockUpload = vi.fn()
-const mockAddToast = vi.fn()
+const { mockUpload, mockAddToast } = vi.hoisted(() => ({
+  mockUpload: vi.fn(),
+  mockAddToast: vi.fn(),
+}))
 
 vi.mock('@/lib/files-controller', () => ({
   filesController: { upload: mockUpload },
