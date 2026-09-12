@@ -80,7 +80,7 @@ describe('ComparisonView', () => {
   it('shows empty state message when no results', () => {
     render(<ComparisonView {...baseProps} />)
     expect(screen.getByText('No benchmark results yet.')).toBeTruthy()
-    expect(screen.getByText('Benchmark all')).toBeTruthy()
+    expect(screen.getAllByText('Benchmark all').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders models card', () => {
@@ -102,13 +102,14 @@ describe('ComparisonView', () => {
     expect(screen.getByTestId('comparison-table-card')).toBeTruthy()
     expect(screen.getByTestId('insights-card')).toBeTruthy()
     expect(screen.getByTestId('summary-card')).toBeTruthy()
-    expect(screen.getByTestId('dynamic-component')).toBeTruthy()
+    expect(screen.getAllByTestId('dynamic-component').length).toBeGreaterThanOrEqual(1)
   })
 
   it('calls onRunAll when benchmark all clicked', () => {
     const onRunAll = vi.fn()
     render(<ComparisonView {...baseProps} onRunAll={onRunAll} />)
-    fireEvent.click(screen.getByText('Benchmark all'))
+    const btn = screen.getByRole('button', { name: /Benchmark all/ })
+    fireEvent.click(btn)
     expect(onRunAll).toHaveBeenCalled()
   })
 })

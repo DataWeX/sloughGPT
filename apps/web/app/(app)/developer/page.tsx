@@ -28,7 +28,7 @@ export default function DeveloperPage() {
   useRefreshShortcut(() => { window.location.reload() })
 
   return (
-    <PageContainer title="Developer" subtitle="Terminal, files & quick actions">
+    <PageContainer title="Developer" subtitle="Shell, files, voice & API tools">
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList aria-label="Developer tools">
           <TabsTrigger value="shell">Terminal</TabsTrigger>
@@ -53,15 +53,15 @@ function ShellTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/30 p-1 w-fit">
+      <div className="flex items-center gap-1 rounded-xl border border-white/[0.06] bg-[#111111] p-1 w-fit">
         <button
           type="button"
           onClick={() => setShellMode('backend')}
           className={cn(
-            'rounded-md px-3 py-1 text-xs font-medium transition-all',
+            'rounded-lg px-4 py-1.5 text-[11px] font-medium transition-all duration-200',
             shellMode === 'backend'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground',
+              ? 'bg-[#1c1c1e] text-[#c7c7cc] shadow-sm shadow-black/20'
+              : 'text-[#636366] hover:text-[#8e8e93]',
           )}
         >
           Backend
@@ -70,10 +70,10 @@ function ShellTab() {
           type="button"
           onClick={() => setShellMode('v86')}
           className={cn(
-            'rounded-md px-3 py-1 text-xs font-medium transition-all',
+            'rounded-lg px-4 py-1.5 text-[11px] font-medium transition-all duration-200',
             shellMode === 'v86'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground',
+              ? 'bg-[#1c1c1e] text-[#c7c7cc] shadow-sm shadow-black/20'
+              : 'text-[#636366] hover:text-[#8e8e93]',
           )}
         >
           Browser VM
