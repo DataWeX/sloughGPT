@@ -139,6 +139,12 @@ def main():
         ok, dur = run_pytest(pytest_args, "Robustness Tests")
         results.append({"suite": "robustness", "passed": ok, "duration_s": dur})
 
+    # Quality and methods tests
+    if args.local or args.all:
+        pytest_args = [QUALITY_METHODS_FILE, "-v" if args.verbose else "-q"]
+        ok, dur = run_pytest(pytest_args, "Quality & Methods Tests")
+        results.append({"suite": "quality_methods", "passed": ok, "duration_s": dur})
+
     # Journey tests (servers required)
     if args.journeys or args.all:
         pytest_args = [JOURNEY_TEST_FILE, "-v" if args.verbose else "-q"]
