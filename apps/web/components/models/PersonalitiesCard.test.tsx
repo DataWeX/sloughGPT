@@ -25,14 +25,14 @@ vi.mock('@sloughgpt/strui', async () => {
       <div role="option" aria-selected="false" data-value={value} {...props}>{children}</div>
     ),
   
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+Spinner: ({ className }: any) => <div className={`animate-spin ${className ?? ''}`} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Badge: ({ label, children, ...props }: any) => <span {...props}>{label ?? children}</span>,
     Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,

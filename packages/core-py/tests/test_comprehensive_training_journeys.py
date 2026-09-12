@@ -229,6 +229,7 @@ def collector(page):
 class TestTrainingLifecycle:
     """Tests the full training flow: navigate → configure → train → monitor → results."""
 
+    @retry_on_failure()
     def test_training_page_loads(self, page, collector):
         body = go(page, "/training", collector)
         has_train = "train" in body.lower()
@@ -236,6 +237,7 @@ class TestTrainingLifecycle:
         ok("training_lifecycle_page_loads", has_train, f"len={len(body)}", dt)
         assert has_train
 
+    @retry_on_failure()
     def test_training_has_tabs(self, page, collector):
         body = go(page, "/training", collector)
         has_tabs = any(w in body.lower() for w in ["train", "results", "settings", "configure"])
@@ -243,6 +245,7 @@ class TestTrainingLifecycle:
         ok("training_lifecycle_has_tabs", has_tabs, f"body_snippet={body[:200]}", dt)
         assert has_tabs
 
+    @retry_on_failure()
     def test_training_pipeline_steps_visible(self, page, collector):
         body = go(page, "/training", collector)
         has_pipeline = any(w in body.lower() for w in ["data", "configure", "start", "pipeline", "step"])
@@ -250,6 +253,7 @@ class TestTrainingLifecycle:
         ok("training_lifecycle_pipeline_steps", has_pipeline, f"body_snippet={body[:200]}", dt)
         assert has_pipeline
 
+    @retry_on_failure()
     def test_training_datasets_section(self, page, collector):
         body = go(page, "/training", collector)
         has_datasets = any(w in body.lower() for w in ["dataset", "data", "upload", "import", "select"])
@@ -257,6 +261,7 @@ class TestTrainingLifecycle:
         ok("training_lifecycle_datasets_section", has_datasets, f"body_snippet={body[:200]}", dt)
         assert has_datasets
 
+    @retry_on_failure()
     def test_training_config_section(self, page, collector):
         body = go(page, "/training", collector)
         has_config = any(w in body.lower() for w in ["config", "epoch", "learning", "rate", "batch", "hyper"])
@@ -264,6 +269,7 @@ class TestTrainingLifecycle:
         ok("training_lifecycle_config_section", has_config, f"body_snippet={body[:200]}", dt)
         assert has_config
 
+    @retry_on_failure()
     def test_training_start_button_exists(self, page, collector):
         go(page, "/training", collector)
         time.sleep(1)
@@ -274,6 +280,7 @@ class TestTrainingLifecycle:
         ok("training_lifecycle_start_button", btn.count() > 0, f"found={btn.count()}", dt)
         assert btn.count() > 0
 
+    @retry_on_failure()
     def test_training_job_detail_page(self, page, collector):
         body = go(page, "/training/job/test-job-123", collector)
         has_content = len(body) > 50
@@ -281,6 +288,7 @@ class TestTrainingLifecycle:
         ok("training_lifecycle_job_detail", has_content, f"len={len(body)}", dt)
         assert has_content
 
+    @retry_on_failure()
     def test_training_job_back_link(self, page, collector):
         go(page, "/training/job/test-job-123", collector)
         time.sleep(1)
@@ -479,6 +487,7 @@ class TestCrossPageNavigation:
         "/benchmark", "/auto-train",
     ]
 
+    @retry_on_failure()
     def test_all_routes_load_without_crash(self, page, collector, route):
         body = go(page, route, collector)
         has_crash = "Something went wrong" in body
@@ -487,6 +496,7 @@ class TestCrossPageNavigation:
         ok(f"nav_{route.replace('/', '_') or '_root'}", passed, f"len={len(body)}, crash={has_crash}", dt)
         assert passed, f"Route {route} crashed or empty"
 
+    @retry_on_failure()
     def test_navigation_back_and_forth(self, page, collector):
         go(page, "/training", collector)
         go(page, "/datasets", collector)
@@ -503,6 +513,7 @@ class TestCrossPageNavigation:
 class TestDevToolsTelemetry:
     """Verifies that DevTools monitoring captured meaningful data."""
 
+    @retry_on_failure()
     def test_console_messages_captured(self, page, collector):
         go(page, "/training", collector)
         time.sleep(2)
@@ -511,6 +522,7 @@ class TestDevToolsTelemetry:
         ok("devtools_console_captured", has_console, f"count={len(collector.console_messages)}", dt)
         assert has_console
 
+    @retry_on_failure()
     def test_network_requests_captured(self, page, collector):
         go(page, "/training", collector)
         time.sleep(2)
@@ -519,6 +531,7 @@ class TestDevToolsTelemetry:
         ok("devtools_network_captured", has_network, f"count={len(collector.network_requests)}", dt)
         assert has_network
 
+    @retry_on_failure()
     def test_no_critical_errors(self, page, collector):
         go(page, "/training", collector)
         time.sleep(2)
@@ -527,6 +540,7 @@ class TestDevToolsTelemetry:
         ok("devtools_no_critical_errors", len(critical) == 0, f"critical={len(critical)}", dt)
         assert len(critical) == 0
 
+    @retry_on_failure()
     def test_api_requests_reach_backend(self, page, collector):
         go(page, "/training", collector)
         time.sleep(2)

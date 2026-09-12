@@ -7,13 +7,8 @@ Runs locally without servers.
 Usage:
     .venv/bin/python -m pytest tests/test_training_benchmarks.py -x -v -s
 """
-import json
 import tempfile
 import time
-from pathlib import Path
-from typing import Any
-
-import pytest
 
 
 def _make_data(char_count: int = 5000) -> str:
@@ -127,7 +122,7 @@ class TestPhaseTimings:
     """Benchmarks individual phase timings."""
 
     def test_validation_phase_speed(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer, TrainingPhase
+        from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(5000))
@@ -193,7 +188,7 @@ class TestMemoryUsage:
                 "max_steps": 3, "n_embed": 32, "n_layer": 2, "n_head": 2,
             }
             results = []
-            for i in range(3):
+            for _ in range(3):
                 trainer = ComprehensiveTrainer()
                 result = trainer.run_full_cycle(data_path=f.name, config=config)
                 results.append(result)
@@ -239,7 +234,7 @@ class TestAdaptiveConfigPerformance:
         print(f"\n  Adaptive config: {duration:.3f}s, confidence={rec.confidence:.2f}")
 
     def test_outcome_tracker_speed(self):
-        from domains.training.outcome_tracker import TrainingOutcomeTracker, TrainingOutcome
+        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         t0 = time.time()

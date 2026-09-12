@@ -7,15 +7,7 @@ Validates that training progress is properly streamed to connected clients.
 Usage:
     .venv/bin/python -m pytest tests/test_training_progress_stream.py -x -v
 """
-import asyncio
-import json
 import tempfile
-import time
-from pathlib import Path
-from typing import Any
-
-import pytest
-
 
 FAST_CONFIG = {
     "method": "sft",
@@ -108,18 +100,18 @@ class TestTrainingProgressCallbacks:
             f.write("The quick brown fox jumps over the lazy dog. " * 200)
             f.flush()
             trainer = ComprehensiveTrainer()
-            bad_callbackCalled = [False]
+            bad_called = [False]
             def bad_callback(d):
-                bad_callbackCalled[0] = True
+                bad_called[0] = True
                 raise RuntimeError("callback error")
-            good_callbackCalled = [False]
+            good_called = [False]
             def good_callback(d):
-                good_callbackCalled[0] = True
+                good_called[0] = True
             trainer.on_progress(bad_callback)
             trainer.on_progress(good_callback)
             result = trainer.run_full_cycle(data_path=f.name, config=FAST_CONFIG)
             assert result.success is True
-            assert good_callbackCalled[0]
+            assert good_called[0]
 
 
 class TestSSEEnvelopeIntegration:
@@ -197,7 +189,7 @@ class TestProgressStreamingEndToEnd:
     """End-to-end tests for progress streaming through the full pipeline."""
 
     def test_trainer_emits_all_phase_events(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer, TrainingPhase
+        from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("The quick brown fox jumps over the lazy dog. " * 200)

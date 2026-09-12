@@ -18,6 +18,7 @@ import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+import { logger } from '@/lib/dev-log'
 import ModelStatusCard from '@/components/models/ModelStatusCard'
 import ComposableLayersCard from '@/components/models/ComposableLayersCard'
 import PersonalitiesCard from '@/components/models/PersonalitiesCard'
@@ -177,11 +178,15 @@ export default function ModelsPage() {
   }, [refreshHealth, refetchModels])
 
   const handleCacheRefresh = useCallback(() => {
-    modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache refresh failed */ {})
+    modelController.getCacheUsage().then(setCacheUsage).catch((e) => {
+      logger.debug('Cache refresh failed', { error: e instanceof Error ? e.message : String(e) })
+    })
   }, [])
 
   useEffect(() => { fetchTraitWeights() }, [fetchTraitWeights])
-  useEffect(() => { modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache info unavailable */ {}) }, [])
+  useEffect(() => { modelController.getCacheUsage().then(setCacheUsage).catch((e) => {
+    logger.debug('Cache info unavailable', { error: e instanceof Error ? e.message : String(e) })
+  }) }, [])
 
   const isOnline = health !== null && health !== 'offline'
   const subtitle = health === null ? 'Connecting...'

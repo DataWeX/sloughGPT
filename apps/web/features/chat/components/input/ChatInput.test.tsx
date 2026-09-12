@@ -25,6 +25,20 @@ vi.mock('./ChatInputRow', () => ({
   ),
 }))
 
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (key: string) => key, locale: 'en' }),
+}))
+
+vi.mock('@/hooks/useConsciousnessStatus', () => ({
+  useConsciousnessStatus: () => ({ status: null }),
+  getConsciousnessLevelLabel: () => 'Off',
+  getQualiaMood: () => '',
+}))
+
+vi.mock('@/lib/consciousness-controller', () => ({
+  consciousnessController: { listPersonas: async () => ({ personas: [] }), activatePersona: async () => {} },
+}))
+
 import { ChatInput } from './ChatInput'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 
