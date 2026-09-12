@@ -211,6 +211,11 @@ class SettingsRouter:
             "/training/auto-train/config", self.auto_train_config, methods=["PATCH"],
         )
 
+        # Training analytics
+        self.router.add_api_route(
+            "/training/analytics", self.get_training_analytics, methods=["GET"],
+        )
+
     # ── Handlers ────────────────────────────────────────────────────
 
     @endpoint("settings.get_all")
@@ -764,6 +769,82 @@ class SettingsRouter:
         safe_audit_log("settings.auto_train_config", resource="training",
                        detail=f"threshold={threshold} interval={interval_s}")
         return success_response(data=trainer.status())
+
+    # ── Training Analytics ──────────────────────────────────────────
+
+    @endpoint("settings.training_analytics")
+    async def get_training_analytics(self) -> dict:
+        """Get aggregated training analytics for charts and summaries."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        outcomes = tracker.load_outcomes()
+
+        if not outcomes:
+            return success_response(data={
+                "total_runs": 0,
+                "quality_trend": [],
+                "method_distribution": {},
+                "model_distribution": {},
+                "convergence_rate": 0.0,
+                "avg_quality": 0.0,
+                "best_run": None,
+                "recent_runs": [],
+                "tag_cloud": {},
+            })
+
+        total = len(outcomes)
+        qualities = [o.get("quality_score", 0) for o in outcomes if o.get("quality_score") is not None]
+        avg_quality = sum(qualities) / len(qualities) if qualities else 0.0
+        converged = sum(1 for o in outcomes if o.get("converged"))
+        convergence_rate = converged / total if total else 0.0
+
+        best = max(outcomes, key=lambda o: o.get("quality_score", 0)) if outcomes else None
+
+        method_dist: dict[str, int] = {}
+        model_dist: dict[str, int] = {}
+        tag_cloud: dict[str, int] = {}
+        for o in outcomes:
+            m = o.get("method", "unknown")
+            method_dist[m] = method_dist.get(m, 0) + 1
+            mdl = o.get("model", "unknown")
+            model_dist[mdl] = model_dist.get(mdl, 0) + 1
+            for t in o.get("tags", []):
+                tag_cloud[t] = tag_cloud.get(t, 0) + 1
+
+        quality_trend = [
+            {"run_id": o.get("run_id", ""), "quality": o.get("quality_score", 0), "timestamp": o.get("timestamp", "")}
+            for o in outcomes[-50:]
+        ]
+
+        recent = [
+            {
+                "run_id": o.get("run_id", ""),
+                "model": o.get("model", ""),
+                "method": o.get("method", ""),
+                "quality_score": o.get("quality_score", 0),
+                "converged": o.get("converged", False),
+                "timestamp": o.get("timestamp", ""),
+                "tags": o.get("tags", []),
+            }
+            for o in outcomes[-10:]
+        ]
+
+        return success_response(data={
+            "total_runs": total,
+            "quality_trend": quality_trend,
+            "method_distribution": method_dist,
+            "model_distribution": model_dist,
+            "convergence_rate": round(convergence_rate, 3),
+            "avg_quality": round(avg_quality, 3),
+            "best_run": {
+                "run_id": best.get("run_id", ""),
+                "model": best.get("model", ""),
+                "quality_score": best.get("quality_score", 0),
+                "method": best.get("method", ""),
+            } if best else None,
+            "recent_runs": recent,
+            "tag_cloud": tag_cloud,
+        })
 
 
 router = SettingsRouter().router

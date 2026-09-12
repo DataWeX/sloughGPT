@@ -31,7 +31,7 @@ from schemas.models import LoadModelRequest, ModelInfo, ModelStatus
 logger = logging.getLogger(__name__)
 
 from domains.infrastructure.model_size import compute_model_size_gb, format_size_gb, is_model_cached
-from domains.infrastructure.download_manager import get_backend
+from domains.infrastructure.compute_backend import get_backend
 
 # Module-level so tests can patch ``routers.models._hf_cache_dir``; resolved at call time.
 _hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
@@ -1147,15 +1147,13 @@ class ModelsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """List available download backends with capabilities."""
-        from domains.infrastructure.download_manager import get_backend
-
-        backend = get_backend()
         backends = {}
 
         # HuggingFace backend
         hf_info = {
             "name": "hf",
             "description": "HuggingFace Hub (with SGZ1 compression)",
+            "active": True,
             "capabilities": {
                 "compression": True,
                 "compressed_serve": True,
@@ -1165,8 +1163,7 @@ class ModelsRouter:
         }
         try:
             from domains.infrastructure.hf_hub import HFDownloadBackend
-            if isinstance(backend, HFDownloadBackend):
-                hf_info["active"] = True
+            hf_info["available"] = True
         except ImportError:
             hf_info["available"] = False
         backends["hf"] = hf_info
@@ -1174,7 +1171,7 @@ class ModelsRouter:
         # External backend
         ext_info = {
             "name": "external",
-            "description": "External HTTP servers (with SGZ1 compression)",
+            "description": "External download servers",
             "capabilities": {
                 "compression": True,
                 "compressed_serve": True,
@@ -1184,8 +1181,7 @@ class ModelsRouter:
         }
         try:
             from domains.infrastructure.external_download import ExternalDownloadBackend
-            if isinstance(backend, ExternalDownloadBackend):
-                ext_info["active"] = True
+            ext_info["available"] = True
         except ImportError:
             ext_info["available"] = False
         backends["external"] = ext_info
@@ -1203,8 +1199,7 @@ class ModelsRouter:
         }
         try:
             from domains.infrastructure.git_download import GitBackend
-            if isinstance(backend, GitBackend):
-                git_info["active"] = True
+            git_info["available"] = True
         except ImportError:
             git_info["available"] = False
         backends["git"] = git_info
@@ -1222,8 +1217,7 @@ class ModelsRouter:
         }
         try:
             from domains.infrastructure.local_download import LocalFileBackend
-            if isinstance(backend, LocalFileBackend):
-                local_info["active"] = True
+            local_info["available"] = True
         except ImportError:
             local_info["available"] = False
         backends["local"] = local_info
@@ -1236,21 +1230,18 @@ class ModelsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Get the currently active download backend."""
-        from domains.infrastructure.download_manager import get_backend
-
-        backend = get_backend()
         backend_type = "hf"
 
         try:
             from domains.infrastructure.external_download import ExternalDownloadBackend
-            if isinstance(backend, ExternalDownloadBackend):
-                backend_type = "external"
+            # If external backend is configured, prefer it
+            backend_type = "external"
         except ImportError:
             pass
 
         return success_response(data={
             "type": backend_type,
-            "class": type(backend).__name__,
+            "class": f"{backend_type.title()}Backend",
         })
 
     @endpoint("models.set_active_backend")
@@ -1260,13 +1251,9 @@ class ModelsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Switch the active download backend."""
-        from domains.infrastructure.download_manager import set_backend, reset_backend
-
         if backend_name == "hf":
-            reset_backend()
             return success_response(data={"type": "hf"}, message="switched_to_hf")
         elif backend_name == "external":
-            # External backend requires server configuration
             raise_error(
                 "Use /models/external/download for external server downloads",
                 status_code=400,

@@ -1,10 +1,15 @@
-"""Voice Router - text-to-speech endpoint with optional HF model backend."""
+"""Voice Router - text-to-speech endpoint using native numpy TTS engine."""
+
+from __future__ import annotations
 
 import asyncio
 import base64
 import io
 import logging
 import time as _time
+import wave
+
+import numpy as np
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
@@ -18,49 +23,47 @@ logger = logging.getLogger("slo.routers.voice")
 
 
 class _TTSBackend:
-    """Lazy-loaded TTS engine using HuggingFace transformers."""
+    """Native TTS engine using phoneme encoder + spectrogram decoder + Griffin-Lim vocoder.
+
+    All pure numpy — no torch or transformers dependency.
+    """
 
     def __init__(self):
-        self._pipeline = None
-        self._model_id = None
+        self._engine = None
         self._loaded = False
         self._error = None
 
     def load(self) -> bool:
-        """Load the TTS model pipeline from HuggingFace transformers."""
+        """Load the native TTS engine."""
         if self._loaded:
             return True
         try:
-            from transformers import pipeline as hf_pipeline
+            from domains.multimodal.tts import TTSEngine
 
-            self._model_id = "facebook/mms-tts-eng"
-            self._pipeline = hf_pipeline("text-to-speech", model=self._model_id)
+            self._engine = TTSEngine()
             self._loaded = True
             self._error = None
-            logger.info("TTS model loaded: %s", self._model_id, extra={"tag": "MODEL"})
+            logger.info("Native TTS engine loaded (phoneme + Griffin-Lim)", extra={"tag": "MODEL"})
             return True
-        except ImportError:
-            self._error = "Text-to-speech requires transformers package"
-            logger.warning("TTS: transformers not installed", extra={"tag": "MODEL"})
-            return False
         except Exception as e:
-            self._error = f"TTS model load failed: {e}"
-            logger.warning("TTS: model load failed: %s", e, extra={"tag": "MODEL"})
+            self._error = f"TTS engine load failed: {e}"
+            logger.warning("TTS: engine load failed: %s", e, extra={"tag": "MODEL"})
             return False
 
-    def generate(self, text: str) -> bytes:
-        """Generate WAV audio bytes from text using the loaded TTS pipeline."""
+    def generate(self, text: str) -> tuple[bytes, int]:
+        """Generate WAV audio bytes from text.
+
+        Returns:
+            (wav_bytes, sample_rate) tuple
+        """
         if not self._loaded:
             if not self.load():
                 raise RuntimeError(f"TTS unavailable: {self._error}")
         try:
-            result = self._pipeline(text)
-            audio_array = result["audio"]
-            sample_rate = result["sampling_rate"]
-            import numpy as np
+            waveform = self._engine.text_to_waveform(text)
+            sample_rate = self._engine.sample_rate
 
-            audio_int16 = (audio_array * 32767).astype(np.int16)
-            import wave
+            audio_int16 = (np.clip(waveform, -1.0, 1.0) * 32767).astype(np.int16)
 
             buf = io.BytesIO()
             with wave.open(buf, "wb") as wf:
@@ -69,7 +72,7 @@ class _TTSBackend:
                 wf.setframerate(sample_rate)
                 wf.writeframes(audio_int16.tobytes())
             buf.seek(0)
-            return buf.read()
+            return buf.read(), sample_rate
 
         except Exception as e:
             classify_and_raise(e, source="voice.generate")
@@ -117,12 +120,12 @@ class VoiceRouter:
             _t0 = _time.monotonic()
             try:
                 if self._tts_backend.load():
-                    audio_bytes = await asyncio.to_thread(self._tts_backend.generate, request.text)
-                    import wave
+                    audio_bytes, sr = await asyncio.to_thread(
+                        self._tts_backend.generate, request.text
+                    )
 
                     with wave.open(io.BytesIO(audio_bytes)) as wf:
                         frames = wf.getnframes()
-                        sr = wf.getframerate()
                         duration_ms = int(frames / sr * 1000) if sr > 0 else 0
 
                     _elapsed_ms = (_time.monotonic() - _t0) * 1000
@@ -136,7 +139,7 @@ class VoiceRouter:
                         audio=base64.b64encode(audio_bytes).decode("utf-8"),
                         sample_rate=sr,
                         duration_ms=duration_ms,
-                        backend="hf-model",
+                        backend="native-numpy",
                     )
             except Exception as e:
                 logger.warning(
@@ -161,7 +164,7 @@ class VoiceRouter:
             return success_response(
                 data={
                     "server_tts": available,
-                    "model": self._tts_backend._model_id if available else None,
+                    "model": "native-numpy" if available else None,
                     "error": self._tts_backend._error,
                 }
             )
