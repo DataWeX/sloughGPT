@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { consciousnessController } from '@/lib/consciousness-controller'
 
 export interface ConsciousnessStatus {
   enabled: boolean
@@ -41,10 +41,8 @@ export function useConsciousnessStatus() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/status`)
-      if (!res.ok) return
-      const json = await res.json()
-      setStatus(json.data ?? json)
+      const data = await consciousnessController.getStatus()
+      setStatus(data as unknown as ConsciousnessStatus)
     } catch {
       // Consciousness endpoint may not exist yet — degrade silently
     } finally {

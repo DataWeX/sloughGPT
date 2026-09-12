@@ -180,11 +180,11 @@ export default function TrainingJobDetailPage() {
             <Button size="sm" variant="outline" onClick={fetchJob}>Retry</Button>
           </CardContent>
         </Card>
-      ) : !job && !loading ? (
+      ) : !loading && !job ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">Job not found</CardContent>
         </Card>
-      ) : (
+      ) : job ? (
         <>
           {/* Plain-language explanation when completed */}
           {job!.status === 'completed' && job!.explanation && (
@@ -390,7 +390,7 @@ export default function TrainingJobDetailPage() {
             </CardContent>
           </Card>
         </>
-      )}
+      ) : null}
 
       <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
         <AlertDialogContent>

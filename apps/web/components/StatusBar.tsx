@@ -13,7 +13,7 @@ import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 import { logger } from '@/lib/dev-log'
 import { formatDuration } from '@/lib/formatDuration'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { apiGet } from '@/lib/http-client'
 import { useModelReadiness } from '@/lib/store'
 
 function getFailureSummary(failures: { kind: string; timeoutMs: number; error: string; timestamp: number }[]): string {
@@ -79,8 +79,8 @@ export function StatusBar() {
   const handleRetry = useCallback(async () => {
     setRetrying(true)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/health`, { signal: AbortSignal.timeout(5000) })
-      if (res.ok) window.location.reload()
+      await apiGet('/health', undefined, { signal: AbortSignal.timeout(5000), silent: true })
+      window.location.reload()
     } catch { /* will be picked up by existing monitor */ }
     finally { setTimeout(() => setRetrying(false), 1000) }
   }, [])

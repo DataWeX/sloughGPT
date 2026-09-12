@@ -72,6 +72,22 @@ export function ConsciousnessSidebarWidget() {
               onClick={() => { router.push('/consciousness/dashboard'); setExpanded(false) }}
             />
             <QuickLink
+              label={t('consciousness_sidebar.link_monitor')}
+              onClick={() => { router.push('/consciousness/monitor'); setExpanded(false) }}
+            />
+            <QuickLink
+              label={t('consciousness_sidebar.link_insights')}
+              onClick={() => { router.push('/consciousness/insights'); setExpanded(false) }}
+            />
+            <QuickLink
+              label={t('consciousness_sidebar.link_personality')}
+              onClick={() => { router.push('/consciousness/personality'); setExpanded(false) }}
+            />
+            <QuickLink
+              label={t('consciousness_sidebar.link_training')}
+              onClick={() => { router.push('/consciousness/training'); setExpanded(false) }}
+            />
+            <QuickLink
               label={t('consciousness_sidebar.link_settings')}
               onClick={() => { router.push('/consciousness/settings'); setExpanded(false) }}
             />

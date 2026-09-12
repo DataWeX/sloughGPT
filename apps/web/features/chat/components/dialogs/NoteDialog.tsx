@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -13,7 +13,7 @@ interface NoteDialogProps {
   onDelete?: () => void
 }
 
-export function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteDialogProps) {
+export const NoteDialog = memo(function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteDialogProps) {
   const [draft, setDraft] = useState(note)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const addToast = useToastStore(s => s.addToast)
@@ -92,4 +92,4 @@ export function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteD
       </DialogPortal>
     </Dialog>
   )
-}
+})

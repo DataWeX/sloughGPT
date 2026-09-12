@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, memo } from 'react'
+import { useState, useCallback, useMemo, memo } from 'react'
 import { Button, IconChevronDown, IconChevronRight, IconCopy, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
@@ -137,7 +137,7 @@ export const ContextWindowViewer = memo(function ContextWindowViewer({
     )
   }
 
-  const estimatedTokens = totalTokens ?? items.reduce((sum, item) => sum + (item.tokenCount ?? Math.ceil(item.content.length / 4)), 0)
+  const estimatedTokens = useMemo(() => totalTokens ?? items.reduce((sum, item) => sum + (item.tokenCount ?? Math.ceil(item.content.length / 4)), 0), [totalTokens, items])
 
   return (
     <div className={cn('space-y-2', className)}>

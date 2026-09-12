@@ -9,19 +9,12 @@
  *   await oon.sync()
  */
 
+import { apiGet, apiPost, apiDelete } from './http-client'
+
 const ENDPOINT = '/api/oon/card'
 
 async function call<T = any>(action: string, data: Record<string, any> = {}): Promise<T> {
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...data }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error || `oon.${action} failed`)
-  }
-  return res.json()
+  return apiPost<T>(ENDPOINT, { action, ...data })
 }
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -157,21 +150,17 @@ export const oon = {
 
   /** Get hash tree for a card */
   hashTree: (cardId: string) =>
-    fetch(`/api/oon/hashtree?cardId=${cardId}`).then(r => r.json()) as Promise<OonHashTree | null>,
+    apiGet<OonHashTree | null>(`/api/oon/hashtree?cardId=${cardId}`),
 
   /** Get all hash trees */
   hashTrees: () =>
-    fetch('/api/oon/hashtree').then(r => r.json()) as Promise<{ trees: OonHashTree[]; count: number }>,
+    apiGet<{ trees: OonHashTree[]; count: number }>('/api/oon/hashtree'),
 
   /** Create hash tree for a card */
   createHashTree: (cardId: string, cardContent: string, tray: string, position: number = 0) =>
-    fetch('/api/oon/hashtree', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cardId, cardContent, tray, position }),
-    }).then(r => r.json()) as Promise<OonHashTree>,
+    apiPost<OonHashTree>('/api/oon/hashtree', { cardId, cardContent, tray, position }),
 
   /** Delete hash tree */
   deleteHashTree: (cardId: string) =>
-    fetch(`/api/oon/hashtree?cardId=${cardId}`, { method: 'DELETE' }).then(r => r.json()),
+    apiDelete(`/api/oon/hashtree?cardId=${cardId}`),
 }

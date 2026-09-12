@@ -50,7 +50,7 @@ export function VoiceSection() {
       }
       setLastResult({ duration_ms: data.duration_ms, backend: data.backend, sample_rate: data.sample_rate })
       setTtsCount(c => c + 1)
-      if (data.audio && data.backend === 'hf-model') {
+      if (data.audio && data.backend !== 'browser-fallback') {
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
         audioRef.current = audio
         audio.play().catch(() => {}) // autoplay policy — expected

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, memo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconPin, IconMessage, IconChat } from '@sloughgpt/strui'
 
@@ -117,7 +117,7 @@ export const MessageContextMenu = memo(function MessageContextMenu({
     } catch { /* clipboard unavailable */ }
   }, [content, onCopy])
 
-  const items: MenuItem[] = [
+  const items: MenuItem[] = useMemo(() => [
     {
       label: copied ? 'Copied!' : 'Copy',
       icon: copied ? <IconCheck className="h-3.5 w-3.5" /> : <IconCopy className="h-3.5 w-3.5" />,
@@ -175,7 +175,7 @@ export const MessageContextMenu = memo(function MessageContextMenu({
       onClick: () => { onDelete(messageId); setOpen(false) },
       variant: 'destructive' as const,
     }] : []),
-  ]
+  ], [copied, handleCopy, content, messageId, role, onEdit, onBookmark, isBookmarked, onPin, isPinned, onRegenerate, onSaveToKnowledge, onAddNote, hasNote, onThread, hasThread, onDelete])
 
   return (
     <>

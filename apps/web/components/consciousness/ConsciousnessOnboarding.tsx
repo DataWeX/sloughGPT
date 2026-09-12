@@ -5,7 +5,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '@slough
 import { useLocale } from '@/hooks/useLocale'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { consciousnessController } from '@/lib/consciousness-controller'
 
 const TOTAL_STEPS = 5
 
@@ -44,12 +44,7 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
     if (step === 2) {
       setSubmitting(true)
       try {
-        const res = await fetch(`${PUBLIC_API_URL}/consciousness/config`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ level: selectedLevel }),
-        })
-        if (!res.ok) throw new Error('Failed to update consciousness level')
+        await consciousnessController.updateConfig({ level: selectedLevel })
         addToast(t('consciousness_onboarding.toast_level_set'), 'success')
       } catch (e) {
         addToast(extractErrorMessage(e), 'error')
@@ -62,12 +57,7 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
     if (step === 3 && selectedPreset) {
       setSubmitting(true)
       try {
-        const res = await fetch(`${PUBLIC_API_URL}/consciousness/personality/presets/apply`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ preset: selectedPreset }),
-        })
-        if (!res.ok) throw new Error('Failed to apply personality preset')
+        await consciousnessController.applyPersonalityPreset(selectedPreset)
         addToast(t('consciousness_onboarding.toast_preset_applied'), 'success')
       } catch (e) {
         addToast(extractErrorMessage(e), 'error')
@@ -85,8 +75,7 @@ export function ConsciousnessOnboarding({ onComplete, onDismiss }: Consciousness
   const handleSeed = async () => {
     setSeeding(true)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/seed?count=10`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to seed data')
+      await consciousnessController.seedData({ count: 10 })
       setSeedDone(true)
       addToast(t('consciousness_onboarding.toast_seeded'), 'success')
     } catch (e) {

@@ -1,7 +1,7 @@
 'use client'
 
 import dynamicNext from 'next/dynamic'
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
 import { generationConfigController } from '@/lib/generation-config-controller'
@@ -32,10 +32,17 @@ const ChatStatsPanel = dynamicNext(() => import('@/features/chat/components/dial
 
 interface ChatPageSectionProps {
   controller: ChatPageController
+  consciousnessOpen?: boolean
+  onConsciousnessToggle?: () => void
 }
 
 export const ChatSidebarSection = memo(function ChatSidebarSection({ controller }: ChatPageSectionProps) {
   const { chat, ui, convCollapsed, toggleConv } = controller
+  const handleStar = useCallback((e: React.MouseEvent, id: string, starred: boolean) => chat.starSession(id, starred), [chat])
+  const handlePin = useCallback((e: React.MouseEvent, id: string, pinned: boolean) => chat.pinSession(id, pinned), [chat])
+  const handleArchive = useCallback((e: React.MouseEvent, id: string, archived: boolean) => chat.archiveSession(id, archived), [chat])
+  const handleDuplicate = useCallback((e: React.MouseEvent, id: string, _name: string) => chat.duplicateSession(id), [chat])
+  const handleCloseSidebar = useCallback(() => ui.setSidebarOpen(false), [ui])
   return (
     <ConversationSidebar
       conversations={chat.sidebarConversations}
@@ -43,24 +50,24 @@ export const ChatSidebarSection = memo(function ChatSidebarSection({ controller 
       onLoadConversation={chat.loadSession}
       onNewChat={chat.newChat}
       onDeleteConversation={chat.deleteSession}
-      onStarConversation={chat.starSession}
-      onPinConversation={chat.pinSession}
-      onArchiveConversation={chat.archiveSession}
+      onStarConversation={handleStar}
+      onPinConversation={handlePin}
+      onArchiveConversation={handleArchive}
       archivedCount={chat.archivedCount}
       onRenameConversation={chat.renameSession}
-      onDuplicateConversation={(id) => chat.duplicateSession(id)}
+      onDuplicateConversation={handleDuplicate}
       open={ui.sidebarOpen}
-      onClose={() => ui.setSidebarOpen(false)}
+      onClose={handleCloseSidebar}
       collapsed={convCollapsed}
       onToggleCollapse={toggleConv}
     />
   )
 })
 
-export const ChatToolbarSection = memo(function ChatToolbarSection({ controller }: ChatPageSectionProps) {
+export const ChatToolbarSection = memo(function ChatToolbarSection({ controller, consciousnessOpen, onConsciousnessToggle }: ChatPageSectionProps) {
   return (
     <ChatToolbarProvider value={controller.toolbarValue}>
-      <ChatToolbar />
+      <ChatToolbar consciousnessOpen={consciousnessOpen} onConsciousnessToggle={onConsciousnessToggle} />
     </ChatToolbarProvider>
   )
 })
@@ -200,13 +207,26 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
     showToast('PDF analyzed — see response below', 'info')
   }, [chat, showToast])
 
+  const handleDismissError = useCallback(() => {
+    chat.setCurrentError(null)
+  }, [chat])
+
+  const handleRemoveReadFile = useCallback(() => {
+    setReadFileData(null)
+    chat.setMessages(prev => prev.filter(m => !m.id.startsWith('file-')))
+  }, [chat, setReadFileData])
+
+  const handleApproveTool = useCallback((approved: boolean) => {
+    chat.handleToolApproval(approved)
+  }, [chat])
+
   return (
     <>
       {chat.currentError && (
         <ErrorBanner
           error={chat.currentError}
           onRetry={chat.handleRetry}
-          onDismiss={() => chat.setCurrentError(null)}
+          onDismiss={handleDismissError}
         />
       )}
 
@@ -238,7 +258,7 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           readLoading={readLoading}
           readFileData={readFileData}
           onFileSelected={handleReadFile}
-          onRemove={() => { setReadFileData(null); chat.setMessages(prev => prev.filter(m => !m.id.startsWith('file-'))) }}
+          onRemove={handleRemoveReadFile}
         />
       )}
 
@@ -260,7 +280,7 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
             <ToolApprovalDialog
               toolName={chat.pendingToolApproval.toolName}
               args={chat.pendingToolApproval.args}
-              onApprove={(approved) => chat.handleToolApproval(approved)}
+              onApprove={handleApproveTool}
             />
           </div>
         )}
@@ -323,15 +343,16 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
 
 export const ChatSearchSection = memo(function ChatSearchSection({ controller }: ChatPageSectionProps) {
   const { chat, ui } = controller
+  const viewerMessages = useMemo(() => chat.messages.map(m => ({
+    id: m.id, role: m.role, content: m.content,
+    timestamp: typeof m.timestamp === 'number' ? m.timestamp : m.timestamp?.getTime() || Date.now(),
+  })), [chat.messages])
   return (
     <>
       <ConversationViewer
         isOpen={ui.showConversationViewer}
         onClose={() => ui.setShowConversationViewer(false)}
-        messages={chat.messages.map(m => ({
-          id: m.id, role: m.role, content: m.content,
-          timestamp: typeof m.timestamp === 'number' ? m.timestamp : m.timestamp?.getTime() || Date.now(),
-        }))}
+        messages={viewerMessages}
         title="Current Conversation"
       />
 

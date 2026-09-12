@@ -7,9 +7,6 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { companionController, type CompanionTraits, type CompanionPreset } from '@/lib/companion-controller'
 import { CompanionInsightsCard } from '@/components/companion/CompanionInsightsCard'
-import { CompanionTraitsCard } from '@/components/companion/CompanionTraitsCard'
-import { CompanionPresetCard } from '@/components/companion/CompanionPresetCard'
-import { CompanionChatCard } from '@/components/companion/CompanionChatCard'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
@@ -171,34 +168,6 @@ export default function CompanionPage() {
       </Card>
 
       <CompanionInsightsCard traits={traits} presets={presets} />
-
-      <CompanionTraitsCard
-        traits={traits}
-        onSave={async (t) => {
-          try {
-            await companionController.setPersonality(t)
-            setTraits(t)
-            addToast('Traits saved', 'success')
-          } catch { addToast('Failed to save traits', 'error') }
-        }}
-        onReset={handleReset}
-      />
-
-      <CompanionPresetCard
-        presets={presets}
-        onSelect={async (id) => {
-          try {
-            const res = await companionController.setPreset(id)
-            setTraits(res.traits)
-            addToast(`Preset "${id}" applied`, 'success')
-          } catch { addToast('Failed to apply preset', 'error') }
-        }}
-      />
-
-      <CompanionChatCard onSend={async (msg) => {
-        const res = await companionController.chat(msg)
-        return res.response
-      }} />
 
       {traits && (
         <Card>

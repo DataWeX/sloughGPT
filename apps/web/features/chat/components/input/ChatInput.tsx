@@ -6,7 +6,7 @@ import { ChatInputRow } from './ChatInputRow'
 import { StreamingIndicator } from '@/features/chat/components/StreamingIndicator'
 import { useConsciousnessStatus, getConsciousnessLevelLabel, getQualiaMood } from '@/hooks/useConsciousnessStatus'
 import { useLocale } from '@/hooks/useLocale'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { consciousnessController } from '@/lib/consciousness-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
 
@@ -78,10 +78,8 @@ export const ChatInput = memo(function ChatInput({
 
   const fetchPersonas = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personas`)
-      if (!res.ok) return
-      const json = await res.json()
-      setPersonas(json.personas ?? [])
+      const result = await consciousnessController.listPersonas()
+      setPersonas((result.personas ?? []).map(p => ({ id: p.id, name: p.name, values: p.personality })))
     } catch {
       // Personas endpoint may not exist
     }
@@ -166,10 +164,8 @@ export const ChatInput = memo(function ChatInput({
       return
     }
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personas/${personaId}/activate`, { method: 'POST' })
-      if (res.ok) {
-        setActivePersona(personaId)
-      }
+      await consciousnessController.activatePersona(personaId)
+      setActivePersona(personaId)
     } catch {
       // activate failed
     }

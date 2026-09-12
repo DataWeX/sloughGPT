@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button, IconX } from '@sloughgpt/strui'
 import type { Card, HashTree } from './types'
 import { COLUMN_LABELS } from './types'
+import { oon } from '@/lib/oon'
 
 interface CardEditorProps {
   card: Card | null
@@ -37,9 +38,8 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
       setSprint(card.sprint)
       setGh(card.gh)
       // Load hash tree
-      fetch(`/api/oon/hashtree?cardId=${card.id}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(data => setHashTree(data))
+      oon.hashTree(card.id)
+        .then(data => setHashTree(data as HashTree | null))
         .catch(() => {})
     }
   }, [card])

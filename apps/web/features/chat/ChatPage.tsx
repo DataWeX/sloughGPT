@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 
 import { modelController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
@@ -16,8 +16,11 @@ import {
   ChatDialogSection,
   ChatToolPanelInline,
 } from '@/features/chat/ChatPageSections'
+import { ConsciousnessChatPanel } from '@/features/chat/components/ConsciousnessChatPanel'
 
 export default function ChatPage() {
+  const [consciousnessOpen, setConsciousnessOpen] = useState(false)
+
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     const store = useToastStore.getState()
     const exists = store.toasts.some(t => t.message === message && t.type === type)
@@ -25,8 +28,6 @@ export default function ChatPage() {
   }, [])
 
   const refreshHealth = useCallback(async () => {
-    // Live status auto-updates via SSE, but manual refresh is still
-    // useful after model load/unload for immediate UI feedback.
     await modelController.getHealth()
   }, [])
 
@@ -40,14 +41,22 @@ export default function ChatPage() {
     </a>
     <div className="flex flex-1 min-h-0 overflow-hidden">
       <ChatSidebarSection controller={controller} />
-      <main className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-xl border border-border/40 bg-[rgb(var(--chat-bg))] shadow-sm" aria-label="Chat">
+      <main className="flex flex-1 min-h-0 overflow-hidden rounded-none lg:rounded-xl border border-border/40 bg-[rgb(var(--chat-bg))] shadow-sm relative" aria-label="Chat">
         <div className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full overflow-hidden">
-          <ChatToolbarSection controller={controller} />
+          <ChatToolbarSection
+            controller={controller}
+            consciousnessOpen={consciousnessOpen}
+            onConsciousnessToggle={() => setConsciousnessOpen(v => !v)}
+          />
           <ChatSettingsSection controller={controller} />
           <ChatChatSection controller={controller} />
           <ChatSearchSection controller={controller} />
         </div>
         <ChatToolPanelInline controller={controller} />
+        <ConsciousnessChatPanel
+          open={consciousnessOpen}
+          onClose={() => setConsciousnessOpen(false)}
+        />
       </main>
       <ChatDialogSection controller={controller} />
     </div>

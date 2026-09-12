@@ -9,15 +9,15 @@ import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 export interface ConvRowProps {
   conversation: Conversation
   isActive: boolean
-  onSelect: () => void
-  onDelete?: (e: React.MouseEvent) => void
-  onStar?: (e: React.MouseEvent) => void
-  onPin?: (e: React.MouseEvent) => void
-  onArchive?: (e: React.MouseEvent) => void
-  onRename?: (name: string) => void
-  onExport?: (e: React.MouseEvent, format?: 'json' | 'markdown') => void
-  onDuplicate?: (e: React.MouseEvent) => void
-  onToggleUnread?: (e: React.MouseEvent) => void
+  onSelect: (id: string) => void
+  onDelete?: (e: React.MouseEvent, id: string) => void
+  onStar?: (e: React.MouseEvent, id: string, starred: boolean) => void
+  onPin?: (e: React.MouseEvent, id: string, pinned: boolean) => void
+  onArchive?: (e: React.MouseEvent, id: string, archive: boolean) => void
+  onRename?: (id: string, name: string) => void
+  onExport?: (e: React.MouseEvent, conversation: Conversation, format?: 'json' | 'markdown') => void
+  onDuplicate?: (e: React.MouseEvent, id: string, name: string) => void
+  onToggleUnread?: (e: React.MouseEvent, id: string, unread: boolean) => void
   searchQuery?: string
 }
 
@@ -49,7 +49,7 @@ export const ConvRow = memo(function ConvRow({
   const handleFinishEdit = () => {
     const trimmed = editValue.trim()
     if (trimmed && trimmed !== c.name) {
-      onRename?.(trimmed)
+      onRename?.(c.id, trimmed)
     }
     setEditing(false)
   }
@@ -85,7 +85,7 @@ export const ConvRow = memo(function ConvRow({
         isActive ? "bg-primary/10" : "hover:bg-muted/40",
         c.unread && !isActive && "bg-primary/5"
       )}
-      onClick={!editing ? onSelect : undefined}
+      onClick={!editing ? () => onSelect(c.id) : undefined}
       role="button"
       tabIndex={0}
       onFocus={(e) => {
@@ -97,7 +97,7 @@ export const ConvRow = memo(function ConvRow({
         buttons.forEach(btn => btn.classList.add('sm:opacity-0'))
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && !editing) { e.preventDefault(); onSelect(); return }
+        if (e.key === 'Enter' && !editing) { e.preventDefault(); onSelect(c.id); return }
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault()
           const scrollable = e.currentTarget.closest('.overflow-y-auto') || e.currentTarget.parentElement?.parentElement?.parentElement
@@ -113,7 +113,7 @@ export const ConvRow = memo(function ConvRow({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={onPin}
+            onClick={(e) => onPin?.(e, c.id, !c.pinned)}
             className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             aria-label={c.pinned ? 'Unpin' : 'Pin'}
           >
@@ -121,7 +121,7 @@ export const ConvRow = memo(function ConvRow({
           </button>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e) }}
+            onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e, c.id, !c.unread) }}
             className={cn(
               "h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
               c.unread ? "opacity-100 text-primary" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 text-muted-foreground/40"
@@ -136,7 +136,7 @@ export const ConvRow = memo(function ConvRow({
           </button>
           <button
             type="button"
-            onClick={onStar}
+            onClick={(e) => onStar?.(e, c.id, !c.starred)}
             className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             aria-label={c.starred ? 'Unstar' : 'Star'}
           >
@@ -189,7 +189,7 @@ export const ConvRow = memo(function ConvRow({
           <>
             <button
               type="button"
-              onClick={(e) => onExport(e, 'json')}
+              onClick={(e) => onExport?.(e, c, 'json')}
               className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
               aria-label="Export as JSON"
               title="Export as JSON"
@@ -198,7 +198,7 @@ export const ConvRow = memo(function ConvRow({
             </button>
             <button
               type="button"
-              onClick={(e) => onExport(e, 'markdown')}
+              onClick={(e) => onExport?.(e, c, 'markdown')}
               className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
               aria-label="Export as Markdown"
               title="Export as Markdown"
@@ -210,7 +210,7 @@ export const ConvRow = memo(function ConvRow({
         {onDuplicate && !editing && (
           <button
             type="button"
-            onClick={onDuplicate}
+            onClick={(e) => onDuplicate?.(e, c.id, c.name)}
             className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
             aria-label={`Duplicate ${c.name}`}
             title="Duplicate conversation"
@@ -221,7 +221,7 @@ export const ConvRow = memo(function ConvRow({
         {onArchive && !editing && (
           <button
             type="button"
-            onClick={onArchive}
+            onClick={(e) => onArchive?.(e, c.id, false)}
             className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
             aria-label="Archive"
           >
@@ -231,7 +231,7 @@ export const ConvRow = memo(function ConvRow({
         {onDelete && !editing && (
           <button
             type="button"
-            onClick={onDelete}
+            onClick={(e) => onDelete?.(e, c.id)}
             className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
             aria-label={`Delete ${c.name}`}
           >

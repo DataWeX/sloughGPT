@@ -5,6 +5,7 @@ import { useState, memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconX, IconEye, IconSettings, IconDocument, IconSparkle, IconCode, IconBolt, IconChart, IconDownload } from '@sloughgpt/strui'
 import { useChatContext } from '@/features/chat/contexts/ChatContext'
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import { KnowledgeTab } from './KnowledgeTab'
 import { MemoryTab } from './MemoryTab'
 import { ContextTab } from './ContextTab'
@@ -87,46 +88,58 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Knowledge</span>
                   </div>
-                  <KnowledgeTab
-                    onOpenConversationViewer={ctx.onOpenConversationViewer}
-                    onOpenSettings={ctx.onOpenSettings}
-                    onOpenShortcuts={ctx.onOpenShortcuts}
-                  />
+                  <SectionErrorBoundary sectionName="Knowledge">
+                    <KnowledgeTab
+                      onOpenConversationViewer={ctx.onOpenConversationViewer}
+                      onOpenSettings={ctx.onOpenSettings}
+                      onOpenShortcuts={ctx.onOpenShortcuts}
+                    />
+                  </SectionErrorBoundary>
                 </section>
                 <section aria-label="Memory">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconSparkle className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Memory</span>
                   </div>
-                  <MemoryTab />
+                  <SectionErrorBoundary sectionName="Memory">
+                    <MemoryTab />
+                  </SectionErrorBoundary>
                 </section>
                 <section aria-label="Context">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconCode className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Context</span>
                   </div>
-                  <ContextTab />
+                  <SectionErrorBoundary sectionName="Context">
+                    <ContextTab />
+                  </SectionErrorBoundary>
                 </section>
                 <section aria-label="Quick Prompts">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconBolt className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Quick Prompts</span>
                   </div>
-                  <QuickPrompts onUsePrompt={(text) => ctx.setInput(text)} />
+                  <SectionErrorBoundary sectionName="Quick Prompts">
+                    <QuickPrompts onUsePrompt={(text) => ctx.setInput(text)} />
+                  </SectionErrorBoundary>
                 </section>
                 <section aria-label="Summary">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Summary</span>
                   </div>
-                  <ConversationSummary messages={messages} />
+                  <SectionErrorBoundary sectionName="Summary">
+                    <ConversationSummary messages={messages} />
+                  </SectionErrorBoundary>
                 </section>
                 <section aria-label="Statistics">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconChart className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Statistics</span>
                   </div>
-                  <ConversationStats messages={messages} />
+                  <SectionErrorBoundary sectionName="Statistics">
+                    <ConversationStats messages={messages} />
+                  </SectionErrorBoundary>
                 </section>
                 <section aria-label="Export">
                   <div className="flex items-center gap-1.5 mb-2">

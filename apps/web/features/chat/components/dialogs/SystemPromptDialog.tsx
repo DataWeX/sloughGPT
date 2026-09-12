@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconTrash, IconPlus } from '@sloughgpt/strui'
@@ -37,7 +37,7 @@ const DEFAULTS: Preset[] = [
   { name: 'Tutor', prompt: 'You are a patient tutor. Explain concepts step by step. Use analogies and examples. Ask questions to check understanding.' },
 ]
 
-export function SystemPromptDialog({ open, onOpenChange, value, onSave }: SystemPromptDialogProps) {
+export const SystemPromptDialog = memo(function SystemPromptDialog({ open, onOpenChange, value, onSave }: SystemPromptDialogProps) {
   const [draft, setDraft] = useState(value)
   const [presets, setPresets] = useState<Preset[]>([])
   const [presetName, setPresetName] = useState('')
@@ -181,4 +181,4 @@ export function SystemPromptDialog({ open, onOpenChange, value, onSave }: System
       </DialogPortal>
     </Dialog>
   )
-}
+})

@@ -1,5 +1,6 @@
 import "../globals.css";
 import AppLayout from "@/components/AppLayout";
+import { ConsciousnessQuickActionsWrapper } from "@/components/consciousness/ConsciousnessQuickActionsWrapper";
 
 export const dynamic = 'force-dynamic'
 
@@ -8,5 +9,10 @@ export default function AppLayoutWrapper({
 }: {
   children: React.ReactNode;
 }) {
-  return <AppLayout>{children}</AppLayout>;
+  return (
+    <>
+      <AppLayout>{children}</AppLayout>
+      <ConsciousnessQuickActionsWrapper />
+    </>
+  );
 }

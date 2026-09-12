@@ -863,6 +863,87 @@ export class SloughGPTClient {
     return this.unwrap(data) as Record<string, unknown>;
   }
 
+  async getTrainingAnalytics(): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', '/settings/training/analytics');
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  // ============ Docstore ============
+
+  async listDocstoreDocs(collection: string): Promise<unknown[]> {
+    const data = await this.request<Record<string, unknown>>('GET', `/docstore/${collection}`);
+    return (data.data ?? data) as unknown[];
+  }
+
+  async getDocstoreDoc(collection: string, docId: string): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', `/docstore/${collection}/${docId}`);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async putDocstoreDoc(collection: string, docId: string, docData: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('PUT', `/docstore/${collection}/${docId}`, docData);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async patchDocstoreDoc(collection: string, docId: string, docData: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('PATCH', `/docstore/${collection}/${docId}`, docData);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async deleteDocstoreDoc(collection: string, docId: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/docstore/${collection}/${docId}`);
+  }
+
+  async clearDocstoreCollection(collection: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/docstore/${collection}`);
+  }
+
+  async bulkPutDocstore(collection: string, docs: Record<string, unknown>[]): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('POST', `/docstore/${collection}/bulk`, docs);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  // ============ Collections ============
+
+  async listCollections(): Promise<unknown[]> {
+    const data = await this.request<Record<string, unknown>>('GET', '/collections');
+    return (data.data ?? data) as unknown[];
+  }
+
+  async getCollection(collectionId: string): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', `/collections/${collectionId}`);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async createCollection(name: string, options: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('POST', '/collections/create', { name, ...options });
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async deleteCollection(collectionId: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/collections/${collectionId}`);
+  }
+
+  async runCollection(collectionId: string, options: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('POST', '/collections/run', { pipeline_id: collectionId, ...options });
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async collectFromCollection(collectionId: string, options: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('POST', `/collections/${collectionId}/collect`, options);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async getCollectionRecords(collectionId: string): Promise<unknown[]> {
+    const data = await this.request<Record<string, unknown>>('GET', `/collections/${collectionId}/records`);
+    return (data.data ?? data) as unknown[];
+  }
+
+  async getCollectionStats(): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', '/collections/stats');
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
   // ============ Auth ============
 
   async getToken(apiKey: string): Promise<unknown> {

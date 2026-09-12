@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { consciousnessController } from '@/lib/consciousness-controller'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton, Switch,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay,
@@ -97,49 +97,42 @@ export default function ConsciousnessDashboardPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [epRes, qRes, bRes, eRes, sRes, qNowRes, statusRes] = await Promise.allSettled([
-        fetch(`${PUBLIC_API_URL}/consciousness/history/episodes?limit=50`),
-        fetch(`${PUBLIC_API_URL}/consciousness/history/qualia?limit=100`),
-        fetch(`${PUBLIC_API_URL}/consciousness/history/beliefs`),
-        fetch(`${PUBLIC_API_URL}/consciousness/evaluate`),
-        fetch(`${PUBLIC_API_URL}/consciousness/self-model`),
-        fetch(`${PUBLIC_API_URL}/consciousness/qualia`),
-        fetch(`${PUBLIC_API_URL}/consciousness/status`),
+      const [epResult, qResult, bResult, eResult, sResult, qNowResult, statusResult] = await Promise.allSettled([
+        consciousnessController.getEpisodeHistory(50),
+        consciousnessController.getQualiaHistory(100),
+        consciousnessController.getBeliefsHistory(),
+        consciousnessController.evaluate(),
+        consciousnessController.getSelfModel(),
+        consciousnessController.getQualia(),
+        consciousnessController.getStatus(),
       ])
 
-      if (epRes.status === 'fulfilled' && epRes.value.ok) {
-        const json = await epRes.value.json()
-        setEpisodes(json.data?.episodes ?? [])
-        setTotalEpisodes(json.data?.total ?? 0)
+      if (epResult.status === 'fulfilled') {
+        setEpisodes((epResult.value.episodes ?? []) as unknown as Episode[])
+        setTotalEpisodes(epResult.value.total ?? 0)
       }
-      if (qRes.status === 'fulfilled' && qRes.value.ok) {
-        const json = await qRes.value.json()
-        setQualiaHistory(json.data?.history ?? [])
+      if (qResult.status === 'fulfilled') {
+        setQualiaHistory((qResult.value.history ?? []) as unknown as QualiaPoint[])
       }
-      if (bRes.status === 'fulfilled' && bRes.value.ok) {
-        const json = await bRes.value.json()
-        setBeliefsHistory(json.data?.beliefs ?? [])
-        const last = json.data?.beliefs?.[json.data.beliefs.length - 1]
+      if (bResult.status === 'fulfilled') {
+        setBeliefsHistory((bResult.value.beliefs ?? []) as unknown as BeliefsPoint[])
+        const last = bResult.value.beliefs?.[bResult.value.beliefs.length - 1]
         if (last) {
           const { timestamp, step, ...rest } = last
           setCurrentBeliefs(rest)
         }
       }
-      if (eRes.status === 'fulfilled' && eRes.value.ok) {
-        const json = await eRes.value.json()
-        setEvalReport(json.data ?? null)
+      if (eResult.status === 'fulfilled') {
+        setEvalReport(eResult.value ?? null)
       }
-      if (sRes.status === 'fulfilled' && sRes.value.ok) {
-        const json = await sRes.value.json()
-        if (json.data?.self_beliefs) setCurrentBeliefs(json.data.self_beliefs)
+      if (sResult.status === 'fulfilled') {
+        if (sResult.value.self_beliefs) setCurrentBeliefs(sResult.value.self_beliefs)
       }
-      if (qNowRes.status === 'fulfilled' && qNowRes.value.ok) {
-        const json = await qNowRes.value.json()
-        if (json.data) setCurrentQualia(json.data)
+      if (qNowResult.status === 'fulfilled') {
+        if (qNowResult.value) setCurrentQualia(qNowResult.value)
       }
-      if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
-        const json = await statusRes.value.json()
-        if (json.data?.level !== undefined) setConsciousnessLevel(json.data.level)
+      if (statusResult.status === 'fulfilled') {
+        if (statusResult.value.level !== undefined) setConsciousnessLevel(statusResult.value.level)
       }
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
@@ -187,11 +180,9 @@ export default function ConsciousnessDashboardPage() {
   const handleSeed = async () => {
     setSeeding(true)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/seed?count=30`, { method: 'POST' })
-      if (res.ok) {
-        addToast('30 episodes added', 'success')
-        await fetchAll()
-      }
+      await consciousnessController.seedData({ count: 30 })
+      addToast('30 episodes added', 'success')
+      await fetchAll()
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -202,15 +193,9 @@ export default function ConsciousnessDashboardPage() {
   const handleReflect = async () => {
     setReflecting(true)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/reflect`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: 'Dashboard reflection trigger' }),
-      })
-      if (res.ok) {
-        addToast('New episode recorded', 'success')
-        await fetchAll()
-      }
+      await consciousnessController.reflect()
+      addToast('New episode recorded', 'success')
+      await fetchAll()
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -221,15 +206,9 @@ export default function ConsciousnessDashboardPage() {
   const handleFeedback = async (episodeIndex: number, rating: number) => {
     setRatingEpisode(episodeIndex)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ episode_index: episodeIndex, rating }),
-      })
-      if (res.ok) {
-        addToast(`Rated ${rating}/5`, 'success')
-        await fetchAll()
-      }
+      await consciousnessController.submitFeedback({ episode_index: episodeIndex, rating })
+      addToast(`Rated ${rating}/5`, 'success')
+      await fetchAll()
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -239,15 +218,9 @@ export default function ConsciousnessDashboardPage() {
 
   const handleLevelChange = async (newLevel: number) => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/config`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level: newLevel }),
-      })
-      if (res.ok) {
-        setConsciousnessLevel(newLevel)
-        addToast(`Level set to ${newLevel}`, 'success')
-      }
+      await consciousnessController.updateConfig({ level: newLevel })
+      setConsciousnessLevel(newLevel)
+      addToast(`Level set to ${newLevel}`, 'success')
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     }
@@ -305,8 +278,8 @@ export default function ConsciousnessDashboardPage() {
   if (loading) {
     return (
       <PageContainer title="Consciousness Dashboard">
-        <div className="space-y-6 p-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+          <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-3">
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
@@ -341,33 +314,33 @@ export default function ConsciousnessDashboardPage() {
 
   return (
     <PageContainer title="Consciousness Dashboard">
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {/* Summary cards */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+        <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Total Episodes</CardTitle>
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground">Total Episodes</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{totalEpisodes}</div>
+              <div className="text-xl sm:text-2xl font-bold">{totalEpisodes}</div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Quality Score</CardTitle>
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground">Quality Score</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-xl sm:text-2xl font-bold">
                 {evalReport ? `${evalReport.overall_score.toFixed(0)}/100` : '—'}
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Avg Growth</CardTitle>
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground">Avg Growth</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-xl sm:text-2xl font-bold">
                 {episodes.length > 0
                   ? `${(episodes.reduce((s, e) => s + e.growth_delta, 0) / episodes.length * 100).toFixed(1)}%`
                   : '—'}
@@ -376,7 +349,7 @@ export default function ConsciousnessDashboardPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2">
                 {t('consciousness_dashboard.autoRefresh')}
                 {isLive && (
                   <Badge variant="default" className="text-[10px] px-1.5 py-0">
@@ -397,7 +370,7 @@ export default function ConsciousnessDashboardPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Actions</CardTitle>
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground">Actions</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={handleSeed} disabled={seeding}>
@@ -417,7 +390,7 @@ export default function ConsciousnessDashboardPage() {
         </div>
 
         {/* Response Quality & Last Reflection */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>Response Quality</CardTitle>
@@ -427,8 +400,8 @@ export default function ConsciousnessDashboardPage() {
               {evalReport ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">Overall Score</span>
-                    <span className="text-2xl font-bold">{evalReport.overall_score.toFixed(0)}/100</span>
+                    <span className="text-xs sm:text-sm">Overall Score</span>
+                    <span className="text-lg sm:text-2xl font-bold">{evalReport.overall_score.toFixed(0)}/100</span>
                   </div>
                   <div className="h-2 rounded-full bg-muted overflow-hidden">
                     <div
@@ -475,14 +448,14 @@ export default function ConsciousnessDashboardPage() {
             <CardDescription>Adjust how deeply the system reflects on each interaction</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {[0, 1, 2, 3].map((lvl) => (
                 <Button
                   key={lvl}
                   size="sm"
                   variant={consciousnessLevel === lvl ? 'default' : 'outline'}
                   onClick={() => handleLevelChange(lvl)}
-                  className="w-20"
+                  className="h-8 sm:h-9 w-16 sm:w-20 text-xs sm:text-sm"
                 >
                   {lvl === 0 ? 'Off' : lvl === 1 ? 'Basic' : lvl === 2 ? 'Full' : 'Deep'}
                 </Button>
@@ -502,14 +475,14 @@ export default function ConsciousnessDashboardPage() {
               <CardDescription>Live beliefs and qualia snapshot</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
                 {Object.keys(currentBeliefs).length > 0 && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-2">Beliefs</div>
                     <div className="space-y-1">
                       {Object.entries(currentBeliefs).map(([k, v]) => (
-                        <div key={k} className="flex items-center gap-2 text-sm">
-                          <span className="capitalize w-24">{k}</span>
+                        <div key={k} className="flex items-center gap-2 text-xs sm:text-sm">
+                          <span className="capitalize w-20 sm:w-24">{k}</span>
                           <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                             <div
                               className="h-full rounded-full transition-all duration-500"
@@ -532,8 +505,8 @@ export default function ConsciousnessDashboardPage() {
                     <div className="text-xs font-medium text-muted-foreground mb-2">Qualia</div>
                     <div className="space-y-1">
                       {Object.entries(currentQualia).map(([k, v]) => (
-                        <div key={k} className="flex items-center gap-2 text-sm">
-                          <span className="capitalize w-24">{k}</span>
+                        <div key={k} className="flex items-center gap-2 text-xs sm:text-sm">
+                          <span className="capitalize w-20 sm:w-24">{k}</span>
                           <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                             <div
                               className="h-full rounded-full transition-all duration-500"
@@ -592,7 +565,7 @@ export default function ConsciousnessDashboardPage() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+              <div className="flex h-48 sm:h-64 items-center justify-center text-xs sm:text-sm text-muted-foreground">
                 Need at least 2 data points. Chat with consciousness enabled to generate data.
               </div>
             )}
@@ -635,7 +608,7 @@ export default function ConsciousnessDashboardPage() {
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+              <div className="flex h-48 sm:h-64 items-center justify-center text-xs sm:text-sm text-muted-foreground">
                 Need at least 2 data points. Chat with consciousness enabled to generate data.
               </div>
             )}
@@ -685,16 +658,16 @@ export default function ConsciousnessDashboardPage() {
                 {[...episodes].reverse().map((ep, i) => {
                   const realIndex = episodes.length - 1 - i
                   return (
-                    <div key={i} className="flex gap-3 rounded-lg border p-3 text-sm cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelectedEpisode(ep)}>
-                      <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground min-w-[60px]">
+                    <div key={i} className="flex gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3 text-xs sm:text-sm cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelectedEpisode(ep)}>
+                      <div className="flex flex-col items-center gap-1 text-[10px] sm:text-xs text-muted-foreground min-w-[48px] sm:min-w-[60px]">
                         <span>{formatTimeAgo(ep.timestamp)}</span>
                         <span className={`font-mono ${ep.growth_delta >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                           {ep.growth_delta >= 0 ? '+' : ''}{(ep.growth_delta * 100).toFixed(1)}%
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs text-muted-foreground truncate">{ep.input_text}</div>
-                        <div className="mt-1 text-sm">{ep.self_insight}</div>
+                        <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{ep.input_text}</div>
+                        <div className="mt-1 text-xs sm:text-sm">{ep.self_insight}</div>
                         <div className="mt-1 flex flex-wrap gap-2">
                           {Object.entries(ep.qualia).slice(0, 4).map(([k, v]) => (
                             <span key={k} className="text-[10px] text-muted-foreground">
@@ -723,7 +696,7 @@ export default function ConsciousnessDashboardPage() {
                 })}
               </div>
             ) : (
-              <div className="flex h-[100px] items-center justify-center text-sm text-muted-foreground">
+              <div className="flex h-24 sm:h-[100px] items-center justify-center text-xs sm:text-sm text-muted-foreground">
                 No episodes yet. Chat with consciousness enabled to start recording.
               </div>
             )}

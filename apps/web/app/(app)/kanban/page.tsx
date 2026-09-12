@@ -12,6 +12,7 @@ import {
 } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useAuthStore } from '@/lib/auth'
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/http-client'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -102,18 +103,12 @@ export default function PlannerPage() {
     setLoading(true)
     setError(null)
     try {
-      const [boardRes, notesRes] = await Promise.all([
-        fetch('/api/planner/board', { headers: wsHeaders }),
-        fetch('/api/planner/notes', { headers: wsHeaders }),
+      const [boardData, notesData] = await Promise.all([
+        apiGet<{ board: KanbanBoard }>('/api/planner/board', undefined, { headers: wsHeaders }),
+        apiGet<{ notes: Note[] }>('/api/planner/notes', undefined, { headers: wsHeaders }),
       ])
-      if (boardRes.ok) {
-        const bd = await boardRes.json()
-        setBoard(bd.board)
-      }
-      if (notesRes.ok) {
-        const nd = await notesRes.json()
-        setNotes(nd.notes || [])
-      }
+      if (boardData?.board) setBoard(boardData.board)
+      if (notesData?.notes) setNotes(notesData.notes || [])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load planner')
     } finally {
@@ -126,10 +121,8 @@ export default function PlannerPage() {
   const handleSync = useCallback(async () => {
     setSyncing(true)
     try {
-      const res = await fetch('/api/planner/sync', { method: 'POST', headers: wsHeaders })
-      if (res.ok) {
-        await fetchAll()
-      }
+      await apiPost('/api/planner/sync', undefined, { headers: wsHeaders })
+      await fetchAll()
     } finally {
       setSyncing(false)
     }
@@ -137,54 +130,36 @@ export default function PlannerPage() {
 
   const handleMoveCard = useCallback(async (cardId: string, column: string) => {
     try {
-      const res = await fetch('/api/planner/board', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...wsHeaders },
-        body: JSON.stringify({ id: cardId, column }),
+      await apiPost('/api/planner/board', { id: cardId, column }, { headers: wsHeaders })
+      setBoard(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          cards: prev.cards.map(c => c.id === cardId ? { ...c, column } : c),
+        }
       })
-      if (res.ok && board) {
-        setBoard(prev => {
-          if (!prev) return prev
-          return {
-            ...prev,
-            cards: prev.cards.map(c => c.id === cardId ? { ...c, column } : c),
-          }
-        })
-      }
     } catch { /* optimistic update — server may reject, board will resync on next fetch */ }
-  }, [board])
+  }, [wsHeaders])
 
   const handleCreateNote = useCallback(async (data: { title: string; tags: string[]; status: string; body: string }) => {
-    const res = await fetch('/api/planner/notes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...wsHeaders },
-      body: JSON.stringify(data),
-    })
-    if (res.ok) {
-      const { note } = await res.json()
-      setNotes(prev => [note, ...prev])
+    const result = await apiPost<{ note: Note }>('/api/planner/notes', data, { headers: wsHeaders })
+    if (result?.note) {
+      setNotes(prev => [result.note, ...prev])
       setShowNewNote(false)
     }
   }, [wsHeaders])
 
   const handleUpdateNote = useCallback(async (id: string, data: Partial<Note>) => {
-    const res = await fetch(`/api/planner/notes/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...wsHeaders },
-      body: JSON.stringify(data),
-    })
-    if (res.ok) {
-      const { note } = await res.json()
-      setNotes(prev => prev.map(n => n.id === id ? note : n))
+    const result = await apiPut<{ note: Note }>(`/api/planner/notes/${id}`, data, { headers: wsHeaders })
+    if (result?.note) {
+      setNotes(prev => prev.map(n => n.id === id ? result.note : n))
       setEditingNote(null)
     }
   }, [wsHeaders])
 
   const handleDeleteNote = useCallback(async (id: string) => {
-    const res = await fetch(`/api/planner/notes/${id}`, { method: 'DELETE', headers: wsHeaders })
-    if (res.ok) {
-      setNotes(prev => prev.filter(n => n.id !== id))
-    }
+    await apiDelete(`/api/planner/notes/${id}`, { headers: wsHeaders })
+    setNotes(prev => prev.filter(n => n.id !== id))
   }, [wsHeaders])
 
   // ── Drag handlers ──────────────────────────────────────────────────

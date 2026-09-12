@@ -64,13 +64,13 @@ const darkColors = [
 ] as const
 
 const accentThemes = [
-  { name: 'blue', label: 'Blue', rgb: '90 130 220' },
-  { name: 'purple', label: 'Purple', rgb: '155 108 214' },
-  { name: 'pink', label: 'Pink', rgb: '218 130 170' },
-  { name: 'red', label: 'Red', rgb: '230 120 130' },
-  { name: 'orange', label: 'Orange', rgb: '236 155 90' },
-  { name: 'green', label: 'Green', rgb: '72 178 130' },
-  { name: 'teal', label: 'Teal', rgb: '72 166 200' },
+  { name: 'blue', label: 'Blue', rgb: '90 130 220', desc: 'Calm ocean, trustworthy' },
+  { name: 'purple', label: 'Purple', rgb: '155 108 214', desc: 'Ethereal lilac, mystical' },
+  { name: 'pink', label: 'Pink', rgb: '218 130 170', desc: 'Soft rose, delicate' },
+  { name: 'red', label: 'Red', rgb: '230 120 130', desc: 'Warm coral, energetic' },
+  { name: 'orange', label: 'Orange', rgb: '236 155 90', desc: 'Peachy bread crust, warm bakery' },
+  { name: 'green', label: 'Green', rgb: '72 178 130', desc: 'Fresh mint, natural' },
+  { name: 'teal', label: 'Teal', rgb: '72 166 200', desc: 'Cool dew, refreshing' },
 ] as const
 
 const typographyScale = [
@@ -687,8 +687,10 @@ export default function MagazinePage() {
         <Card className="magazine-card">
           <CardContent className="pt-2.5 px-2.5 pb-2.5">
             <p className="mb-4 text-xs text-muted-foreground">
-              Seven accent themes override <code className="font-mono text-[10px] bg-muted px-1 rounded">--primary</code> and{' '}
-              <code className="font-mono text-[10px] bg-muted px-1 rounded">--ring</code> via CSS class on{' '}
+              Seven accent auras override <code className="font-mono text-[10px] bg-muted px-1 rounded">--primary</code>,{' '}
+              <code className="font-mono text-[10px] bg-muted px-1 rounded">--secondary</code>,{' '}
+              <code className="font-mono text-[10px] bg-muted px-1 rounded">--muted</code>, and{' '}
+              <code className="font-mono text-[10px] bg-muted px-1 rounded">--border</code> via CSS class on{' '}
               <code className="font-mono text-[10px] bg-muted px-1 rounded">&lt;html&gt;</code>.
             </p>
             <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
@@ -718,7 +720,7 @@ export default function MagazinePage() {
                   <div className="min-w-0">
                     <div className="text-xs font-medium">{t.label}</div>
                     <div className="font-mono text-[10px] text-muted-foreground">
-                      html.theme-{t.name}
+                      {t.desc}
                     </div>
                   </div>
                   <Button

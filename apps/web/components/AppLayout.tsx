@@ -16,6 +16,7 @@ import { useApiMonitor } from '@/lib/api-monitor-store'
 import { RadixToastContainer } from '@/features/chat/components/feedback/Toast'
 import { CommandPalette } from '@/components/CommandPalette'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
+import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
 import { useToastStore } from '@/lib/toast-store'
 import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
@@ -46,6 +47,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const apiStatus = useApiMonitor(s => s.status)
   const { open: convOpen, navCollapsed, toggleNav, setNavCollapsed, toggleConv } = useConvSidebar()
   useGlobalShortcuts()
+  useConsciousnessShortcuts()
 
   // Initialize live health SSE stream
   useEffect(() => {

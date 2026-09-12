@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { consciousnessController } from '@/lib/consciousness-controller'
+import { apiPatch } from '@/lib/http-client'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Skeleton,
 } from '@sloughgpt/strui'
@@ -95,41 +96,35 @@ export default function PersonalityPage() {
 
   const fetchPersonas = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personas`)
-      if (res.ok) {
-        const json = await res.json()
-        setSavedPersonas(json.personas ?? [])
-      }
+      const data = await consciousnessController.listPersonas() as any
+      setSavedPersonas(data.personas ?? [])
     } catch {}
   }, [])
 
   const fetchProfile = useCallback(async () => {
     try {
-      const [profileRes, presetsRes, histRes, conflictsRes] = await Promise.allSettled([
-        fetch(`${PUBLIC_API_URL}/consciousness/personality`),
-        fetch(`${PUBLIC_API_URL}/consciousness/personality/presets`),
-        fetch(`${PUBLIC_API_URL}/consciousness/personality/history`),
-        fetch(`${PUBLIC_API_URL}/consciousness/personality/conflicts`),
+      const [profileResult, presetsResult, histResult, conflictsResult] = await Promise.allSettled([
+        consciousnessController.getPersonality(),
+        consciousnessController.getPersonalityPresets(),
+        consciousnessController.getPersonalityHistory(),
+        consciousnessController.getPersonalityConflicts(),
       ])
-      if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
-        const json = await profileRes.value.json()
-        setProfile(json.data)
-        setValuesInput(json.data.values.join(', '))
-        setGoalsInput(json.data.goals.join(', '))
-        setInterestsInput(json.data.interests.join(', '))
-        setAvoidInput(json.data.avoid.join(', '))
+      if (profileResult.status === 'fulfilled') {
+        const d = profileResult.value as unknown as PersonalityProfile
+        setProfile(d)
+        setValuesInput(d.values.join(', '))
+        setGoalsInput(d.goals.join(', '))
+        setInterestsInput(d.interests.join(', '))
+        setAvoidInput(d.avoid.join(', '))
       }
-      if (presetsRes.status === 'fulfilled' && presetsRes.value.ok) {
-        const json = await presetsRes.value.json()
-        setPresetNames(json.data?.names ?? [])
+      if (presetsResult.status === 'fulfilled') {
+        setPresetNames((presetsResult.value as any)?.names ?? [])
       }
-      if (histRes.status === 'fulfilled' && histRes.value.ok) {
-        const json = await histRes.value.json()
-        setPersonalityHistory(json.data?.history ?? [])
+      if (histResult.status === 'fulfilled') {
+        setPersonalityHistory((histResult.value as any)?.history ?? [])
       }
-      if (conflictsRes.status === 'fulfilled' && conflictsRes.value.ok) {
-        const json = await conflictsRes.value.json()
-        setConflicts(json.data?.conflicts ?? [])
+      if (conflictsResult.status === 'fulfilled') {
+        setConflicts((conflictsResult.value as any)?.conflicts ?? [])
       }
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
@@ -145,30 +140,19 @@ export default function PersonalityPage() {
     if (!profile) return
     setSaving(true)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personality`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          values: valuesInput.split(',').map(s => s.trim()).filter(Boolean),
-          goals: goalsInput.split(',').map(s => s.trim()).filter(Boolean),
-          interests: interestsInput.split(',').map(s => s.trim()).filter(Boolean),
-          avoid: avoidInput.split(',').map(s => s.trim()).filter(Boolean),
-          voice: profile.voice,
-          traits: profile.traits,
-          style: profile.style,
-        }),
+      const data = await apiPatch('/consciousness/personality', {
+        values: valuesInput.split(',').map(s => s.trim()).filter(Boolean),
+        goals: goalsInput.split(',').map(s => s.trim()).filter(Boolean),
+        interests: interestsInput.split(',').map(s => s.trim()).filter(Boolean),
+        avoid: avoidInput.split(',').map(s => s.trim()).filter(Boolean),
+        voice: profile.voice,
+        traits: profile.traits,
+        style: profile.style,
       })
-      if (res.ok) {
-        const json = await res.json()
-        setProfile(json.data)
-        addToast('Personality saved', 'success')
-        // Re-fetch conflicts
-        const conflictsRes = await fetch(`${PUBLIC_API_URL}/consciousness/personality/conflicts`)
-        if (conflictsRes.ok) {
-          const cJson = await conflictsRes.json()
-          setConflicts(cJson.data?.conflicts ?? [])
-        }
-      }
+      setProfile(data as PersonalityProfile)
+      addToast('Personality saved', 'success')
+      const conflictsData = await consciousnessController.getPersonalityConflicts()
+      setConflicts((conflictsData as any)?.conflicts ?? [])
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -231,16 +215,9 @@ export default function PersonalityPage() {
 
   const handleReset = async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personality/reset`, { method: 'POST' })
-      if (res.ok) {
-        const json = await res.json()
-        setProfile(json.data)
-        setValuesInput(json.data.values.join(', '))
-        setGoalsInput(json.data.goals.join(', '))
-        setInterestsInput(json.data.interests.join(', '))
-        setAvoidInput(json.data.avoid.join(', '))
-        addToast('Personality reset to defaults', 'success')
-      }
+      await consciousnessController.resetPersonality()
+      fetchProfile()
+      addToast('Personality reset to defaults', 'success')
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     }
@@ -249,21 +226,10 @@ export default function PersonalityPage() {
   const handleApplyPreset = async (presetName: string) => {
     setApplyingPreset(presetName)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personality/presets/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preset: presetName }),
-      })
-      if (res.ok) {
-        const json = await res.json()
-        setProfile(json.data)
-        setValuesInput(json.data.values.join(', '))
-        setGoalsInput(json.data.goals.join(', '))
-        setInterestsInput(json.data.interests.join(', '))
-        setAvoidInput(json.data.avoid.join(', '))
-        setActivePreset(presetName)
-        addToast(`Applied "${presetName}" preset`, 'success')
-      }
+      await consciousnessController.applyPersonalityPreset(presetName)
+      fetchProfile()
+      setActivePreset(presetName)
+      addToast(`Applied "${presetName}" preset`, 'success')
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -285,21 +251,15 @@ export default function PersonalityPage() {
     setSavingPersona(true)
     try {
       const slug = personaNameInput.trim().toLowerCase().replace(/\s+/g, '-')
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personas/save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          persona_id: slug,
-          name: personaNameInput.trim(),
-          profile,
-        }),
-      })
-      if (res.ok) {
-        addToast('Persona saved', 'success')
-        setShowSavePersonaDialog(false)
-        setPersonaNameInput('')
-        fetchPersonas()
-      }
+      await consciousnessController.savePersona({
+        persona_id: slug,
+        name: personaNameInput.trim(),
+        profile,
+      } as any)
+      addToast('Persona saved', 'success')
+      setShowSavePersonaDialog(false)
+      setPersonaNameInput('')
+      fetchPersonas()
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -310,13 +270,9 @@ export default function PersonalityPage() {
   const handleActivatePersona = async (id: string) => {
     setActivatingPersona(id)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personas/${id}/activate`, {
-        method: 'POST',
-      })
-      if (res.ok) {
-        addToast('Persona activated', 'success')
-        fetchProfile()
-      }
+      await consciousnessController.activatePersona(id)
+      addToast('Persona activated', 'success')
+      fetchProfile()
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -327,13 +283,9 @@ export default function PersonalityPage() {
   const handleDeletePersona = async (id: string) => {
     setDeletingPersona(id)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personas/${id}`, {
-        method: 'DELETE',
-      })
-      if (res.ok) {
-        addToast('Persona deleted', 'success')
-        fetchPersonas()
-      }
+      await consciousnessController.deletePersona(id)
+      addToast('Persona deleted', 'success')
+      fetchPersonas()
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -357,14 +309,14 @@ export default function PersonalityPage() {
 
   return (
     <PageContainer title="Personality">
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {/* Header with save/reset */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Personality Configuration</h2>
-            <p className="text-sm text-muted-foreground">Define how the consciousness system thinks, speaks, and behaves</p>
+            <h2 className="text-base sm:text-lg font-semibold">Personality Configuration</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground">Define how the consciousness system thinks, speaks, and behaves</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={handleExport}>Export</Button>
             <Button variant="outline" onClick={handleImport}>Import</Button>
             <Button variant="outline" onClick={handleReset}>Reset</Button>
@@ -393,10 +345,10 @@ export default function PersonalityPage() {
                 {savedPersonas.map((persona) => (
                   <div
                     key={persona.id}
-                    className="rounded-lg border p-4 space-y-2"
+                    className="rounded-lg border p-3 sm:p-4 space-y-2"
                   >
-                    <div className="font-medium">{persona.name}</div>
-                    <div className="text-xs text-muted-foreground line-clamp-2">
+                    <div className="text-sm sm:text-base font-medium">{persona.name}</div>
+                    <div className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2">
                       {persona.values?.join(', ') || '—'}
                     </div>
                     <div className="flex gap-2 pt-1">
@@ -434,9 +386,9 @@ export default function PersonalityPage() {
             <CardHeader>
               <CardTitle>{t('personality.savePersona')}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2 sm:space-y-3">
               <div>
-                <label className="text-sm font-medium">{t('personality.personaName')}</label>
+                <label className="text-xs sm:text-sm font-medium">{t('personality.personaName')}</label>
                 <Input
                   value={personaNameInput}
                   onChange={(e) => setPersonaNameInput(e.target.value)}
@@ -521,44 +473,44 @@ export default function PersonalityPage() {
             <CardTitle>Core Identity</CardTitle>
             <CardDescription>What matters most and what the system strives toward</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 sm:space-y-4">
             <div>
-              <label className="text-sm font-medium">Values (comma-separated)</label>
+              <label className="text-xs sm:text-sm font-medium">Values (comma-separated)</label>
               <input
                 type="text"
                 value={valuesInput}
                 onChange={(e) => setValuesInput(e.target.value)}
-                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border bg-background px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm"
                 placeholder="helpfulness, honesty, curiosity"
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Goals (comma-separated)</label>
+              <label className="text-xs sm:text-sm font-medium">Goals (comma-separated)</label>
               <input
                 type="text"
                 value={goalsInput}
                 onChange={(e) => setGoalsInput(e.target.value)}
-                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border bg-background px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm"
                 placeholder="Provide accurate responses, Learn from interactions"
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Interests (comma-separated)</label>
+              <label className="text-xs sm:text-sm font-medium">Interests (comma-separated)</label>
               <input
                 type="text"
                 value={interestsInput}
                 onChange={(e) => setInterestsInput(e.target.value)}
-                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border bg-background px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm"
                 placeholder="AI, programming, science"
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Avoid (comma-separated)</label>
+              <label className="text-xs sm:text-sm font-medium">Avoid (comma-separated)</label>
               <input
                 type="text"
                 value={avoidInput}
                 onChange={(e) => setAvoidInput(e.target.value)}
-                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border bg-background px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm"
                 placeholder="being condescending, making things up"
               />
             </div>
@@ -571,10 +523,10 @@ export default function PersonalityPage() {
             <CardTitle>Voice</CardTitle>
             <CardDescription>How the system sounds when communicating</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 sm:space-y-3">
             {Object.entries(profile.voice).map(([key, value]) => (
-              <div key={key} className="flex items-center gap-4">
-                <label className="text-sm w-32">{VOICE_LABELS[key] || key}</label>
+              <div key={key} className="flex items-center gap-2 sm:gap-4">
+                <label className="text-xs sm:text-sm w-24 sm:w-32 shrink-0">{VOICE_LABELS[key] || key}</label>
                 <input
                   type="range"
                   min="0"
@@ -582,9 +534,9 @@ export default function PersonalityPage() {
                   step="0.05"
                   value={value}
                   onChange={(e) => handleVoiceChange(key, parseFloat(e.target.value))}
-                  className="flex-1"
+                  className="flex-1 min-w-0"
                 />
-                <span className="text-xs text-muted-foreground w-10 text-right">{(value * 100).toFixed(0)}%</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">{(value * 100).toFixed(0)}%</span>
               </div>
             ))}
           </CardContent>
@@ -596,10 +548,10 @@ export default function PersonalityPage() {
             <CardTitle>Traits</CardTitle>
             <CardDescription>Big Five personality dimensions</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 sm:space-y-3">
             {Object.entries(profile.traits).map(([key, value]) => (
-              <div key={key} className="flex items-center gap-4">
-                <label className="text-sm w-32">{TRAIT_LABELS[key] || key}</label>
+              <div key={key} className="flex items-center gap-2 sm:gap-4">
+                <label className="text-xs sm:text-sm w-24 sm:w-32 shrink-0">{TRAIT_LABELS[key] || key}</label>
                 <input
                   type="range"
                   min="0"
@@ -607,9 +559,9 @@ export default function PersonalityPage() {
                   step="0.05"
                   value={value}
                   onChange={(e) => handleTraitChange(key, parseFloat(e.target.value))}
-                  className="flex-1"
+                  className="flex-1 min-w-0"
                 />
-                <span className="text-xs text-muted-foreground w-10 text-right">{(value * 100).toFixed(0)}%</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground w-8 sm:w-10 text-right shrink-0">{(value * 100).toFixed(0)}%</span>
               </div>
             ))}
           </CardContent>
@@ -621,9 +573,9 @@ export default function PersonalityPage() {
             <CardTitle>Communication Style</CardTitle>
             <CardDescription>Preferences for how to respond</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-1.5 sm:space-y-2">
             {Object.entries(profile.style).map(([key, value]) => (
-              <div key={key} className="flex items-center gap-3">
+              <div key={key} className="flex items-center gap-2 sm:gap-3">
                 <button
                   onClick={() => handleStyleToggle(key)}
                   className={`w-10 h-5 rounded-full transition-colors ${value ? 'bg-primary' : 'bg-muted'}`}
@@ -644,7 +596,7 @@ export default function PersonalityPage() {
               <CardDescription>Compare imported values with your current profile</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">
                 <div className="font-medium text-muted-foreground">Setting</div>
                 <div className="font-medium text-muted-foreground">Current</div>
                 <div className="font-medium text-muted-foreground">Imported</div>

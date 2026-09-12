@@ -248,6 +248,10 @@ export const settingsController = {
     return apiPatch(`/settings/training/auto-train/config${q ? `?${q}` : ''}`)
   },
 
+  async getTrainingAnalytics(): Promise<Record<string, unknown>> {
+    return apiGet('/settings/training/analytics')
+  },
+
   // ── API Keys ──────────────────────────────────────────────
 
   async createSecurityKey(name: string, scopes?: string[], expiresInDays?: number): Promise<Record<string, unknown>> {

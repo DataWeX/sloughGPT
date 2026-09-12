@@ -39,6 +39,13 @@ const ToolCallCard = memo(function ToolCallCard({ event }: { event: ToolCallEven
     )}
       onClick={() => hasOutput && setExpanded(!expanded)}
       role={hasOutput ? 'button' : undefined}
+      tabIndex={hasOutput ? 0 : undefined}
+      onKeyDown={hasOutput ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          setExpanded(!expanded)
+        }
+      } : undefined}
       aria-expanded={hasOutput ? expanded : undefined}
     >
       <div className="flex items-center gap-1.5">

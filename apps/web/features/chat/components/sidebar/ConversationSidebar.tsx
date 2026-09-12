@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useDeferredValue, useCallback } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight, IconDot, IconDotOutline } from '@sloughgpt/strui'
 import {
@@ -54,13 +54,13 @@ function SidebarContent({
   onLoadConversation: (id: string) => void
   onNewChat: () => void
   onDeleteConversation?: (id: string) => void
-  onStarConversation?: (id: string, starred: boolean) => void
-  onPinConversation?: (id: string, pinned: boolean) => void
-  onArchiveConversation?: (id: string, archived: boolean) => void
+  onStarConversation?: (e: React.MouseEvent, id: string, starred: boolean) => void
+  onPinConversation?: (e: React.MouseEvent, id: string, pinned: boolean) => void
+  onArchiveConversation?: (e: React.MouseEvent, id: string, archived: boolean) => void
   archivedCount?: number
   onRenameConversation?: (id: string, name: string) => void
-  onToggleUnreadConversation?: (id: string, unread: boolean) => void
-  onDuplicateConversation?: (id: string, name: string) => void
+  onToggleUnreadConversation?: (e: React.MouseEvent, id: string, unread: boolean) => void
+  onDuplicateConversation?: (e: React.MouseEvent, id: string, name: string) => void
   onClose?: () => void
   isDrawer?: boolean
   onToggleCollapse?: () => void
@@ -70,6 +70,7 @@ function SidebarContent({
   const [search, setSearch] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>('updated')
+  const deferredSearch = useDeferredValue(search)
 
   useEffect(() => {
     let cancelled = false
@@ -102,7 +103,7 @@ function SidebarContent({
     })
   }, [conversations, sortMode])
 
-  const q = search.toLowerCase().trim()
+  const q = deferredSearch.toLowerCase().trim()
   const filtered = useMemo(() => {
     if (!q) return sorted
     return sorted.filter(c =>
@@ -111,11 +112,11 @@ function SidebarContent({
     )
   }, [sorted, q])
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDelete = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation()
     const conv = sorted.find(c => c.id === id)
     setDeleteTarget({ id, name: conv?.name || 'this conversation' })
-  }
+  }, [sorted])
 
   const confirmDelete = () => {
     if (deleteTarget) {
@@ -124,10 +125,39 @@ function SidebarContent({
     }
   }
 
-  const starred = filtered.filter(c => c.starred).slice(0, 10)
-  const unstarred = filtered.filter(c => !c.starred)
-  const pinned = unstarred.filter(c => c.pinned)
-  const unpinned = unstarred.filter(c => !c.pinned)
+  const handleSelect = useCallback((id: string) => {
+    onLoadConversation(id)
+    onClose?.()
+  }, [onLoadConversation, onClose])
+
+  const handleStar = useCallback((e: React.MouseEvent, id: string, starred: boolean) => {
+    onStarConversation?.(e, id, starred)
+  }, [onStarConversation])
+
+  const handlePin = useCallback((e: React.MouseEvent, id: string, pinned: boolean) => {
+    onPinConversation?.(e, id, pinned)
+  }, [onPinConversation])
+
+  const handleArchive = useCallback((e: React.MouseEvent, id: string, archive: boolean) => {
+    onArchiveConversation?.(e, id, archive)
+  }, [onArchiveConversation])
+
+  const handleRename = useCallback((id: string, name: string) => {
+    onRenameConversation?.(id, name)
+  }, [onRenameConversation])
+
+  const handleDuplicate = useCallback((e: React.MouseEvent, id: string, name: string) => {
+    onDuplicateConversation?.(e, id, name)
+  }, [onDuplicateConversation])
+
+  const handleToggleUnread = useCallback((e: React.MouseEvent, id: string, unread: boolean) => {
+    onToggleUnreadConversation?.(e, id, unread)
+  }, [onToggleUnreadConversation])
+
+  const starred = useMemo(() => filtered.filter(c => c.starred).slice(0, 10), [filtered])
+  const unstarred = useMemo(() => filtered.filter(c => !c.starred), [filtered])
+  const pinned = useMemo(() => unstarred.filter(c => c.pinned), [unstarred])
+  const unpinned = useMemo(() => unstarred.filter(c => !c.pinned), [unstarred])
 
   function recencyGroup(dateStr: string | undefined): string {
     if (!dateStr) return 'Older'
@@ -155,12 +185,7 @@ function SidebarContent({
     return groups.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label))
   }, [unpinned])
 
-  const handleSelect = (id: string) => {
-    onLoadConversation(id)
-    onClose?.()
-  }
-
-  const handleExport = (e: React.MouseEvent, c: Conversation, format: 'json' | 'markdown' = 'json') => {
+  const handleExport = useCallback((e: React.MouseEvent, c: Conversation, format: 'json' | 'markdown' = 'json') => {
     e.stopPropagation()
     const safeName = (c.name || 'conversation').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50)
     if (format === 'markdown') {
@@ -187,7 +212,7 @@ function SidebarContent({
       }
       downloadJson(data, `${safeName}.json`)
     }
-  }
+  }, [])
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -334,15 +359,15 @@ function SidebarContent({
                         key={c.id}
                         conversation={c}
                         isActive={c.id === currentConversationId}
-                        onSelect={() => handleSelect(c.id)}
-                        onDelete={(e) => handleDelete(e, c.id)}
-                        onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
-                        onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
-                        onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, true) }}
-                        onRename={(name) => onRenameConversation?.(c.id, name)}
-                        onExport={(e, fmt) => handleExport(e, c, fmt)}
-                        onDuplicate={(e) => { e.stopPropagation(); onDuplicateConversation?.(c.id, c.name) }}
-                        onToggleUnread={(e) => { e.stopPropagation(); onToggleUnreadConversation?.(c.id, !c.unread) }}
+                        onSelect={handleSelect}
+                        onDelete={handleDelete}
+                        onStar={handleStar}
+                        onPin={handlePin}
+                        onArchive={handleArchive}
+                        onRename={handleRename}
+                        onExport={handleExport}
+                        onDuplicate={handleDuplicate}
+                        onToggleUnread={handleToggleUnread}
                         searchQuery={q}
                       />
                     ))}
@@ -362,15 +387,15 @@ function SidebarContent({
                         key={c.id}
                         conversation={c}
                         isActive={c.id === currentConversationId}
-                        onSelect={() => handleSelect(c.id)}
-                        onDelete={(e) => handleDelete(e, c.id)}
-                        onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
-                        onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
-                        onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, true) }}
-                        onRename={(name) => onRenameConversation?.(c.id, name)}
-                        onExport={(e, fmt) => handleExport(e, c, fmt)}
-                        onDuplicate={(e) => { e.stopPropagation(); onDuplicateConversation?.(c.id, c.name) }}
-                        onToggleUnread={(e) => { e.stopPropagation(); onToggleUnreadConversation?.(c.id, !c.unread) }}
+                        onSelect={handleSelect}
+                        onDelete={handleDelete}
+                        onStar={handleStar}
+                        onPin={handlePin}
+                        onArchive={handleArchive}
+                        onRename={handleRename}
+                        onExport={handleExport}
+                        onDuplicate={handleDuplicate}
+                        onToggleUnread={handleToggleUnread}
                         searchQuery={q}
                       />
                     ))}
@@ -390,15 +415,15 @@ function SidebarContent({
                         key={c.id}
                         conversation={c}
                         isActive={c.id === currentConversationId}
-                        onSelect={() => handleSelect(c.id)}
-                        onDelete={(e) => handleDelete(e, c.id)}
-                        onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
-                        onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
-                        onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, true) }}
-                        onRename={(name) => onRenameConversation?.(c.id, name)}
-                        onExport={(e, fmt) => handleExport(e, c, fmt)}
-                        onDuplicate={(e) => { e.stopPropagation(); onDuplicateConversation?.(c.id, c.name) }}
-                        onToggleUnread={(e) => { e.stopPropagation(); onToggleUnreadConversation?.(c.id, !c.unread) }}
+                        onSelect={handleSelect}
+                        onDelete={handleDelete}
+                        onStar={handleStar}
+                        onPin={handlePin}
+                        onArchive={handleArchive}
+                        onRename={handleRename}
+                        onExport={handleExport}
+                        onDuplicate={handleDuplicate}
+                        onToggleUnread={handleToggleUnread}
                         searchQuery={q}
                       />
                     ))}
@@ -458,15 +483,15 @@ function SidebarContent({
                         key={c.id}
                         conversation={c}
                         isActive={c.id === currentConversationId}
-                        onSelect={() => handleSelect(c.id)}
-                        onDelete={(e) => handleDelete(e, c.id)}
-                        onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
-                        onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
-                        onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, false) }}
-                        onRename={(name) => onRenameConversation?.(c.id, name)}
-                        onExport={(e, fmt) => handleExport(e, c, fmt)}
-                        onDuplicate={(e) => { e.stopPropagation(); onDuplicateConversation?.(c.id, c.name) }}
-                        onToggleUnread={(e) => { e.stopPropagation(); onToggleUnreadConversation?.(c.id, !c.unread) }}
+                        onSelect={handleSelect}
+                        onDelete={handleDelete}
+                        onStar={handleStar}
+                        onPin={handlePin}
+                        onArchive={(e, id, archive) => handleArchive(e, id, false)}
+                        onRename={handleRename}
+                        onExport={handleExport}
+                        onDuplicate={handleDuplicate}
+                        onToggleUnread={handleToggleUnread}
                         searchQuery={q}
                       />
                     ))

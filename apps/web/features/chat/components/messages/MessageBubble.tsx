@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { cn, IconStar } from '@sloughgpt/strui'
 import { formatRelativeTime } from '@/lib/time-format'
+import { ConsciousnessMessageBadge } from '../ConsciousnessMessageBadge'
 
 import { MessageActions } from './MessageActions'
 import { MessageContextMenu } from './MessageContextMenu'
@@ -17,7 +18,7 @@ export interface MessageBubbleProps {
   showTimestamp: boolean
   images?: ImageAttachment[]
   onCopy?: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
@@ -32,10 +33,10 @@ export interface MessageBubbleProps {
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
-  onReact?: (emoji: string) => void
+  onReact?: (messageId: string, emoji: string) => void
   onPin?: (messageId: string) => void
   hasNote?: boolean
-  onAddNote?: () => void
+  onAddNote?: (messageId: string) => void
   hasThread?: boolean
   onThread?: (messageId: string) => void
   'aria-live'?: 'polite' | 'assertive' | 'off'
@@ -90,6 +91,9 @@ export const MessageBubble = memo(function MessageBubble({
     }
   }, [])
 
+  const handleEditStart = useCallback(() => setIsEditing(true), [])
+  const handleEditCancel = useCallback(() => setIsEditing(false), [])
+
   useEffect(() => {
     const feed = document.getElementById('chat-messages')
     if (!feed) return
@@ -106,7 +110,7 @@ export const MessageBubble = memo(function MessageBubble({
       hasNote={hasNote}
       hasThread={hasThread}
       onCopy={onCopy}
-      onEdit={onEdit ? () => setIsEditing(true) : undefined}
+      onEdit={onEdit ? handleEditStart : undefined}
       onBookmark={onBookmark}
       onPin={onPin}
       onRegenerate={showActions ? onRegenerate : undefined}
@@ -173,8 +177,8 @@ export const MessageBubble = memo(function MessageBubble({
           collapsibleLength={collapsibleLength}
           isEditing={isEditing}
           onEdit={onEdit}
-          onEditStart={() => setIsEditing(true)}
-          onEditCancel={() => setIsEditing(false)}
+         onEditStart={handleEditStart}
+         onEditCancel={handleEditCancel}
         />
 
         {showTimestamp && (
@@ -183,6 +187,11 @@ export const MessageBubble = memo(function MessageBubble({
             role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
           )}>
             {formatRelativeTime(timestamp)}
+            {role === 'assistant' && messageId && (
+              <span className="ml-1.5">
+                <ConsciousnessMessageBadge messageId={messageId} />
+              </span>
+            )}
           </p>
         )}
       </div>
@@ -201,7 +210,7 @@ export const MessageBubble = memo(function MessageBubble({
           onBookmark={onBookmark}
           onDelete={onDelete}
           onSaveToKnowledge={onSaveToKnowledge}
-          onReact={onReact ? (messageId, emoji) => onReact(emoji) : undefined}
+          onReact={onReact}
         />
       )}
 
@@ -211,7 +220,7 @@ export const MessageBubble = memo(function MessageBubble({
           messageId={id}
           role={role}
           onCopy={onCopy}
-          onEdit={() => setIsEditing(true)}
+          onEdit={handleEditStart}
           onSuggestionClick={onSuggestionClick}
           onDelete={onDelete}
         />

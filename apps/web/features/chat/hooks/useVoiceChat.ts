@@ -356,7 +356,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
     try {
       // Try server-side TTS first
       const result = await voiceController.tts(text)
-      if (result.backend === 'hf-model' && result.audio) {
+      if (result.audio && result.backend !== 'browser-fallback') {
         await voiceController.playAudio(result.audio, result.sample_rate)
         speakingRef.current = false
         stopInterruptDetection()

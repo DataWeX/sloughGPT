@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, memo } from 'react'
 import Link from 'next/link'
 import { cn, Switch, Button, Spinner } from '@sloughgpt/strui'
 import { IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
@@ -14,7 +14,7 @@ import { MemoryEditForm } from './MemoryEditForm'
 
 const MAX_VISIBLE = 8
 
-export function MemoryTab() {
+export const MemoryTab = memo(function MemoryTab() {
   const addToast = useToastStore(s => s.addToast)
   const {
     stats, items, loading, searched, searchResults,
@@ -188,7 +188,7 @@ export function MemoryTab() {
               size="sm"
               variant="outline"
               className="h-7 shrink-0 text-[10px] px-2"
-              onClick={() => { setShowAdd(v => !v); setAddError(null); setEditingItem(null) }}
+              onClick={() => { setShowAdd(v => !v); setEditingItem(null) }}
             >
               {showAdd ? 'Close' : '+ Store'}
             </Button>
@@ -375,4 +375,4 @@ export function MemoryTab() {
       </Link>
     </div>
   )
-}
+})

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { consciousnessController } from '@/lib/consciousness-controller'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
 } from '@sloughgpt/strui'
@@ -170,28 +170,20 @@ export default function ConsciousnessAnalyticsPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [epRes, qRes, bRes, pHRes] = await Promise.allSettled([
-        fetch(`${PUBLIC_API_URL}/consciousness/history/episodes?limit=100`),
-        fetch(`${PUBLIC_API_URL}/consciousness/history/qualia?limit=100`),
-        fetch(`${PUBLIC_API_URL}/consciousness/history/beliefs`),
-        fetch(`${PUBLIC_API_URL}/consciousness/personality/history`),
+      const [episodesResult, qualiaResult, beliefsResult] = await Promise.allSettled([
+        consciousnessController.getEpisodeHistory(100),
+        consciousnessController.getQualiaHistory(100),
+        consciousnessController.getBeliefsHistory(),
       ])
 
-      if (epRes.status === 'fulfilled' && epRes.value.ok) {
-        const json = await epRes.value.json()
-        setEpisodes(json.data?.episodes ?? [])
+      if (episodesResult.status === 'fulfilled') {
+        setEpisodes((episodesResult.value as unknown as { episodes: Episode[] })?.episodes ?? [])
       }
-      if (qRes.status === 'fulfilled' && qRes.value.ok) {
-        const json = await qRes.value.json()
-        setQualiaHistory(json.data?.qualia ?? [])
+      if (qualiaResult.status === 'fulfilled') {
+        setQualiaHistory((qualiaResult.value as unknown as { qualia: QualiaPoint[] })?.qualia ?? [])
       }
-      if (bRes.status === 'fulfilled' && bRes.value.ok) {
-        const json = await bRes.value.json()
-        setBeliefsData(json.data?.beliefs ?? null)
-      }
-      if (pHRes.status === 'fulfilled' && pHRes.value.ok) {
-        const json = await pHRes.value.json()
-        setPersonalityHistory(json.data ?? null)
+      if (beliefsResult.status === 'fulfilled') {
+        setBeliefsData((beliefsResult.value as unknown as { beliefs: BeliefsData })?.beliefs ?? null)
       }
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { consciousnessController } from '@/lib/consciousness-controller'
 import { Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Skeleton, Slider, Switch } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -71,10 +71,9 @@ export default function ConsciousnessPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/status`)
-      const json = await res.json()
-      setStatus(json.data || json)
-      setLevel(json.data?.level ?? json.level ?? 0)
+      const data = await consciousnessController.getStatus()
+      setStatus(data as unknown as ConsciousnessStatus)
+      setLevel(data.level ?? 0)
     } catch (e) {
       console.error('Failed to fetch consciousness status', e)
     } finally {
@@ -84,9 +83,8 @@ export default function ConsciousnessPage() {
 
   const fetchEval = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/evaluate`)
-      const json = await res.json()
-      setEvalReport(json.data || json)
+      const data = await consciousnessController.evaluate()
+      setEvalReport(data)
     } catch (e) {
       console.error('Failed to fetch eval report', e)
     }
@@ -94,10 +92,8 @@ export default function ConsciousnessPage() {
 
   const fetchEpisodes = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/history/episodes?limit=10`)
-      const json = await res.json()
-      const data = json.data || json
-      setEpisodes((data.episodes || []).slice(0, 5))
+      const data = await consciousnessController.getEpisodeHistory(10)
+      setEpisodes((data.episodes || []).slice(0, 5) as unknown as Episode[])
     } catch (e) {
       console.error('Failed to fetch episodes', e)
     }
@@ -112,12 +108,7 @@ export default function ConsciousnessPage() {
   const updateLevel = async (newLevel: number) => {
     setLevel(newLevel)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/config`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level: newLevel }),
-      })
-      if (!res.ok) throw new Error('Failed to update level')
+      await consciousnessController.updateConfig({ level: newLevel })
       addToast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, 'success')
       fetchStatus()
     } catch (e) {
@@ -130,9 +121,8 @@ export default function ConsciousnessPage() {
     setReflecting(true)
     setReflection(null)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/reflect`, { method: 'POST' })
-      const json = await res.json()
-      setReflection(json.data?.reflection ?? json.reflection ?? 'No reflection generated')
+      const data = await consciousnessController.reflect()
+      setReflection(data.reflection ?? 'No reflection generated')
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -143,15 +133,7 @@ export default function ConsciousnessPage() {
   const handleTrain = async () => {
     setTraining(true)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/train/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model_path: '' }),
-      })
-      if (!res.ok) {
-        const json = await res.json()
-        throw new Error(json.detail?.message || 'Training failed')
-      }
+      await consciousnessController.startTraining({ model_path: '' })
       addToast('Consciousness LoRA training finished', 'success')
       fetchStatus()
       fetchEval()
@@ -165,8 +147,7 @@ export default function ConsciousnessPage() {
   const handleSeed = async () => {
     setSeeding(true)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/seed?count=10`, { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to seed data')
+      await consciousnessController.seedData({ count: 10 })
       addToast('Seeded 10 training pairs', 'success')
       fetchStatus()
       fetchEpisodes()
@@ -179,9 +160,8 @@ export default function ConsciousnessPage() {
 
   const handleExport = async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/status`)
-      const json = await res.json()
-      const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' })
+      const data = await consciousnessController.getStatus()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -206,13 +186,13 @@ export default function ConsciousnessPage() {
   if (loading) {
     return (
       <PageContainer title="Consciousness">
-        <div className="space-y-6 p-6">
+        <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
           <div className="flex items-center gap-2">
             <Skeleton className="h-8 w-20" />
             <Skeleton className="h-8 w-20" />
             <Skeleton className="h-8 w-20" />
           </div>
-          <Card><CardContent className="p-4 space-y-3">
+          <Card><CardContent className="p-3 sm:p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Skeleton className="h-4 w-32" />
               <Skeleton className="h-5 w-16 rounded-full" />
@@ -220,9 +200,9 @@ export default function ConsciousnessPage() {
             <Skeleton className="h-2 w-48" />
             <Skeleton className="h-1.5 w-full rounded-full" />
           </CardContent></Card>
-          <Card><CardContent className="p-4 space-y-3">
+          <Card><CardContent className="p-3 sm:p-4 space-y-3">
             <Skeleton className="h-3 w-24" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
               {[1,2,3,4,5,6,7,8].map(i => (
                 <div key={i} className="space-y-1">
                   <Skeleton className="h-2 w-12" />
@@ -231,23 +211,23 @@ export default function ConsciousnessPage() {
               ))}
             </div>
           </CardContent></Card>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card><CardContent className="p-4 space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+            <Card><CardContent className="p-3 sm:p-4 space-y-2">
               <Skeleton className="h-3 w-28" />
               {[1,2,3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
             </CardContent></Card>
-            <Card><CardContent className="p-4 space-y-2">
+            <Card><CardContent className="p-3 sm:p-4 space-y-2">
               <Skeleton className="h-3 w-28" />
               <Skeleton className="h-3 w-full" />
               <Skeleton className="h-8 w-24" />
             </CardContent></Card>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card><CardContent className="p-4 space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+            <Card><CardContent className="p-3 sm:p-4 space-y-2">
               <Skeleton className="h-3 w-24" />
               <Skeleton className="h-1.5 w-full rounded-full" />
             </CardContent></Card>
-            <Card><CardContent className="p-4 space-y-2">
+            <Card><CardContent className="p-3 sm:p-4 space-y-2">
               <Skeleton className="h-3 w-24" />
               <Skeleton className="h-1.5 w-full rounded-full" />
             </CardContent></Card>
@@ -262,8 +242,8 @@ export default function ConsciousnessPage() {
 
   return (
     <PageContainer title="Consciousness">
-      <div className="space-y-6 p-6">
-        <div className="flex items-center gap-2">
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={handleSeed} disabled={seeding} variant="secondary" size="sm">
             {seeding ? 'Seeding...' : 'Seed Data'}
           </Button>
@@ -322,7 +302,7 @@ export default function ConsciousnessPage() {
             </CardHeader>
             <CardContent>
               <div className="flex justify-center mb-6">
-                <svg viewBox="-110 -110 220 220" className="w-56 h-56">
+                <svg viewBox="-110 -110 220 220" className="w-40 h-40 sm:w-56 sm:h-56">
                   {[0.2, 0.4, 0.6, 0.8, 1.0].map((r, i) => (
                     <polygon
                       key={i}
@@ -386,10 +366,10 @@ export default function ConsciousnessPage() {
                   })}
                 </svg>
               </div>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-4">
                 {Object.entries(qualia).map(([key, value]) => (
                   <div key={key} className="space-y-1">
-                    <div className="text-xs font-medium text-muted-foreground capitalize">
+                    <div className="text-[10px] sm:text-xs font-medium text-muted-foreground capitalize">
                       {key}
                     </div>
                     <div className="flex items-center gap-2">
@@ -417,13 +397,13 @@ export default function ConsciousnessPage() {
               <CardDescription>Core beliefs and confidence levels</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2">
                 {Object.entries(beliefs)
                   .sort(([, a], [, b]) => b - a)
                   .map(([belief, confidence]) => (
-                    <div key={belief} className="flex items-center gap-3">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                      <span className="flex-1 text-sm">{belief}</span>
+                    <div key={belief} className="flex items-center gap-2 sm:gap-3">
+                      <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                      <span className="flex-1 text-xs sm:text-sm truncate">{belief}</span>
                       <Badge variant="outline" className="text-xs">
                         {(confidence * 100).toFixed(0)}%
                       </Badge>
@@ -441,7 +421,7 @@ export default function ConsciousnessPage() {
           </CardHeader>
           <CardContent>
             {reflection ? (
-              <div className="rounded-md bg-muted p-4 text-sm whitespace-pre-wrap">
+              <div className="rounded-md bg-muted p-3 sm:p-4 text-xs sm:text-sm whitespace-pre-wrap">
                 {reflection}
               </div>
             ) : (
@@ -479,10 +459,10 @@ export default function ConsciousnessPage() {
               <CardDescription>Quality metrics for the consciousness system</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {Object.entries(evalReport.metrics).map(([name, metric]) => (
-                  <div key={name} className="flex items-center gap-3">
-                    <span className="w-40 text-sm capitalize">{name.replace(/_/g, ' ')}</span>
+                  <div key={name} className="flex items-center gap-2 sm:gap-3">
+                    <span className="w-28 sm:w-40 text-xs sm:text-sm capitalize">{name.replace(/_/g, ' ')}</span>
                     <div className="h-2 flex-1 rounded-full bg-secondary">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
@@ -510,7 +490,7 @@ export default function ConsciousnessPage() {
               <CardTitle>Training Status</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm">
                 <div>
                   <span className="text-muted-foreground">Status: </span>
                   <Badge variant={status.training.is_training ? 'default' : 'secondary'}>
@@ -559,12 +539,12 @@ export default function ConsciousnessPage() {
             <CardContent>
               <div className="space-y-3">
                 {episodes.map((ep, i) => (
-                  <div key={i} className="rounded-md border p-3 space-y-2">
+                  <div key={i} className="rounded-md border p-2 sm:p-3 space-y-1.5 sm:space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm flex-1 line-clamp-2">{ep.input}</p>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-0.5 shrink-0">
                         {Array.from({ length: 5 }, (_, s) => (
-                          <svg key={s} className={`w-3.5 h-3.5 ${s < ep.rating ? 'fill-amber-400' : 'fill-muted'}`} viewBox="0 0 20 20">
+                          <svg key={s} className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${s < ep.rating ? 'fill-amber-400' : 'fill-muted'}`} viewBox="0 0 20 20">
                             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                           </svg>
                         ))}

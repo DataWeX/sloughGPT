@@ -6,6 +6,9 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { VoicePresetCard } from '@/components/voice/VoicePresetCard'
+import { VoiceRecordingCard } from '@/components/voice/VoiceRecordingCard'
+import { VoiceComparisonCard } from '@/components/voice/VoiceComparisonCard'
+import { VoiceWaveformCard } from '@/components/voice/VoiceWaveformCard'
 import { useToastStore } from '@/lib/toast-store'
 
 export default function VoicePage() {
@@ -48,7 +51,7 @@ export default function VoicePage() {
       }
       setLastResult({ duration_ms: data.duration_ms, backend: data.backend, sample_rate: data.sample_rate })
       setTtsCount(c => c + 1)
-      if (data.audio && data.backend === 'hf-model') {
+      if (data.audio && data.backend !== 'browser-fallback') {
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
         audioRef.current = audio
         audio.play().catch(() => {}) // autoplay policy — expected
@@ -127,6 +130,12 @@ export default function VoicePage() {
       </Card>
 
       <VoicePresetCard onApply={(p) => setActivePreset(p)} />
+
+      <VoiceRecordingCard />
+
+      <VoiceComparisonCard />
+
+      <VoiceWaveformCard />
 
       <Card>
         <CardHeader className="pb-2 pt-2.5 px-2.5">

@@ -7,7 +7,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input } from '@sloughgpt/strui'
 import { settingsController } from '@/lib/settings-controller'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { apiGet } from '@/lib/http-client'
 import { AutoTrainStatusCard } from '@/components/auto-train/AutoTrainStatusCard'
 import { AutoTrainConfigCard } from '@/components/auto-train/AutoTrainConfigCard'
 import { AutoTrainHistoryCard } from '@/components/auto-train/AutoTrainHistoryCard'
@@ -44,16 +44,16 @@ export default function AutoTrainPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [statusResp, statsResp] = await Promise.all([
-        fetch(`${PUBLIC_API_URL}/settings/training/auto-train/status`).then(r => r.json()),
-        fetch(`${PUBLIC_API_URL}/mobile/train/stats`).then(r => r.json()),
+      const [statusData, statsData] = await Promise.all([
+        settingsController.getAutoTrainSettingsStatus(),
+        apiGet('/mobile/train/stats'),
       ])
-      if (statusResp.data) {
-        setStatus(statusResp.data)
-        setThreshold(statusResp.data.threshold || 10)
+      if (statusData) {
+        setStatus(statusData as unknown as AutoTrainStatus)
+        setThreshold((statusData as any).threshold || 10)
       }
-      if (statsResp.data) {
-        setStats(statsResp.data)
+      if (statsData) {
+        setStats(statsData as unknown as TrainingStats)
       }
     } catch (err) {
       console.error('Failed to fetch auto-train data:', err)
@@ -67,7 +67,7 @@ export default function AutoTrainPage() {
   const handleUpdateConfig = async () => {
     setUpdating(true)
     try {
-      await fetch(`${PUBLIC_API_URL}/settings/training/auto-train/config?threshold=${threshold}&interval_s=${intervalS}`, { method: 'PATCH' })
+      await settingsController.updateAutoTrainSettingsConfig({ threshold, interval_s: intervalS })
       fetchData()
     } catch (err) {
       console.error('Failed to update config:', err)
@@ -109,7 +109,7 @@ export default function AutoTrainPage() {
               threshold={status?.threshold}
               intervalS={120}
               onSave={async (t, i) => {
-                await fetch(`${PUBLIC_API_URL}/settings/training/auto-train/config?threshold=${t}&interval_s=${i}`, { method: 'PATCH' })
+                await settingsController.updateAutoTrainSettingsConfig({ threshold: t, interval_s: i })
                 fetchData()
               }}
             />

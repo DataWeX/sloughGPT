@@ -6,6 +6,9 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 import { SecurityOverviewCard } from '@/components/security/SecurityOverviewCard'
+import { ThreatLogCard } from '@/components/security/ThreatLogCard'
+import { PermissionMatrixCard } from '@/components/security/PermissionMatrixCard'
+import { SecurityAuditCard } from '@/components/security/SecurityAuditCard'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
@@ -202,6 +205,12 @@ export default function SecurityPage() {
         apiKeyConfigured={activeKeys.length > 0}
         apiKeyCount={activeKeys.length}
       />
+
+      <SecurityAuditCard logs={logs} keys={keys} />
+
+      <ThreatLogCard logs={logs} />
+
+      <PermissionMatrixCard keys={keys} />
 
       <Card>
         <CardHeader className="pb-2">

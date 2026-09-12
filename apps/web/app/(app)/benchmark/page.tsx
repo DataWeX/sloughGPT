@@ -9,6 +9,9 @@ import { benchmarkController, type BenchmarkResult, type LoggedBenchmarkResponse
 import { modelController } from '@/lib/model-controller'
 import { apiPost } from '@/lib/http-client'
 import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
+import { BenchmarkChartCard } from '@/components/benchmark/BenchmarkChartCard'
+import { BenchmarkCompareCard } from '@/components/benchmark/BenchmarkCompareCard'
+import { BenchmarkHistoryCard } from '@/components/benchmark/BenchmarkHistoryCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
@@ -175,6 +178,13 @@ export default function BenchmarkPage() {
       {tab === 'metrics' && (
         <>
           <BenchmarkInsightsCard metrics={metrics} quality={quality} stats={stats} />
+          <BenchmarkChartCard history={responses.map(r => ({
+            timestamp: r.timestamp ?? '',
+            model: r.model ?? '',
+            throughput: r.tokens_generated && r.duration_ms ? (r.tokens_generated / (r.duration_ms / 1000)) : undefined,
+            latency: r.duration_ms ?? undefined,
+            tokens: r.tokens_generated ?? undefined,
+          }))} />
           <KpiGrid>
             <StatCard label="Model" value={String(metrics?.model ?? '—')} />
             <StatCard label="Inferences" value={String(metrics?.inference_count ?? 0)} />
@@ -259,7 +269,18 @@ export default function BenchmarkPage() {
       )}
 
       {tab === 'responses' && (
-        <Card>
+        <>
+          <BenchmarkHistoryCard
+            history={responses.map(r => ({
+              timestamp: r.timestamp ?? '',
+              model: r.model ?? '',
+              throughput: r.tokens_generated && r.duration_ms ? (r.tokens_generated / (r.duration_ms / 1000)) : undefined,
+              latency: r.duration_ms ?? undefined,
+              tokens: r.tokens_generated ?? undefined,
+            }))}
+            onClear={handleClearHistory}
+          />
+          <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-[11px] font-medium">Logged Responses ({responses.length})</CardTitle>
             <div className="flex gap-1">
@@ -294,6 +315,7 @@ export default function BenchmarkPage() {
             )}
           </CardContent>
         </Card>
+        </>
       )}
 
       {tab === 'perplexity' && (
@@ -362,7 +384,7 @@ export default function BenchmarkPage() {
             <Button size="sm" onClick={handleRunCompare} disabled={compareLoading || compareModels.length === 0} className="h-7 text-[11px]">
               {compareLoading ? 'Running benchmarks...' : `Run on ${compareModels.length} model${compareModels.length !== 1 ? 's' : ''}`}
             </Button>
-            <ComparisonTableCard completedResults={compareResults} models={availableModels.filter(m => compareModels.includes(m.id))} bestMetrics={bestMetrics} />
+            <BenchmarkCompareCard results={compareResults} />
             {compareResults.length === 0 && !compareLoading && (
               <div className="text-center py-6 text-[10px] text-muted-foreground/60">
                  Select models above and click Run to compare them side by side.

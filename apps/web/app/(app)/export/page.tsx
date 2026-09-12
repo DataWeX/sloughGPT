@@ -8,6 +8,9 @@ import { StatusBanner } from '@/components/composed/StatusBanner'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
 import { ExportHistoryCard, recordExport } from '@/components/export/ExportHistoryCard'
+import { ExportTemplateCard } from '@/components/export/ExportTemplateCard'
+import { ExportProgressCard } from '@/components/export/ExportProgressCard'
+import { ExportScheduleCard } from '@/components/export/ExportScheduleCard'
 import { downloadJson, downloadBlob } from '@/lib/download-utils'
 import { apiGet } from '@/lib/http-client'
 
@@ -130,6 +133,14 @@ export default function ExportPage() {
       )}
 
       <ExportHistoryCard />
+
+      <ExportProgressCard />
+
+      <ExportTemplateCard onSelect={(t) => {
+        setSelectedFormat(t.format)
+      }} />
+
+      <ExportScheduleCard />
 
       <Card>
         <CardHeader className="pb-2 pt-2.5 px-2.5">

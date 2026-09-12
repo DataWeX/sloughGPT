@@ -6,10 +6,16 @@ import { ChatSearchBar } from './ChatSearchBar'
 import { ModelDropdown } from './ModelDropdown'
 import { SoulSelectorDropdown } from './SoulSelectorDropdown'
 import { ChatMoreMenu } from './ChatMoreMenu'
+import { ConsciousnessToggle } from '@/features/chat/components/ConsciousnessToggle'
 import { IconSearch, IconMenu, IconPlus, IconChat } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
 
-export const ChatToolbar = memo(function ChatToolbar() {
+interface ChatToolbarProps {
+  consciousnessOpen?: boolean
+  onConsciousnessToggle?: () => void
+}
+
+export const ChatToolbar = memo(function ChatToolbar({ consciousnessOpen, onConsciousnessToggle }: ChatToolbarProps) {
   const ctx = useChatToolbarContext()
 
   const currentName = ctx.conversations.conversations.find(
@@ -72,10 +78,13 @@ export const ChatToolbar = memo(function ChatToolbar() {
         <IconSearch className="w-4 h-4" aria-hidden="true" />
       </button>
 
-      {/* Right cluster: model + personality + menu */}
+      {/* Right cluster: model + personality + consciousness + menu */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
         <ModelDropdown />
         <SoulSelectorDropdown />
+        {onConsciousnessToggle && (
+          <ConsciousnessToggle open={!!consciousnessOpen} onToggle={onConsciousnessToggle} />
+        )}
         <ChatMoreMenu />
       </div>
     </div>

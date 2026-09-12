@@ -7,6 +7,9 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { feedbackController, type FeedbackStats, type WorkflowStatus, type TrainingStats } from '@/lib/feedback-controller'
 import { FeedbackInsightsCard } from '@/components/feedback/FeedbackInsightsCard'
+import { SentimentTrendCard } from '@/components/feedback/SentimentTrendCard'
+import { FeedbackFormCard } from '@/components/feedback/FeedbackFormCard'
+import { ConversationDetailCard } from '@/components/feedback/ConversationDetailCard'
 import { WorkflowSection } from '@/components/workflow/WorkflowSection'
 import { feedbackConversationsController } from '@/lib/feedback-conversations-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -182,6 +185,25 @@ export default function FeedbackPage() {
           </KpiGrid>
 
           <FeedbackInsightsCard stats={stats} />
+
+          {stats?.db_stats && (
+            <SentimentTrendCard history={[]} />
+          )}
+
+          <FeedbackFormCard
+            onSubmit={async (fb) => {
+              try {
+                await feedbackController.recordFeedbackWorkflow({
+                  userMessage: fb.comment ?? 'feedback',
+                  assistantResponse: '',
+                  rating: fb.rating,
+                })
+                addToast('Feedback submitted', 'success')
+              } catch {
+                addToast('Could not submit feedback', 'error')
+              }
+            }}
+          />
 
           {workflow && (
             <KpiGrid>

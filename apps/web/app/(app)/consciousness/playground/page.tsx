@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { consciousnessController } from '@/lib/consciousness-controller'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
 } from '@sloughgpt/strui'
@@ -93,11 +93,8 @@ export default function ConsciousnessPlaygroundPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/status`)
-      if (res.ok) {
-        const json = await res.json()
-        setStatus(json.data || json)
-      }
+      const data = await consciousnessController.getStatus()
+      setStatus(data as unknown as ConsciousnessStatus)
     } catch (e) {
       console.error('Failed to fetch status', e)
     }
@@ -105,12 +102,8 @@ export default function ConsciousnessPlaygroundPage() {
 
   const fetchEpisodes = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/history/episodes?limit=20`)
-      if (res.ok) {
-        const json = await res.json()
-        const data = json.data || json
-        setEpisodes(data.episodes || [])
-      }
+      const data = await consciousnessController.getEpisodeHistory(20)
+      setEpisodes((data as any).episodes || [])
     } catch (e) {
       console.error('Failed to fetch episodes', e)
     }
@@ -128,18 +121,9 @@ export default function ConsciousnessPlaygroundPage() {
     setReflecting(true)
     setReflectionResult(null)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/reflect`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: input }),
-      })
-      if (res.ok) {
-        const json = await res.json()
-        setReflectionResult(json.data?.reflection ?? json.reflection ?? 'No reflection generated')
-        addToast('Reflection generated', 'success')
-      } else {
-        throw new Error('Reflect failed')
-      }
+      const data = await consciousnessController.reflect()
+      setReflectionResult((data as any)?.reflection ?? 'No reflection generated')
+      addToast('Reflection generated', 'success')
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {
@@ -154,15 +138,8 @@ export default function ConsciousnessPlaygroundPage() {
     }
     setProcessing(true)
     try {
-      const reflectRes = await fetch(`${PUBLIC_API_URL}/consciousness/reflect`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: input }),
-      })
-      if (reflectRes.ok) {
-        const json = await reflectRes.json()
-        setReflectionResult(json.data?.reflection ?? json.reflection ?? 'No reflection generated')
-      }
+      const data = await consciousnessController.reflect()
+      setReflectionResult((data as any)?.reflection ?? 'No reflection generated')
       await Promise.all([fetchStatus(), fetchEpisodes()])
       addToast('Input processed through consciousness', 'success')
       setInput('')
@@ -176,15 +153,9 @@ export default function ConsciousnessPlaygroundPage() {
   const handleFeedback = async (episodeIndex: number, rating: number) => {
     setRatingEpisode(episodeIndex)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ episode_index: episodeIndex, rating }),
-      })
-      if (res.ok) {
-        addToast(`Rated ${rating}/5`, 'success')
-        await fetchEpisodes()
-      }
+      await consciousnessController.submitFeedback({ episode_index: episodeIndex, rating })
+      addToast(`Rated ${rating}/5`, 'success')
+      await fetchEpisodes()
     } catch (e) {
       addToast(extractErrorMessage(e), 'error')
     } finally {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { consciousnessController } from '@/lib/consciousness-controller'
 import {
   Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
   Input,
@@ -10,6 +10,7 @@ import {
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
+import { useLiveTraining } from '@/hooks/useLiveTraining'
 
 interface TrainStatus {
   pairs_collected: number
@@ -52,6 +53,7 @@ interface EvalReport {
 export default function ConsciousnessTrainingPage() {
   const addToast = useToastStore(state => state.addToast)
   const { t } = useLocale()
+  const { isTraining: liveTraining, connected: trainingConnected } = useLiveTraining()
   const [loading, setLoading] = useState(true)
   const [trainStatus, setTrainStatus] = useState<TrainStatus | null>(null)
   const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
@@ -60,9 +62,8 @@ export default function ConsciousnessTrainingPage() {
 
   const fetchTrainStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/train/status`)
-      const json = await res.json()
-      setTrainStatus(json.data || json)
+      const data = await consciousnessController.getTrainingStatus()
+      setTrainStatus(data as unknown as TrainStatus)
     } catch (e) {
       console.error('Failed to fetch train status', e)
     }
@@ -70,9 +71,8 @@ export default function ConsciousnessTrainingPage() {
 
   const fetchEval = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/evaluate`)
-      const json = await res.json()
-      setEvalReport(json.data || json)
+      const data = await consciousnessController.evaluate()
+      setEvalReport(data as unknown as EvalReport)
     } catch (e) {
       console.error('Failed to fetch eval report', e)
     }
@@ -85,15 +85,7 @@ export default function ConsciousnessTrainingPage() {
   const handleStartTraining = async () => {
     setTraining(true)
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/train/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model_path: modelPath }),
-      })
-      if (!res.ok) {
-        const json = await res.json()
-        throw new Error(json.detail?.message || 'Training failed')
-      }
+      await consciousnessController.startTraining({ model_path: modelPath })
       addToast(t('consciousness_training.toast_started'), 'success')
       await Promise.all([fetchTrainStatus(), fetchEval()])
     } catch (e) {
@@ -166,8 +158,11 @@ export default function ConsciousnessTrainingPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {t('consciousness_training.status_title')}
-              {trainStatus?.is_training && (
+              {(trainStatus?.is_training || liveTraining) && (
                 <Badge variant="default">{t('consciousness_training.training_active')}</Badge>
+              )}
+              {trainingConnected && (
+                <Badge variant="secondary" className="text-xs">LIVE</Badge>
               )}
             </CardTitle>
             <CardDescription>{t('consciousness_training.status_desc')}</CardDescription>

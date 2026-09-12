@@ -73,7 +73,7 @@ export const MessageContent = memo(function MessageContent({
     }
     return (
       <article className="leading-relaxed text-sm" aria-label={`${role} message`}>
-        <Markdown content={visibleContent} />
+        <Markdown content={visibleContent} isStreaming={isStreaming} />
         {isCollapsible && isCollapsed && (
           <span className="text-muted-foreground/40 select-none">…</span>
         )}
