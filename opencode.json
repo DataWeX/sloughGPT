@@ -26,11 +26,6 @@
       "description": "Diagnose and fix the most recent test failures",
       "agent": "error-fixer"
     },
-    "test-training-flow": {
-      "template": "Write and run a Playwright user journey test for the training flow. Navigate to http://localhost:3000/training, verify the page loads, check for training-related elements (buttons, config sections), test button clicks, and verify no console errors. Add new tests to packages/core-py/tests/test_user_journeys.py.",
-      "description": "Test training flow as a user journey",
-      "agent": "test-writer"
-    },
     "ui-fix": {
       "template": "Read the UI error log at ~/.opencode-ui-error-log.json and the live backend errors at http://localhost:8000/errors/recent. Diagnose the most recent frontend error, identify the file and root cause, and apply a fix.",
       "description": "Diagnose and fix the most recent frontend UI error",
@@ -47,8 +42,8 @@
       "agent": "systems-engineer"
     },
     "test": {
-      "template": "Write tests for the specified target. For frontend components, write vitest component tests. For Python modules, write pytest unit tests. For full page flows, add Playwright journey tests to test_user_journeys.py. Measure coverage first, then close gaps.",
-      "description": "Write tests (unit, component, journey) for a feature or module",
+      "template": "Write tests for the specified target. Detect the type automatically: if the target is a React component or page (.tsx), write vitest component tests. If it's a Python module (.py), write pytest unit tests. If it's a page flow or the user says 'journey', add Playwright tests to test_user_journeys.py. If the user says 'coverage', measure and improve coverage. Always check what tests exist first, then fill gaps.",
+      "description": "Write tests for any target (auto-detects unit, component, journey, coverage)",
       "agent": "test-writer"
     }
   },
