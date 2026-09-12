@@ -29,7 +29,7 @@
     "test-training-flow": {
       "template": "Run the training flow tests using chrome-devtools MCP. Open http://localhost:3000/training in a browser, take snapshots, click buttons, verify the training page loads correctly, check for console errors, and report results.",
       "description": "Test training flow using browser automation",
-      "agent": "training-flow-tester"
+      "agent": "test-writer"
     },
     "ui-fix": {
       "template": "Read the UI error log at ~/.opencode-ui-error-log.json and the live backend errors at http://localhost:8000/errors/recent. Diagnose the most recent frontend error, identify the file and root cause, and apply a fix.",
@@ -45,6 +45,11 @@
       "template": "Run systems engineering on the specified target: kernel, init, vm, buildroot, driver <name>, syscall <name>, addon <name>, pane, surface, tui, v86. Design and implement OS-level components for the Dait operating system.",
       "description": "Design and implement OS components, kernel modules, drivers, Buildroot configs, or VM extensions",
       "agent": "systems-engineer"
+    },
+    "test": {
+      "template": "Write tests for the specified target. For frontend components, write vitest component tests. For Python modules, write pytest unit tests. For full page flows, add Playwright journey tests to test_user_journeys.py. Measure coverage first, then close gaps.",
+      "description": "Write tests (unit, component, journey) for a feature or module",
+      "agent": "test-writer"
     }
   },
   "agent": {
@@ -75,6 +80,11 @@
     },
     "systems-engineer": {
       "description": "Systems engineering agent for OS design and code. Writes kernel modules, device drivers, init system services, Buildroot configurations, and VM infrastructure.",
+      "mode": "subagent",
+      "hidden": false
+    },
+    "test-writer": {
+      "description": "Writes unit tests, component tests, Playwright journey tests, and improves coverage. Use for 'add tests', 'write tests', 'coverage', 'journey tests'.",
       "mode": "subagent",
       "hidden": false
     }
