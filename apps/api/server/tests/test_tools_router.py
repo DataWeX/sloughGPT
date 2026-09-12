@@ -183,7 +183,7 @@ class TestToolsGenerate:
 
     def test_generate_stream_contains_tokens(self, client):
         res = client.post("/tools/writing/generate", json={"payload": {"text": "hello"}})
-        lines = [l for l in res.text.split("\n") if l.startswith("data: ") and '"token"' in l]
+        lines = [ln for ln in res.text.split("\n") if ln.startswith("data: ") and '"token"' in ln]
         assert len(lines) >= 1
 
     def test_generate_stream_ends_with_done(self, client):
@@ -208,8 +208,6 @@ class TestToolsGenerate:
         res = client.post("/tools/nope/generate", json={"payload": {}})
         assert "E_NOT_FOUND" in res.text
 
-    def test_generate_passes_messages_to_provider(self, client, patch_tools_engine):
+    def test_generate_renders_prompt(self, client, patch_tools_engine):
         client.post("/tools/writing/generate", json={"payload": {"text": "hello"}})
-        prompt = patch_tools_engine.render_prompt.return_value
-        # Verify the prompt was rendered and passed (indirectly: render_prompt was called)
-        patch_tools_engine.render_prompt.assert_called_once()
+        patch_tools_engine.render_prompt.assert_called_once_with("writing", {"text": "hello"})

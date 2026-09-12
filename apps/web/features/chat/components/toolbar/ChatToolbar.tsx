@@ -23,7 +23,7 @@ export const ChatToolbar = memo(function ChatToolbar({ consciousnessOpen, onCons
   )?.name
 
   return (
-    <div className="z-10 flex items-center justify-between px-2 sm:px-3 py-1.5 border-b border-border/30 shrink-0 bg-background/80 backdrop-blur-sm gap-2">
+    <div className="z-10 flex items-center justify-between px-2 sm:px-3 py-1.5 border-b border-border/20 shrink-0 bg-background/80 backdrop-blur-sm gap-2" role="toolbar" aria-label="Chat toolbar">
       {/* Left cluster: conversation identity */}
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <button

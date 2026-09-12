@@ -31,35 +31,38 @@ class TestModelCard:
         from domains.training.model_card import ModelCard
 
         card = ModelCard(
-            name="test_model",
-            version="1.0",
+            model_name="test_model",
+            model_type="slnet",
             description="A test model",
         )
-        assert card.name == "test_model"
-        assert card.version == "1.0"
+        assert card.model_name == "test_model"
+        assert card.model_type == "slnet"
 
-    def test_model_card_to_dict(self):
+    def test_model_card_to_markdown(self):
         from domains.training.model_card import ModelCard
 
         card = ModelCard(
-            name="test_model",
-            version="1.0",
+            model_name="test_model",
+            model_type="slnet",
             description="A test model",
         )
-        d = card.to_dict()
-        assert isinstance(d, dict)
-        assert d["name"] == "test_model"
+        md = card.to_markdown()
+        assert isinstance(md, str)
+        assert "test_model" in md
 
     def test_generate_model_card(self):
         from domains.training.model_card import generate_model_card
 
         card = generate_model_card(
             name="test_model",
-            model_type="slnet",
-            training_info={"epochs": 3, "loss": 0.5},
+            base_model="gpt2",
+            description="A test model",
+            epochs=3,
+            learning_rate=0.001,
         )
         assert card is not None
-        assert card.name == "test_model"
+        assert card.model_name == "test_model"
+        assert card.epochs == 3
 
     def test_model_card_from_outcome(self):
         from domains.training.model_card import generate_model_card_from_outcome
@@ -75,7 +78,19 @@ class TestModelCard:
         )
         card = generate_model_card_from_outcome(outcome)
         assert card is not None
-        assert card.name is not None
+        assert card.model_name is not None
+
+    def test_model_card_to_dict(self):
+        from domains.training.model_card import ModelCard
+
+        card = ModelCard(
+            model_name="test_model",
+            model_type="slnet",
+            description="A test model",
+        )
+        d = card.to_dict()
+        assert isinstance(d, dict)
+        assert d["model_name"] == "test_model"
 
 
 class TestAutoConfig:
@@ -89,7 +104,8 @@ class TestAutoConfig:
             f.flush()
             analysis = analyse_dataset(f.name)
             assert analysis is not None
-            assert hasattr(analysis, "total_chars")
+            assert analysis.char_count > 0
+            assert analysis.word_count > 0
 
     def test_auto_configure(self):
         from domains.training.auto_config import auto_configure
@@ -97,18 +113,44 @@ class TestAutoConfig:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
             f.flush()
-            config = auto_configure(f.name)
-            assert isinstance(config, dict)
-            assert len(config) > 0
+            config = auto_configure(
+                dataset="test_dataset",
+                dataset_path=f.name,
+            )
+            assert config is not None
+            assert config.dataset == "test_dataset"
 
-    def test_auto_configure_has_recommended_keys(self):
-        from domains.training.auto_config import auto_configure
+    def test_dataset_analysis_format(self):
+        from domains.training.auto_config import analyse_dataset
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
             f.flush()
-            config = auto_configure(f.name)
-            assert "method" in config or "model" in config or "batch_size" in config
+            analysis = analyse_dataset(f.name)
+            assert analysis.format == "text"
+
+    def test_dataset_analysis_size_category(self):
+        from domains.training.auto_config import analyse_dataset
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+            f.write(DATA_TEXT)
+            f.flush()
+            analysis = analyse_dataset(f.name)
+            assert analysis.size_category in ("tiny", "small", "medium", "large")
+
+    def test_plain_language_verdict(self):
+        from domains.training.auto_config import plain_language_verdict
+
+        verdict = plain_language_verdict({"verdict": "improved", "perplexity_improvement_pct": 10})
+        assert isinstance(verdict, str)
+        assert len(verdict) > 0
+
+    def test_plain_language_verdict_degraded(self):
+        from domains.training.auto_config import plain_language_verdict
+
+        verdict = plain_language_verdict({"verdict": "degraded", "perplexity_improvement_pct": -5})
+        assert isinstance(verdict, str)
+        assert len(verdict) > 0
 
 
 class TestDatasetManifest:
@@ -127,29 +169,6 @@ class TestDatasetManifest:
         assert issubclass(ManifestError, ValueError)
 
 
-class TestAutoConfigExtended:
-    """Extended tests for auto-configuration."""
-
-    def test_auto_configure_produces_valid_config(self):
-        from domains.training.auto_config import auto_configure
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write(DATA_TEXT)
-            f.flush()
-            config = auto_configure(f.name)
-            if "batch_size" in config:
-                assert config["batch_size"] > 0
-            if "epochs" in config:
-                assert config["epochs"] > 0
-
-    def test_plain_language_verdict(self):
-        from domains.training.auto_config import plain_language_verdict
-
-        verdict = plain_language_verdict({"delta": 0.1, "improved": True})
-        assert isinstance(verdict, str)
-        assert len(verdict) > 0
-
-
 class TestModelCardExtended:
     """Extended tests for model card."""
 
@@ -158,54 +177,63 @@ class TestModelCardExtended:
 
         card = generate_model_card(
             name="test_model",
-            model_type="slnet",
-            training_info={
-                "epochs": 5,
-                "batch_size": 8,
-                "learning_rate": 0.001,
-                "loss": 0.3,
-            },
+            base_model="gpt2",
+            description="A test model",
+            epochs=5,
+            batch_size=8,
+            learning_rate=0.001,
+            final_loss=0.3,
         )
         assert card is not None
+        assert card.epochs == 5
+        assert card.batch_size == 8
 
     def test_model_card_serializable(self):
         from domains.training.model_card import generate_model_card
 
         card = generate_model_card(
             name="test_model",
-            model_type="slnet",
-            training_info={"epochs": 3},
+            base_model="gpt2",
+            description="A test model",
+            epochs=3,
         )
         d = card.to_dict()
         assert isinstance(d, dict)
-        assert "name" in d
+        assert "model_name" in d
+
+    def test_model_card_from_dict(self):
+        from domains.training.model_card import ModelCard
+
+        d = {
+            "model_name": "test_model",
+            "model_type": "slnet",
+            "description": "A test model",
+        }
+        card = ModelCard.from_dict(d)
+        assert card.model_name == "test_model"
+        assert card.model_type == "slnet"
 
 
 class TestComprehensiveTrainerWithAutoConfig:
     """Tests for ComprehensiveTrainer with auto-config."""
 
-    def test_trainer_with_auto_config(self):
+    def test_trainer_with_explicit_config(self):
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
             f.flush()
             trainer = ComprehensiveTrainer()
-            result = trainer.run_full_cycle(
-                data_path=f.name,
-                config={**FAST_CONFIG, "auto_config": True},
-            )
+            result = trainer.run_full_cycle(data_path=f.name, config=FAST_CONFIG)
             assert result.success
 
-    def test_trainer_with_adaptive_config(self):
+    def test_trainer_multiple_runs(self):
         from domains.training.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
             f.flush()
-            trainer = ComprehensiveTrainer()
-            result = trainer.run_full_cycle(
-                data_path=f.name,
-                config={**FAST_CONFIG, "adaptive": True},
-            )
-            assert result.success
+            for _ in range(2):
+                trainer = ComprehensiveTrainer()
+                result = trainer.run_full_cycle(data_path=f.name, config=FAST_CONFIG)
+                assert result.success

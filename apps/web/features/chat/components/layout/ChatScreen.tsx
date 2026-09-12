@@ -52,6 +52,7 @@ interface ChatScreenProps {
   onEdit?: (messageId: string, newContent: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
+  onModeSelect?: (mode: string) => void
   className?: string
   model?: string
   isBookmarked?: (id: string) => boolean
@@ -88,6 +89,7 @@ export const ChatScreen = memo(function ChatScreen({
   onEdit,
   searchQuery,
   onSuggestionClick,
+  onModeSelect,
   className,
   model,
   isBookmarked,
@@ -183,7 +185,7 @@ export const ChatScreen = memo(function ChatScreen({
 
       {messages.length === 0 && !isOffline && !sessionLoading && (
         <div className={cn("transition-all duration-300", emptyFading && "opacity-0 scale-95")}>
-          <EmptyState hasModel={hasModel} suggestions={suggestions} onSuggestionClick={onSuggestionClick} />
+          <EmptyState hasModel={hasModel} suggestions={suggestions} onSuggestionClick={onSuggestionClick} onModeSelect={onModeSelect} />
         </div>
       )}
 
@@ -218,7 +220,7 @@ export const ChatScreen = memo(function ChatScreen({
         </div>
       )}
     </>
-  ), [isOffline, sessionLoading, messages.length, emptyFading, hasModel, suggestions, onSuggestionClick, onRefreshHealth, toolEvents, ragVerification])
+  ), [isOffline, sessionLoading, messages.length, emptyFading, hasModel, suggestions, onSuggestionClick, onModeSelect, onRefreshHealth, toolEvents, ragVerification])
 
   // Virtuoso Footer — suggestions, thinking indicator
   const ListFooter = useCallback(() => (

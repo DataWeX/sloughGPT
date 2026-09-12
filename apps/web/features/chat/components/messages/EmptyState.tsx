@@ -30,7 +30,7 @@ function ToolModeCard({ mode, label, description, icon, color, onClick }: ToolMo
       className={cn(
         "group relative flex flex-col items-start gap-1.5 p-3 rounded-xl border border-border/30 bg-card/30",
         "hover:border-primary/30 hover:bg-primary/[0.03] hover:shadow-sm hover:shadow-primary/5",
-        "hover:-translate-y-0.5 transition-all duration-200 cursor-pointer text-left"
+        "hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 cursor-pointer text-left"
       )}
     >
       <div className="flex items-center gap-2">
@@ -86,7 +86,7 @@ export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSu
 
   return (
     <div
-      className="flex flex-col items-center justify-center gap-6 py-10 sm:py-14 text-center px-4"
+      className="flex flex-col items-center justify-center gap-6 py-10 sm:py-14 text-center px-4 animate-in fade-in duration-500"
       role="region"
       aria-label="Chat ready"
     >

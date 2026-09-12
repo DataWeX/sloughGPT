@@ -38,6 +38,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onReact?: (messageId: string, emoji: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
+  onModeSelect?: (mode: string) => void
   onAddImage?: (dataUrl: string) => void
   onRemoveImage?: (id: string) => void
   className?: string
@@ -84,6 +85,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     onReact,
     searchQuery,
     onSuggestionClick,
+    onModeSelect,
     images,
     onAddImage,
     onRemoveImage,
@@ -140,6 +142,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
           onPin={onPin}
           searchQuery={searchQuery}
           onSuggestionClick={onSuggestionClick}
+          onModeSelect={onModeSelect}
           toolEvents={toolEvents}
           ragVerification={ragVerification}
           isBookmarked={isBookmarked}

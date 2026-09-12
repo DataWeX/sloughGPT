@@ -1,5 +1,7 @@
 """Tests for the tools domain (profiles + engine)."""
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 from domains.tools import (
     TOOL_PROFILES,

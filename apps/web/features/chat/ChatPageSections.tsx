@@ -220,6 +220,10 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
     chat.handleToolApproval(approved)
   }, [chat])
 
+  const handleModeSelect = useCallback((mode: string) => {
+    setChatMode(mode as any)
+  }, [setChatMode])
+
   return (
     <>
       {chat.currentError && (
@@ -290,6 +294,7 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           sessionLoading={chat.sessionLoading}
           model={model.model}
           health={health}
+          chatMode={chatMode}
           suggestions={suggestions}
           onRefreshHealth={refreshHealth}
           onCopy={chat.handleCopy}
@@ -300,6 +305,7 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           onEdit={chat.handleEditMessage}
           searchQuery={ui.searchQuery}
           onSuggestionClick={chat.handleSuggestionClick}
+          onModeSelect={handleModeSelect}
           toolEvents={chat.toolEvents}
           streamingStatus={chat.pendingToolApproval ? 'tool_call' : 'generating'}
           streamingToolName={chat.pendingToolApproval?.toolName}
