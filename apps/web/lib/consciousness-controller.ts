@@ -39,11 +39,13 @@ export interface Qualia {
 }
 
 export interface Episode {
-  id: string
+  input: string
+  response: string
+  narrative: string
+  qualia: Record<string, number>
+  growth_delta: number
+  rating: number
   timestamp: string
-  event: string
-  emotional_response: string
-  belief_update: string
 }
 
 export interface Belief {

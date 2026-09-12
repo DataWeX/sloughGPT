@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from domains.memory.memory_provider import KnowledgeMemoryProvider
+from domain.memory import KnowledgeMemoryProvider
 
 
 @pytest.fixture
@@ -176,7 +176,7 @@ class TestGetStore:
 
     def test_falls_back_to_singleton(self):
         p = KnowledgeMemoryProvider(store=None)
-        with patch("domains.memory.memory_provider.get_knowledge_memory") as mock_get:
+        with patch("domain.knowledge.get_knowledge_memory") as mock_get:
             mock_get.return_value = MagicMock()
             store = p._get_store()
             mock_get.assert_called_once()

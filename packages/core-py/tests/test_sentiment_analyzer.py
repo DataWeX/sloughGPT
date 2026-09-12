@@ -1,4 +1,4 @@
-"""Comprehensive tests for domains.soul.cognitive — all cognitive classes.
+"""Comprehensive tests for domain.soul._internal.cognitive — all cognitive classes.
 
 Covers: SentimentAnalyzer, EmotionalResponseGenerator, RelationshipMemory,
 SessionMemory, EpisodicMemoryStore, CognitiveArchitecture,
@@ -6,7 +6,7 @@ NeuralPlasticityEngine, MetaLearningEngine, DreamProcessingEngine.
 """
 
 import pytest
-from domains.soul.cognitive import (
+from domain.soul._internal.cognitive import (
     CognitiveArchitecture,
     DreamProcessingEngine,
     EmotionalResponseGenerator,
@@ -29,7 +29,7 @@ def _make_experience(eid="e1", importance=0.5):
 def _make_experience_real(eid="e1", importance=0.5):
     """Try importing real Experience; fall back to SimpleNamespace."""
     try:
-        from domains.soul.foundation import Experience
+        from domain.soul._internal.foundation import Experience
         return Experience(id=eid, importance=importance, content="test")
     except ImportError:
         return _make_experience(eid, importance)

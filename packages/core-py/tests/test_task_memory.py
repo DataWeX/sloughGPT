@@ -1,12 +1,12 @@
-"""Tests for domains.memory.task_memory — archive helpers and constants."""
+"""Tests for domain.memory._internal.task_memory — archive helpers and constants."""
 
 import json
 import time
 import pytest
 from pathlib import Path
 
-from domains.memory.memory_config import MemoryConfig
-from domains.memory.task_memory import (
+from domain.memory._internal.memory_config import MemoryConfig
+from domain.memory._internal.task_memory import (
     TASK_REMEMBER,
     TASK_STORE,
     TASK_CONSOLIDATE,
@@ -46,7 +46,7 @@ class TestArchivePath:
     def test_returns_path_with_filename(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path))
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         p = _archive_path()
@@ -66,7 +66,7 @@ class TestAppendReadRoundTrip:
     def test_single_record(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         record = {"ts": 1.0, "task_type": "memory.remember", "stored": True}
@@ -79,7 +79,7 @@ class TestAppendReadRoundTrip:
     def test_multiple_records_appended_in_order(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         for i in range(5):
@@ -92,7 +92,7 @@ class TestAppendReadRoundTrip:
         nested = tmp_path / "a" / "b" / "c"
         cfg = MemoryConfig(store_path=str(nested), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         _append_archive({"ts": 1.0})
@@ -103,7 +103,7 @@ class TestAppendReadRoundTrip:
     def test_unicode_content_preserved(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         record = {"content": "日本語テスト 🎉 émojis"}
@@ -120,7 +120,7 @@ class TestReadArchive:
     def test_empty_when_file_missing(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         assert _read_archive() == []
@@ -128,7 +128,7 @@ class TestReadArchive:
     def test_skips_blank_lines(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         path = _archive_path()
@@ -140,7 +140,7 @@ class TestReadArchive:
     def test_skips_corrupt_json_lines(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         path = _archive_path()
@@ -157,7 +157,7 @@ class TestReadArchive:
     def test_empty_file_returns_empty_list(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         path = _archive_path()
@@ -174,7 +174,7 @@ class TestListArchive:
     def test_returns_newest_first(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         for i in range(5):
@@ -185,7 +185,7 @@ class TestListArchive:
     def test_respects_limit(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         for i in range(10):
@@ -197,7 +197,7 @@ class TestListArchive:
     def test_limit_one_returns_single_newest(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         for i in range(5):
@@ -209,7 +209,7 @@ class TestListArchive:
     def test_empty_archive_returns_empty_list(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         assert list_archive(limit=10) == []
@@ -217,7 +217,7 @@ class TestListArchive:
     def test_limit_clamped_to_at_least_one(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         _append_archive({"ts": 1.0})
@@ -235,7 +235,7 @@ class TestArchiveStats:
     def test_empty_archive(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         stats = archive_stats()
@@ -248,7 +248,7 @@ class TestArchiveStats:
     def test_counts_by_task_type(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         _append_archive({"task_type": "memory.remember", "ts": 1.0})
@@ -262,7 +262,7 @@ class TestArchiveStats:
     def test_timestamps(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         _append_archive({"ts": 100.0})
@@ -275,7 +275,7 @@ class TestArchiveStats:
     def test_bytes_nonzero_when_records_exist(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         _append_archive({"ts": 1.0, "data": "x" * 100})
@@ -285,7 +285,7 @@ class TestArchiveStats:
     def test_unknown_task_type(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         _append_archive({"ts": 1.0})
@@ -295,7 +295,7 @@ class TestArchiveStats:
     def test_path_in_stats(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         stats = archive_stats()
@@ -310,7 +310,7 @@ class TestPruneArchive:
     def test_no_file_returns_zero(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         assert prune_archive(retain_days=30) == 0
@@ -318,7 +318,7 @@ class TestPruneArchive:
     def test_removes_old_records(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         now = time.time()
@@ -335,7 +335,7 @@ class TestPruneArchive:
     def test_keeps_all_when_within_retention(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         now = time.time()
@@ -348,7 +348,7 @@ class TestPruneArchive:
     def test_retain_days_zero_removes_everything(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         now = time.time()
@@ -361,7 +361,7 @@ class TestPruneArchive:
     def test_records_without_ts_are_pruned(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         _append_archive({"label": "no_ts"})
@@ -375,7 +375,7 @@ class TestPruneArchive:
     def test_defaults_to_config_retention(self, tmp_path, monkeypatch):
         cfg = MemoryConfig(store_path=str(tmp_path), enabled=True, archive_retention_days=0.001)
         monkeypatch.setattr(
-            "domains.memory.task_memory.MemoryConfig",
+            "domain.memory._internal.task_memory.MemoryConfig",
             type("MC", (), {"get": staticmethod(lambda: cfg)}),
         )
         old = time.time() - 10 * 86400

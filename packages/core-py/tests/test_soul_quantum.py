@@ -5,7 +5,7 @@ import random
 
 import pytest
 
-from domains.soul.quantum import (
+from domain.soul._internal.quantum import (
     HyperdimensionalProcessor,
     QuantumCognitiveEngine,
     QuantumParallelProcessor,

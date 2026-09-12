@@ -1,7 +1,7 @@
-"""Tests for domains.soul.hd_memory — HDMemoryItem, HDMemoryStore."""
+"""Tests for domain.soul._internal.hd_memory — HDMemoryItem, HDMemoryStore."""
 
 import pytest
-from domains.soul.hd_memory import HDMemoryItem, HDMemoryStore
+from domain.soul._internal.hd_memory import HDMemoryItem, HDMemoryStore
 
 
 # ===================================================================

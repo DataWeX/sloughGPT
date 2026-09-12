@@ -52,7 +52,7 @@ afterEach(() => cleanup())
 
 const defaultProps = {
   itemCount: 5,
-  archiveStats: { records: 10, bytes: 5120 },
+  archiveStats: { records: 10, bytes: 5120, path: 'mem:/archive', task_types: {}, oldest_ts: null, newest_ts: null },
   loading: false,
   fetchData: vi.fn().mockResolvedValue(undefined),
   openArchive: vi.fn(),
@@ -95,7 +95,7 @@ describe('MemoryMaintenancePanel', () => {
   })
 
   it('disables prune when no archive records', async () => {
-    render(<MemoryMaintenancePanel {...defaultProps} archiveStats={{ records: 0, bytes: 0 }} />)
+    render(<MemoryMaintenancePanel {...defaultProps} archiveStats={{ records: 0, bytes: 0, path: 'mem:/archive', task_types: {}, oldest_ts: null, newest_ts: null }} />)
     await waitFor(() => {
       const btn = screen.getByRole('button', { name: /Prune old/ })
       expect(btn).toHaveProperty('disabled', true)

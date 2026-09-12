@@ -66,7 +66,7 @@ const defaultProps = {
   apiOk: true,
   modelLoaded: true,
   modelType: 'llama',
-  detailed: { status: 'healthy', uptime_seconds: 3600, inference: { inference_count: 42 }, gpu: { backend: 'cuda', tier: 'high' }, versions: { package: '1.0.0', api: '2.0.0' } },
+  detailed: { status: 'healthy', uptime_seconds: 3600, inference: { inference_count: 42 }, gpu: { backend: 'cuda', tier: 'high', device_type: 'gpu', vram_gb: 8, memory_hint: '' }, versions: { package: '1.0.0', api: '2.0.0' } },
   metrics: { cpu_percent: 25, memory_used_gb: 4.0, memory_total_gb: 16.0, memory_percent: 25 },
   disk: { used_gb: 100, total_gb: 500, percent: 20 },
   info: { platform: 'linux', platform_release: '6.1', architecture: 'x86_64', processor: 'Intel', cpu_count: 8, platform_version: '6.1.0' },

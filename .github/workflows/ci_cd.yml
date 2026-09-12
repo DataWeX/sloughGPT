@@ -30,9 +30,13 @@ jobs:
           cache-dependency-path: |
             apps/api/server/requirements.txt
             pyproject.toml
-      - run: pip install ruff
-      - name: Ruff syntax check
-        run: ruff check packages/core-py/ apps/api/server/ --select E9,F63,F7,F82 --exclude '__pycache__'
+      - run: pip install ruff mypy
+      - name: Ruff lint
+        run: ruff check packages/core-py/ apps/api/server/ --exclude '__pycache__'
+      - name: Ruff format check
+        run: ruff format --check packages/core-py/ apps/api/server/ --exclude '__pycache__'
+      - name: Mypy type check
+        run: mypy packages/core-py/ apps/api/server/ --ignore-missing-imports --no-error-summary || true
 
   # ─── Core Python tests (packages/core-py) ───────────────────────
   test-core-py:
@@ -65,6 +69,7 @@ jobs:
             --ignore=tests/test_slonet_compute_sensitivity.py \
             --ignore=tests/test_slonet_provider.py \
             --ignore=tests/test_shell_repl.py \
+            --cov=. --cov-report=term-missing --cov-fail-under=50 \
             -q --tb=short
 
   # ─── Server API tests ───────────────────────────────────────────
@@ -90,7 +95,7 @@ jobs:
 
       - name: Run server tests
         working-directory: apps/api/server
-        run: python -m pytest tests/ -q --tb=short
+        run: python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=30 -q --tb=short
 
   # ─── Root-level Python tests (tests/) ───────────────────────────
   # DISABLED: ~100 pre-existing failures from success_response wrapper changes

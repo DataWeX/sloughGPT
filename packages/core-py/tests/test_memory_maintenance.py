@@ -7,14 +7,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from domains.memory.maintenance import (
+from domain.memory._internal.maintenance import (
     maintenance_tick,
     run_memory_maintenance,
     start_memory_maintenance,
     stop_memory_maintenance,
     _maintenance_task,
 )
-import domains.memory.maintenance as mod
+import domain.memory._internal.maintenance as mod
 
 
 @pytest.fixture(autouse=True)

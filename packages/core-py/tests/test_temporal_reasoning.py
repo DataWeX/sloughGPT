@@ -1,6 +1,6 @@
 """Meaningful tests for TemporalReasoningEngine — timeline management, branching, switching, merging."""
 
-from domains.soul.quantum import TemporalReasoningEngine
+from domain.soul._internal.quantum import TemporalReasoningEngine
 
 
 class TestTemporalReasoningInit:

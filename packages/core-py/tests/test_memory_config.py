@@ -1,8 +1,8 @@
-"""Tests for domains.memory.memory_config — MemoryConfig."""
+"""Tests for domain.memory._internal.config — MemoryConfig."""
 
 import os
 import pytest
-from domains.memory.memory_config import MemoryConfig
+from domain.memory._internal.memory_config import MemoryConfig
 
 
 class TestMemoryConfigDefaults:

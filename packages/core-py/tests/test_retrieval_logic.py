@@ -1,7 +1,7 @@
 """Meaningful tests for RelationshipMemory, BM25Indexer, HybridRetriever."""
 
 import time
-from domains.soul.cognitive import RelationshipMemory
+from domain.soul._internal.cognitive import RelationshipMemory
 from domains.cognitive.rag import BM25Indexer, HybridRetriever, TextChunk, RetrievalResult
 
 

@@ -1,7 +1,7 @@
 """Meaningful tests for SessionMemory, EpisodicMemoryStore, CognitiveArchitecture, NeuralPlasticityEngine, MetaLearningEngine."""
 
 import time
-from domains.soul.cognitive import (
+from domain.soul._internal.cognitive import (
     SessionMemory, EpisodicMemoryStore, CognitiveArchitecture,
     NeuralPlasticityEngine, MetaLearningEngine,
 )

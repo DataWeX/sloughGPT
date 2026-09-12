@@ -32,7 +32,7 @@ describe('KnowledgeSearchCard', () => {
 
   it('displays results when provided', () => {
     const results = [
-      { id: '1', content: 'Fact about cats', topic: 'animals', source: 'manual', importance: 0.8, score: 0.95 },
+      { id: '1', content: 'Fact about cats', topic: 'animals', source: 'manual', importance: 0.8, score: 0.95, url: 'https://example.com', timestamp: 1700000000 },
     ]
     render(<KnowledgeSearchCard {...defaultProps} results={results} />)
     expect(screen.getByText(/Fact about cats/)).toBeInTheDocument()
@@ -40,7 +40,7 @@ describe('KnowledgeSearchCard', () => {
 
   it('displays topic badge for results', () => {
     const results = [
-      { id: '1', content: 'Fact about cats', topic: 'animals', source: 'manual', importance: 0.8, score: 0.95 },
+      { id: '1', content: 'Fact about cats', topic: 'animals', source: 'manual', importance: 0.8, score: 0.95, url: 'https://example.com', timestamp: 1700000000 },
     ]
     render(<KnowledgeSearchCard {...defaultProps} results={results} />)
     expect(screen.getByText('animals')).toBeInTheDocument()

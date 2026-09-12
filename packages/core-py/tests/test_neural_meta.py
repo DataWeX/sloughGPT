@@ -1,11 +1,11 @@
-"""Tests for domains.soul.cognitive — all classes except DreamProcessingEngine.
+"""Tests for domain.soul._internal.cognitive — all classes except DreamProcessingEngine.
 
 Covers: NeuralPlasticityEngine, MetaLearningEngine, SentimentAnalyzer,
 EmotionalResponseGenerator, RelationshipMemory, SessionMemory,
 EpisodicMemoryStore, CognitiveArchitecture.
 """
 
-from domains.soul.cognitive import (
+from domain.soul._internal.cognitive import (
     NeuralPlasticityEngine,
     MetaLearningEngine,
     SentimentAnalyzer,

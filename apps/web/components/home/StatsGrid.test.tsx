@@ -20,7 +20,7 @@ describe('StatsGrid', () => {
   it('shows model count', () => { render(<StatsGrid {...base} />); expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(1) })
   it('shows em dash when null', () => { render(<StatsGrid {...base} modelCount={null} />); expect(screen.getByText('\u2014')).toBeDefined() })
   it('shows soul name', () => { render(<StatsGrid {...base} />); expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1) })
-  it('shows model + soul', () => { render(<StatsGrid {...base} />); expect(screen.getAllByText(/gpt2 \+ Friendly/).length).toBeGreaterThanOrEqual(1) })
+  it('shows model Loaded state', () => { render(<StatsGrid {...base} />); expect(screen.getAllByText('Loaded').length).toBeGreaterThanOrEqual(1) })
   it('shows Not loaded', () => { render(<StatsGrid {...base} modelStatus={{ loaded: false, model: null }} />); expect(screen.getAllByText('Not loaded').length).toBeGreaterThanOrEqual(1) })
   it('shows conversations', () => { render(<StatsGrid {...base} />); expect(screen.getAllByText(/42 conversations/).length).toBeGreaterThanOrEqual(1) })
   it('hides conversations when null', () => { const { container } = render(<StatsGrid {...base} inferenceCount={null} />); expect(container.textContent).not.toMatch(/\d+ conversations/) })

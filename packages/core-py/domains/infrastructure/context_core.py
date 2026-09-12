@@ -382,7 +382,7 @@ Be concise, accurate, and helpful."""
             return ""
         try:
             import asyncio
-            from domains.memory.memory_service import get_memory_service
+            from domain.memory._internal.memory_service import get_memory_service
 
             def _retrieve() -> List[Dict[str, Any]]:
                 return get_memory_service().retrieve(query, limit)

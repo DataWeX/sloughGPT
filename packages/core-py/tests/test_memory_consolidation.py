@@ -1,6 +1,6 @@
-"""Tests for domains.memory.consolidation — plan_consolidation, _embed_cache."""
+"""Tests for domain.memory._internal.consolidation — plan_consolidation, _embed_cache."""
 
-from domains.memory.consolidation import plan_consolidation, _embed_cache
+from domain.memory._internal.consolidation import plan_consolidation, _embed_cache
 
 
 class TestEmbedCache:

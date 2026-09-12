@@ -1,8 +1,8 @@
-"""Tests for domains.soul.cognitive — CognitiveArchitecture and related classes."""
+"""Tests for domain.soul._internal.cognitive — CognitiveArchitecture and related classes."""
 
 import pytest
 from dataclasses import dataclass
-from domains.soul.cognitive import (
+from domain.soul._internal.cognitive import (
     CognitiveArchitecture,
     SessionMemory,
     EpisodicMemoryStore,

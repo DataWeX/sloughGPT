@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { LocaleProvider } from '@/hooks/useLocale'
 import ConsciousnessPlaygroundPage from './page'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import type { ConsciousnessController } from '@/lib/consciousness-controller'
 
 const { mockAddToast } = vi.hoisted(() => ({
   mockAddToast: vi.fn(),

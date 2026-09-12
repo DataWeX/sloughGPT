@@ -162,7 +162,7 @@ class TestDashboardSummary:
         _mock("domains.training.outcome_tracker", {
             "TrainingOutcomeTracker": MagicMock(return_value=MagicMock(get_stats=lambda: {"total_runs": 3}))
         })
-        _mock("domains.settings.persistent", {
+        _mock("domain.settings._internal.persistent", {
             "get_settings": MagicMock(return_value={"settings": True})
         })
 
@@ -197,7 +197,7 @@ class TestDashboardSummary:
         _mock("domains.training.outcome_tracker", {
             "TrainingOutcomeTracker": MagicMock(return_value=MagicMock(get_stats=lambda: {"total_runs": 0}))
         })
-        _mock("domains.settings.persistent", {
+        _mock("domain.settings._internal.persistent", {
             "get_settings": MagicMock(return_value={"settings": True})
         })
 
@@ -231,7 +231,7 @@ class TestDashboardSummary:
         _mock("domains.training.outcome_tracker", {
             "TrainingOutcomeTracker": MagicMock(return_value=MagicMock(get_stats=lambda: {"total_runs": 3}))
         })
-        _mock("domains.settings.persistent", {
+        _mock("domain.settings._internal.persistent", {
             "get_settings": MagicMock(return_value={"settings": True})
         })
 

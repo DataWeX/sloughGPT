@@ -127,25 +127,20 @@ export function TerminalPanel({
     )}>
       {/* macOS title bar */}
       <div className="flex items-center h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-        {/* Traffic lights */}
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full bg-[#ff5f57] shadow-[inset_0_-1px_1px_rgba(0,0,0,0.15)] ring-1 ring-black/10" />
           <span className="w-3 h-3 rounded-full bg-[#febc2e] shadow-[inset_0_-1px_1px_rgba(0,0,0,0.15)] ring-1 ring-black/10" />
           <span className="w-3 h-3 rounded-full bg-[#28c840] shadow-[inset_0_-1px_1px_rgba(0,0,0,0.15)] ring-1 ring-black/10" />
         </div>
-        {/* Title */}
         <div className="flex-1 flex items-center justify-center">
           <span className="text-[11px] font-medium text-[#8e8e93] select-none">dait</span>
         </div>
-        {/* Status indicator */}
-        <div className="flex items-center gap-1.5">
-          <span className={cn(
-            'w-1.5 h-1.5 rounded-full',
-            state.isRunning ? 'bg-[#febc2e] animate-pulse' :
-            state.exitCode !== null && state.exitCode !== 0 ? 'bg-[#ff5f57]' :
-            'bg-[#28c840]',
-          )} />
-        </div>
+        <span className={cn(
+          'w-1.5 h-1.5 rounded-full',
+          state.isRunning ? 'bg-[#febc2e] animate-pulse' :
+          state.exitCode !== null && state.exitCode !== 0 ? 'bg-[#ff5f57]' :
+          'bg-[#28c840]',
+        )} />
       </div>
 
       {/* Output area */}

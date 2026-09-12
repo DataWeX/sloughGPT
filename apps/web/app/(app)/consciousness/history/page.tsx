@@ -91,7 +91,7 @@ export default function ConsciousnessHistoryPage() {
 
   const fetchEpisodes = useCallback(async (off: number, append: boolean) => {
     try {
-      const data = await consciousnessController.getEpisodeHistory(PAGE_SIZE) as any
+      const data = await consciousnessController.getEpisodeHistory(PAGE_SIZE)
       const newEps: Episode[] = data.episodes ?? []
       const total: number = data.total ?? 0
       if (append) {

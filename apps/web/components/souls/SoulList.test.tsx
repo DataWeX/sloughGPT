@@ -61,7 +61,6 @@ vi.mock('@/lib/time-format', () => ({
   formatShortDate: (d: string) => 'Jan 1, 2025',
 }))
 
-import { SoulList } from './SoulList'
 import type { Soul } from '@/lib/souls-controller'
 
 const makeSoul = (overrides: Partial<Soul> = {}): Soul => ({

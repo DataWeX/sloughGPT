@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { cn } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { FileEntry } from '@/lib/files-controller'
 
 interface FileStatsCardProps {
@@ -25,12 +25,12 @@ function extGroup(filename: string): string {
 }
 
 const GROUP_COLORS: Record<string, string> = {
-  Text: 'bg-[#28c840]/10 text-[#28c840]',
-  Data: 'bg-[#0a7aff]/10 text-[#0a7aff]',
-  Code: 'bg-[#febc2e]/10 text-[#febc2e]',
-  Web: 'bg-[#bf5af2]/10 text-[#bf5af2]',
-  PDF: 'bg-[#ff5f57]/10 text-[#ff5f57]',
-  Other: 'bg-white/[0.06] text-[#8e8e93]',
+  Text: 'bg-success/15 text-success',
+  Data: 'bg-primary/15 text-primary',
+  Code: 'bg-warning/15 text-warning',
+  Web: 'bg-accent/15 text-accent',
+  PDF: 'bg-destructive/15 text-destructive',
+  Other: 'bg-muted text-muted-foreground',
 }
 
 export function FileStatsCard({ files }: FileStatsCardProps) {
@@ -52,44 +52,35 @@ export function FileStatsCard({ files }: FileStatsCardProps) {
   if (files.length === 0) return null
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden" data-testid="file-stats">
-      <div className="flex items-center h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-        <span className="text-[11px] font-medium text-[#8e8e93]">File Overview</span>
-      </div>
-      <div className="px-4 py-3">
-        {/* KPI row */}
-        <div className="grid grid-cols-3 gap-3 mb-3">
-          {[
-            { label: 'Total', value: files.length },
-            { label: 'Size', value: formatSize(totalSize) },
-            { label: 'Indexed', value: `${indexed}/${files.length}` },
-          ].map(kpi => (
-            <div key={kpi.label} className="rounded-lg border border-white/[0.04] bg-[#111111] px-3 py-2">
-              <p className="text-[10px] text-[#636366] uppercase tracking-wider">{kpi.label}</p>
-              <p className="text-[13px] font-medium text-[#c7c7cc] font-mono mt-0.5">{kpi.value}</p>
-            </div>
-          ))}
-        </div>
-        {/* Group breakdown */}
-        <div className="space-y-1">
+    <Card data-testid="file-stats">
+      <CardHeader>
+        <CardTitle className="text-base">File Overview</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <KpiGrid columns={3} className="mb-3">
+          <StatCard label="Total" value={files.length} />
+          <StatCard label="Size" value={formatSize(totalSize)} />
+          <StatCard label="Indexed" value={<>{indexed}<span className="text-muted-foreground">/{files.length}</span></>} />
+        </KpiGrid>
+        <div className="space-y-1.5">
           {sorted.map(([group, { count, size }]) => (
-            <div key={group} className="flex items-center justify-between text-[11px] py-1">
+            <div key={group} className="flex items-center justify-between text-[11px] py-0.5">
               <div className="flex items-center gap-2">
                 <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', GROUP_COLORS[group] ?? GROUP_COLORS.Other)}>
                   {group}
                 </span>
-                <span className="text-[#636366]">{count} file{count !== 1 ? 's' : ''}</span>
+                <span className="text-muted-foreground">{count} file{count !== 1 ? 's' : ''}</span>
               </div>
-              <span className="font-mono text-[#636366]">{formatSize(size)}</span>
+              <span className="font-mono text-muted-foreground">{formatSize(size)}</span>
             </div>
           ))}
         </div>
         {notIndexed > 0 && (
-          <div className="mt-2 text-[10px] text-[#febc2e]">
+          <div className="mt-2 text-[10px] text-warning">
             {notIndexed} file{notIndexed !== 1 ? 's' : ''} not indexed
           </div>
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }

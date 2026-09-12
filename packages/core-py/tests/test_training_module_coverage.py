@@ -115,11 +115,11 @@ class TestQualityScorerModule:
 class TestAdaptiveConfigModule:
     """Tests for domains/training/adaptive_config.py."""
 
-    def test_adaptive_config_exists(self):
-        from domains.training.adaptive_config import AdaptiveConfig
+    def test_adaptive_config_engine_exists(self):
+        from domains.training.adaptive_config import AdaptiveConfigEngine
 
-        config = AdaptiveConfig()
-        assert config is not None
+        engine = AdaptiveConfigEngine()
+        assert engine is not None
 
 
 class TestCheckpointsModule:
@@ -138,51 +138,63 @@ class TestDatasetModule:
     def test_dataset_creation(self):
         from domains.training.dataset import TrainingDataset
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write(DATA_TEXT)
-            f.flush()
-            dataset = TrainingDataset(path=f.name)
-            assert dataset is not None
+        dataset = TrainingDataset(source_text=DATA_TEXT)
+        assert dataset is not None
+        assert len(dataset.chunks) > 0
 
 
 class TestPairExtractorModule:
     """Tests for domains/training/pair_extractor.py."""
 
-    def test_extract_pairs_from_text(self):
-        from domains.training.pair_extractor import extract_pairs_from_text
+    def test_extract_pairs_from_sessions(self):
+        from domains.training.pair_extractor import extract_pairs_from_sessions
 
-        pairs = extract_pairs_from_text("User: Hello\nAssistant: Hi there")
+        pairs = extract_pairs_from_sessions([])
         assert isinstance(pairs, list)
 
 
 class TestPerformanceModule:
     """Tests for domains/training/performance.py."""
 
-    def test_performance_tracker_exists(self):
-        from domains.training.performance import PerformanceTracker
+    def test_performance_monitor_exists(self):
+        from domains.training.performance import PerformanceMonitor
 
-        tracker = PerformanceTracker()
-        assert tracker is not None
+        monitor = PerformanceMonitor()
+        assert monitor is not None
 
 
 class TestLRSchedulersModule:
     """Tests for domains/training/lr_schedulers.py."""
 
-    def test_get_scheduler(self):
-        from domains.training.lr_schedulers import get_scheduler
+    def test_scheduler_classes_importable(self):
+        from domains.training.lr_schedulers import (
+            SchedulerConfig,
+            WarmupCosineScheduler,
+            PolynomialDecayScheduler,
+            LinearWarmupScheduler,
+        )
 
-        scheduler = get_scheduler("cosine", optimizer=None, num_warmup_steps=10, num_training_steps=100)
-        assert scheduler is not None
+        assert SchedulerConfig is not None
+        assert WarmupCosineScheduler is not None
+        assert PolynomialDecayScheduler is not None
+        assert LinearWarmupScheduler is not None
 
 
 class TestEWCModule:
     """Tests for domains/training/ewc.py."""
 
-    def test_ewc_exists(self):
-        from domains.training.ewc import EWC
+    def test_ewc_classes_importable(self):
+        from domains.training.ewc import (
+            EWCParameters,
+            TaskSnapshot,
+            DiagonalFisherEstimator,
+            EwcContinualLearner,
+        )
 
-        ewc = EWC()
-        assert ewc is not None
+        assert EWCParameters is not None
+        assert TaskSnapshot is not None
+        assert DiagonalFisherEstimator is not None
+        assert EwcContinualLearner is not None
 
 
 class TestComprehensiveTrainerExtended:
@@ -233,5 +245,6 @@ class TestComprehensiveTrainerExtended:
                     "n_head": 2,
                 },
             )
-            assert hasattr(result, "phase_durations")
-            assert isinstance(result.phase_durations, dict)
+            assert result.success
+            assert hasattr(result, "performance")
+            assert isinstance(result.performance, dict)

@@ -6,7 +6,7 @@ import math
 import random
 import pytest
 
-from domains.soul.quantum import (
+from domain.soul._internal.quantum import (
     QuantumState,
     QuantumCognitiveEngine,
     QuantumParallelProcessor,

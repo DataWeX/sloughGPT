@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "main" | grep -q "$(git rev-parse --abbrev-ref HEAD)" && echo "⚠️  Direct commits to main are discouraged" && exit 0

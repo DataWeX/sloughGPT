@@ -6,9 +6,9 @@ import pytest
 
 from pathlib import Path
 
-from domains.memory.memory_config import MemoryConfig
-from domains.memory.memory_provider import KnowledgeMemoryProvider
-from domains.memory.memory_service import MemoryService, get_memory_service
+from domain.memory._internal.memory_config import MemoryConfig
+from domain.memory._internal.memory_provider import KnowledgeMemoryProvider
+from domain.memory._internal.memory_service import MemoryService, get_memory_service
 from domains.learner.knowledge import KnowledgeMemory
 
 
@@ -320,7 +320,7 @@ class TestConsolidation:
             "Machine learning learns patterns from data very effectively.",
             "ml", "task",
         )
-        from domains.memory.consolidation import plan_consolidation
+        from domain.memory._internal.consolidation import plan_consolidation
 
         plan = plan_consolidation(service.list_all(limit=100), threshold=0.80)
         assert plan["removed_count"] == 1
@@ -333,7 +333,7 @@ class TestConsolidation:
     def test_consolidate_distinct_facts_untouched(self, service):
         service.store("Machine learning learns patterns from data.", "ml", "task")
         service.store("The octopus has three hearts and blue blood.", "biology", "task")
-        from domains.memory.consolidation import plan_consolidation
+        from domain.memory._internal.consolidation import plan_consolidation
 
         plan = plan_consolidation(service.list_all(limit=100), threshold=0.80)
         assert plan["removed_count"] == 0
@@ -511,7 +511,7 @@ class TestChatWiring:
 
     def test_router_imports_memory_service(self):
         src = self._ROUTER.read_text()
-        assert "from domains.memory.memory_service import get_memory_service" in src
+        assert "from domain.memory._internal.memory_service import get_memory_service" in src
 
     def test_router_invokes_remember_facts_in_post_gen(self):
         src = self._ROUTER.read_text()

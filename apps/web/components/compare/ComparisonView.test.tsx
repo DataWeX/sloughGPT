@@ -18,7 +18,8 @@ vi.mock('@sloughgpt/strui', () => ({
 vi.mock('next/dynamic', () => {
   const mock = (factory: any, opts?: any) => {
     const Component = React.forwardRef((props: any, ref: any) => React.createElement('div', { 'data-testid': 'dynamic-component', ref }, null))
-    return Object.assign(Component, { displayName: 'DynamicComponent' })
+    Component.displayName = 'DynamicComponent'
+    return Component
   }
   return { __esModule: true, default: mock }
 })
@@ -52,7 +53,7 @@ import { ComparisonView, ComparisonHeader } from './ComparisonView'
 afterEach(() => cleanup())
 
 const baseProps = {
-  models: [{ id: 'm1', name: 'Model A' }],
+  models: [{ id: 'm1', name: 'Model A', loaded: true }],
   loading: false,
   results: {},
   running: new Set<string>(),
@@ -90,14 +91,14 @@ describe('ComparisonView', () => {
   })
 
   it('renders snapshots when present', () => {
-    const snapshots = [{ id: 's1', name: 'Snapshot 1', savedAt: '2026-01-01T00:00:00Z', modelIds: ['m1'], results: {} }]
+    const snapshots = [{ id: 's1', name: 'Snapshot 1', savedAt: '2026-01-01T00:00:00Z', modelIds: ['m1'], results: {}, modelNames: {} }]
     render(<ComparisonView {...baseProps} snapshots={snapshots} />)
     expect(screen.getByText('Saved Comparisons')).toBeTruthy()
     expect(screen.getByText('Snapshot 1')).toBeTruthy()
   })
 
   it('renders comparison table and cards when results exist', () => {
-    const results: [string, any] = [['m1', { throughput: 100, latency: 50 }]]
+    const results = [['m1', { throughput: 100, latency: 50 }]] as [string, any][]
     render(<ComparisonView {...baseProps} completedResults={results} />)
     expect(screen.getByTestId('comparison-table-card')).toBeTruthy()
     expect(screen.getByTestId('insights-card')).toBeTruthy()
@@ -120,7 +121,7 @@ describe('ComparisonHeader', () => {
   })
 
   it('shows save input when results exist', () => {
-    const results: [string, any] = [['m1', {}]]
+    const results = [['m1', {}]] as [string, any][]
     render(<ComparisonHeader completedResults={results} snapshotName="test" onSnapshotNameChange={vi.fn()} onSaveSnapshot={vi.fn()} onExport={vi.fn()} onRunAll={vi.fn()} loading={false} running={new Set()} />)
     expect(screen.getByRole('button', { name: /Save/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Export/ })).toBeTruthy()

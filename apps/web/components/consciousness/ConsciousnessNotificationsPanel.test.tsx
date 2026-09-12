@@ -10,6 +10,7 @@ vi.mock('@/hooks/useConsciousnessNotifications', () => ({
     unreadCount: 0,
     markAsRead: vi.fn(),
     clearAll: vi.fn(),
+    addNotification: vi.fn(),
   }),
 }))
 
@@ -61,6 +62,7 @@ describe('ConsciousnessNotificationsPanel', () => {
       unreadCount: 1,
       markAsRead: vi.fn(),
       clearAll: vi.fn(),
+      addNotification: vi.fn(),
     })
     renderComponent()
     fireEvent.click(screen.getByLabelText('consciousness_notifications.toggle'))
@@ -76,6 +78,7 @@ describe('ConsciousnessNotificationsPanel', () => {
       unreadCount: 1,
       markAsRead: vi.fn(),
       clearAll: vi.fn(),
+      addNotification: vi.fn(),
     })
     renderComponent()
     expect(screen.getByText('1')).toBeTruthy()
@@ -89,6 +92,7 @@ describe('ConsciousnessNotificationsPanel', () => {
       unreadCount: 1,
       markAsRead: vi.fn(),
       clearAll: vi.fn(),
+      addNotification: vi.fn(),
     })
     renderComponent()
     fireEvent.click(screen.getByLabelText('consciousness_notifications.toggle'))

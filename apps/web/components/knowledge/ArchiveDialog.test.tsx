@@ -54,7 +54,7 @@ afterEach(() => cleanup())
 const defaultProps = {
   open: true,
   onOpenChange: vi.fn(),
-  archiveStats: { records: 5, bytes: 10240 },
+  archiveStats: { records: 5, bytes: 10240, path: 'mem:/archive', task_types: {}, oldest_ts: null, newest_ts: null },
 }
 
 beforeEach(() => {

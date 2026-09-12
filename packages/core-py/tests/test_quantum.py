@@ -1,9 +1,9 @@
-"""Tests for domains.soul.quantum — QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor, HyperdimensionalProcessor, TemporalReasoningEngine."""
+"""Tests for domain.soul._internal.quantum — QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor, HyperdimensionalProcessor, TemporalReasoningEngine."""
 
 import math
 import random
 import pytest
-from domains.soul.quantum import (
+from domain.soul._internal.quantum import (
     QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor,
     HyperdimensionalProcessor, TemporalReasoningEngine,
 )

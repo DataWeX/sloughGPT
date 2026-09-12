@@ -71,11 +71,17 @@ describe('useConsciousnessStatus', () => {
 
   it('fetches and returns status', async () => {
     const mockStatus = {
+      status: 'ok',
+      uptime: 3600,
       enabled: true,
       level: 2,
       episodes: 10,
+      beliefs_count: 1,
+      qualia_count: 1,
+      narrative: 'A narrative.',
       beliefs: { competence: 0.7 },
       current_qualia: { valence: 0.5, arousal: 0.3, novelty: 0.6, coherence: 0.7, salience: 0.4 },
+      training: { is_training: false, total_pairs: 0, current_epoch: 0, loss: 0 },
     }
     mockCtrl.getStatus.mockResolvedValue(mockStatus)
 

@@ -1,8 +1,8 @@
-"""Tests for domains.soul.quantum — HyperdimensionalProcessor, TemporalReasoningEngine."""
+"""Tests for domain.soul._internal.quantum — HyperdimensionalProcessor, TemporalReasoningEngine."""
 
 import pytest
 
-from domains.soul.quantum import HyperdimensionalProcessor, TemporalReasoningEngine
+from domain.soul._internal.quantum import HyperdimensionalProcessor, TemporalReasoningEngine
 
 
 # ── HyperdimensionalProcessor construction ──────────────────────────────────

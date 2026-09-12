@@ -30,12 +30,15 @@ export default function DeveloperPage() {
   return (
     <PageContainer title="Developer" subtitle="Shell, files, voice & API tools">
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList aria-label="Developer tools">
-          <TabsTrigger value="shell">Terminal</TabsTrigger>
-          <TabsTrigger value="files">Files</TabsTrigger>
-          <TabsTrigger value="voice">Voice</TabsTrigger>
-          <TabsTrigger value="api">API</TabsTrigger>
-          <TabsTrigger value="quick">Quick Actions</TabsTrigger>
+        <TabsList
+          aria-label="Developer tools"
+          className="rounded-xl border border-white/[0.06] bg-[#111111] p-1 h-auto"
+        >
+          <TabsTrigger value="shell" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">Terminal</TabsTrigger>
+          <TabsTrigger value="files" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">Files</TabsTrigger>
+          <TabsTrigger value="voice" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">Voice</TabsTrigger>
+          <TabsTrigger value="api" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">API</TabsTrigger>
+          <TabsTrigger value="quick" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">Quick Actions</TabsTrigger>
         </TabsList>
 
         <TabsContent value="shell"><ShellTab /></TabsContent>

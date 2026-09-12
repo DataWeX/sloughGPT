@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from domains.mobile.notifications import (
+from domain.mobile._internal.notifications import (
     DeviceToken,
     NotificationPayload,
     PushNotificationService,

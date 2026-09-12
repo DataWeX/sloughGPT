@@ -1,6 +1,6 @@
-"""Tests for domains.soul.cognitive — SessionMemory, EpisodicMemoryStore, SentimentAnalyzer, EmotionalResponseGenerator, RelationshipMemory, NeuralPlasticityEngine, MetaLearningEngine."""
+"""Tests for domain.soul._internal.cognitive — SessionMemory, EpisodicMemoryStore, SentimentAnalyzer, EmotionalResponseGenerator, RelationshipMemory, NeuralPlasticityEngine, MetaLearningEngine."""
 
-from domains.soul.cognitive import (
+from domain.soul._internal.cognitive import (
     SessionMemory,
     EpisodicMemoryStore,
     SentimentAnalyzer,

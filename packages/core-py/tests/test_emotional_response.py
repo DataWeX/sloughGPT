@@ -1,6 +1,6 @@
 """Meaningful tests for EmotionalResponseGenerator — empathetic responses, adaptation, formatting."""
 
-from domains.soul.cognitive import (
+from domain.soul._internal.cognitive import (
     EmotionalResponseGenerator,
     SentimentAnalyzer,
     RelationshipMemory,

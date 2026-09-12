@@ -9,7 +9,7 @@ import pytest
 
 from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 from domains.training.adaptive_config import AdaptiveConfigEngine, AdaptiveRecommendation
-from domains.settings.persistent import (
+from domain.settings._internal.persistent import (
     AppSettings,
     GenerationSettings,
     TrainingSettings,

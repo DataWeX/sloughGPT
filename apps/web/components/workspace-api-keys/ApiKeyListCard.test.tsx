@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import { ApiKeyListCard } from './ApiKeyListCard'
+import { ApiKeyListCard } from '@/components/api-keys/ApiKeyListCard'
 
 afterEach(() => cleanup())
 
@@ -63,12 +63,12 @@ describe('ApiKeyListCard', () => {
 
   it('renders the title', () => {
     render(<ApiKeyListCard keys={[]} />)
-    expect(screen.getByText('Active Keys')).toBeDefined()
+    expect(screen.getByText(/API Keys/)).toBeDefined()
   })
 
-  it('renders custom title', () => {
-    render(<ApiKeyListCard keys={[]} title="Revoked Keys" />)
-    expect(screen.getByText('Revoked Keys')).toBeDefined()
+  it('shows the active key count', () => {
+    render(<ApiKeyListCard keys={mockKeys} />)
+    expect(screen.getByText(/1 active/)).toBeDefined()
   })
 
   it('renders empty message when no keys', () => {
@@ -89,19 +89,20 @@ describe('ApiKeyListCard', () => {
   it('calls onRotate when rotate button clicked', () => {
     const onRotate = vi.fn()
     render(<ApiKeyListCard keys={[mockKeys[0]]} onRotate={onRotate} />)
-    fireEvent.click(screen.getByTitle('Rotate key'))
+    fireEvent.click(screen.getByText('Rotate'))
     expect(onRotate).toHaveBeenCalledWith('1')
   })
 
-  it('calls onRevoke when revoke button clicked', () => {
+  it('calls onRevoke when confirm button clicked', () => {
     const onRevoke = vi.fn()
     render(<ApiKeyListCard keys={[mockKeys[0]]} onRevoke={onRevoke} />)
-    fireEvent.click(screen.getByTitle('Revoke key'))
+    fireEvent.click(screen.getByText('Revoke'))
+    fireEvent.click(screen.getByText('Confirm'))
     expect(onRevoke).toHaveBeenCalledWith('1')
   })
 
   it('shows Revoked badge for revoked keys', () => {
     render(<ApiKeyListCard keys={[mockKeys[1]]} />)
-    expect(screen.getByText('Revoked')).toBeDefined()
+    expect(screen.getAllByText('Revoked').length).toBeGreaterThanOrEqual(1)
   })
 })

@@ -2,11 +2,11 @@
 
 import random
 import pytest
-from domains.soul.quantum import (
+from domain.soul._internal.quantum import (
     QuantumState, QuantumCognitiveEngine, QuantumParallelProcessor,
     HyperdimensionalProcessor,
 )
-from domains.soul.hd_memory import HDMemoryStore, HDMemoryItem
+from domain.soul._internal.hd_memory import HDMemoryStore, HDMemoryItem
 
 
 # ── QuantumState ───────────────────────────────────────────────────────

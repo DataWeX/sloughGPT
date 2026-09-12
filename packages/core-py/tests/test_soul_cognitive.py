@@ -1,10 +1,10 @@
-"""Tests for domains.soul.cognitive — SentimentAnalyzer, EmotionalResponseGenerator,
+"""Tests for domain.soul._internal.cognitive — SentimentAnalyzer, EmotionalResponseGenerator,
 RelationshipMemory, CognitiveArchitecture, NeuralPlasticityEngine,
 MetaLearningEngine, DreamProcessingEngine."""
 
 import pytest
 from dataclasses import dataclass
-from domains.soul.cognitive import (
+from domain.soul._internal.cognitive import (
     SentimentAnalyzer,
     EmotionalResponseGenerator,
     RelationshipMemory,

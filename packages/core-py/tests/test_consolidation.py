@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from domains.memory.consolidation import plan_consolidation
+from domain.memory._internal.consolidation import plan_consolidation
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ class TestEdgeCases:
         assert result["removed_count"] == 0
 
     def test_two_distinct_facts(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.3):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.3):
             result = plan_consolidation([
                 _fact("a", "cats are animals"),
                 _fact("b", "quantum physics is complex"),
@@ -39,7 +39,7 @@ class TestEdgeCases:
         assert result["removed_count"] == 0
 
     def test_missing_id_skipped(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.0):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.0):
             result = plan_consolidation([{"content": "no id field"}])
         assert result["keep_ids"] == []
         assert result["removed_count"] == 0
@@ -49,7 +49,7 @@ class TestEdgeCases:
 
 class TestDuplicateDetection:
     def test_two_near_duplicates(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.95):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.95):
             result = plan_consolidation([
                 _fact("a", "The user prefers Zed over VS Code"),
                 _fact("b", "User prefers the editor Zed"),
@@ -63,13 +63,13 @@ class TestDuplicateDetection:
     def test_keeps_longest_fact(self):
         short = _fact("a", "short")
         long = _fact("b", "this is a much longer fact with more detail")
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.95):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.95):
             result = plan_consolidation([short, long])
         assert result["keep_ids"] == ["b"]
         assert result["remove_ids"] == ["a"]
 
     def test_three_duplicates_cluster(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.90):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.90):
             result = plan_consolidation([
                 _fact("a", "fact one"),
                 _fact("b", "fact one rephrased"),
@@ -95,7 +95,7 @@ class TestDuplicateDetection:
             else:
                 return 0.95  # b,c
 
-        with patch("domains.memory.consolidation._cosine_similarity", side_effect=mock_sim):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", side_effect=mock_sim):
             result = plan_consolidation([
                 _fact("a", "alpha"),
                 _fact("b", "beta"),
@@ -109,7 +109,7 @@ class TestDuplicateDetection:
 
 class TestTopicIsolation:
     def test_different_topics_not_clustered(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.99):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.99):
             result = plan_consolidation([
                 _fact("a", "same text", topic="cooking"),
                 _fact("b", "same text", topic="coding"),
@@ -118,7 +118,7 @@ class TestTopicIsolation:
         assert result["keep_ids"] == ["a", "b"]
 
     def test_same_topic_clustered(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.99):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.99):
             result = plan_consolidation([
                 _fact("a", "same text", topic="cooking"),
                 _fact("b", "same text", topic="cooking"),
@@ -126,7 +126,7 @@ class TestTopicIsolation:
         assert result["removed_count"] == 1
 
     def test_none_topic_defaults_to_general(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.99):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.99):
             result = plan_consolidation([
                 _fact("a", "text", topic=None),
                 _fact("b", "text", topic=None),
@@ -138,7 +138,7 @@ class TestTopicIsolation:
 
 class TestThreshold:
     def test_exact_threshold_included(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.80):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.80):
             result = plan_consolidation(
                 [_fact("a", "x"), _fact("b", "y")],
                 threshold=0.80,
@@ -146,7 +146,7 @@ class TestThreshold:
         assert result["removed_count"] == 1
 
     def test_below_threshold_excluded(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.79):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.79):
             result = plan_consolidation(
                 [_fact("a", "x"), _fact("b", "y")],
                 threshold=0.80,
@@ -154,7 +154,7 @@ class TestThreshold:
         assert result["removed_count"] == 0
 
     def test_custom_threshold(self):
-        with patch("domains.memory.consolidation._cosine_similarity", return_value=0.50):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", return_value=0.50):
             result = plan_consolidation(
                 [_fact("a", "x"), _fact("b", "y")],
                 threshold=0.50,
@@ -175,7 +175,7 @@ class TestMultipleClusters:
                 return 0.95
             return 0.20
 
-        with patch("domains.memory.consolidation._cosine_similarity", side_effect=mock_sim):
+        with patch("domain.memory._internal.consolidation._cosine_similarity", side_effect=mock_sim):
             result = plan_consolidation([
                 _fact("a", "cooking tip one"),
                 _fact("b", "cooking tip one rephrased"),

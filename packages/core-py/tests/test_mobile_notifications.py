@@ -5,7 +5,7 @@ import time
 from unittest.mock import patch, MagicMock
 
 import pytest
-from domains.mobile.notifications import (
+from domain.mobile._internal.notifications import (
     DeviceToken,
     NotificationPayload,
     PushNotificationService,
@@ -717,7 +717,7 @@ class TestNotificationServiceSingleton:
         old = mod._service
         try:
             mod._service = None
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile._internal.notifications import get_notification_service
             svc1 = get_notification_service()
             svc2 = get_notification_service()
             assert svc1 is svc2

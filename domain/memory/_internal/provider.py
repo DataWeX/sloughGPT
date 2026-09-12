@@ -64,7 +64,7 @@ class KnowledgeMemoryProvider:
         """Resolve the concrete store (injected or module singleton)."""
         if self._store is not None:
             return self._store
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.knowledge import get_knowledge_memory
         return get_knowledge_memory()
 
     def store_turn(self, user_message: str, assistant_response: str) -> bool:
