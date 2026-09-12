@@ -12,6 +12,7 @@ import { filesController, type FileEntry } from '@/lib/files-controller'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { authFetch } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
 
 
 const QUICK_ACTIONS = [
@@ -26,9 +27,31 @@ const QUICK_ACTIONS = [
 export default function DeveloperPage() {
   const [tab, setTab] = useState<string>('shell')
   useRefreshShortcut(() => { window.location.reload() })
+  const { startupStage, startupElapsed } = useLiveStatus()
 
   return (
-    <PageContainer title="Developer" subtitle="Shell, files, voice & API tools">
+    <PageContainer
+      title="Developer"
+      subtitle="Shell, files, voice & API tools"
+      headerRight={
+        <div className="flex items-center gap-3">
+          {startupStage && startupStage !== 'ready' && startupStage !== 'background' && (
+            <div className="flex items-center gap-2 rounded-lg border border-[#febc2e]/20 bg-[#febc2e]/[0.06] px-3 py-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#febc2e] animate-pulse" />
+              <span className="text-[10px] font-medium text-[#febc2e] uppercase tracking-wider">
+                {startupStage} {startupElapsed > 0 && `· ${startupElapsed.toFixed(0)}s`}
+              </span>
+            </div>
+          )}
+          {startupStage === 'ready' && (
+            <div className="flex items-center gap-2 rounded-lg border border-[#28c840]/20 bg-[#28c840]/[0.06] px-3 py-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#28c840]" />
+              <span className="text-[10px] font-medium text-[#28c840] uppercase tracking-wider">Ready</span>
+            </div>
+          )}
+        </div>
+      }
+    >
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList
           aria-label="Developer tools"

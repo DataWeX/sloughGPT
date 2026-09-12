@@ -624,6 +624,14 @@ class HealthController:
 
         lifecycle = _get_lifecycle_info()
 
+        # Staged loader info
+        try:
+            from infrastructure.staged_loader import get_staged_loader
+            staged_loader = get_staged_loader()
+            startup_progress = staged_loader.get_status()
+        except Exception:
+            startup_progress = {"stage": "unknown", "stage_value": 0, "elapsed_seconds": 0, "errors": {}, "stages": {}}
+
         # Version info
         try:
             from version import version_info as _version_info
@@ -675,6 +683,7 @@ class HealthController:
             "quantization": _get_quantization_info(),
             "kv_sessions": _get_kv_session_info(),
             "lifecycle": lifecycle,
+            "startup_progress": startup_progress,
             "training_pool": _get_executor_stats(),
             "resource_allocation": _get_resource_allocation(),
             "process_guard": _get_process_guard_status(),

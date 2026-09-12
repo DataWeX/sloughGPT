@@ -149,15 +149,21 @@ class HealthRouter:
 
     @endpoint("health.startup_progress")
     async def startup_progress(self) -> dict:
-        """Current startup phase.
+        """Current startup phase with staged loader status.
 
         Returns the lifecycle phase string (e.g. "running", "starting",
-        "draining") from the startup progress tracker.
+        "draining") from the startup progress tracker, plus the staged
+        loader stage and timing information.
 
         Returns:
-            Envelope with the current phase string.
+            Envelope with the current phase string and staged loader info.
         """
-        return success_response(data=STARTUP_PHASE)
+        from infrastructure.staged_loader import get_staged_loader
+
+        loader = get_staged_loader()
+        data = dict(STARTUP_PHASE)
+        data["staged_loader"] = loader.get_status()
+        return success_response(data=data)
 
     @endpoint("health.debug_info")
     async def debug_info(self) -> dict:

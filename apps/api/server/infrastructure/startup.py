@@ -316,41 +316,102 @@ class StartupOrchestrator:
         return server_state.model is not None
 
     async def run(self):
-        """Execute all startup phases via the lifecycle manager."""
-        # Initialize lifecycle manager
-        await self._init_lifecycle()
+        """Execute startup in 3 stages via StagedLoader.
 
-        # Reuse profile enum resolved in _init_lifecycle
-        profile_enum = getattr(self, "_profile_enum", None)
-        if profile_enum is None:
-            try:
-                from domains.infrastructure.lifecycle import StartupProfile
+        Stage 1 (CRITICAL): DB pool, model load, core routers → server accepts requests
+        Stage 2 (READY): Model loaded, all routers → full API available
+        Stage 3 (BACKGROUND): W&B, metrics, analytics → non-critical services
+        """
+        from infrastructure.staged_loader import Stage, get_staged_loader
 
-                profile_enum = StartupProfile.FULL
-            except Exception as exc:
-                logger.warning("StartupProfile import failed: %s", exc, extra={"tag": "START"})
-                profile_enum = None
+        loader = get_staged_loader()
+        self._staged_loader = loader
 
-        # Run sequential phases via lifecycle manager
-        if self._lifecycle is not None:
-            ok = await self._lifecycle.start(timeout=180.0, profile=profile_enum)
-            if not ok:
-                logger.warning(
-                    "Lifecycle startup incomplete — running fallback phases", extra={"tag": "START"}
-                )
-                await self._phase5_model_registry()
-                await self._phase6_routers()
-            else:
-                # Lifecycle reached RUNNING — update STARTUP_PHASE so health
-                # endpoints can report readiness without creating the lifecycle
-                # singleton (which would race with _init_lifecycle's event bus).
-                STARTUP_PHASE.update(phase="running", step=9, total=9, message="Server running")
-        else:
-            # Fallback: run phases directly
+        # ── Stage 1: CRITICAL ────────────────────────────────────
+        # Server starts accepting requests, model loads in background
+        async def _init_db_pool():
+            from infrastructure.db_pool import get_db
+            # Warm the singleton so first request is instant
+            get_db("uploads_mogdb")
+
+        async def _init_model_load():
+            self._phase2_model_load_task = asyncio.create_task(self._phase2_model_load())
+
+        async def _init_core_routers():
+            # Health routes already registered pre-lifespan
+            # Model registry + feature routers register here
             await self._phase5_model_registry()
             await self._phase6_routers()
 
-        await _restore_training_runtime()
+        loader.on(Stage.CRITICAL, "db_pool", _init_db_pool, timeout=5.0)
+        loader.on(Stage.CRITICAL, "model_load", _init_model_load, timeout=5.0)
+        loader.on(Stage.CRITICAL, "core_routers", _init_core_routers, timeout=30.0)
+
+        await loader.run_stage(Stage.CRITICAL)
+
+        # ── Stage 2: READY ───────────────────────────────────────
+        # Wait for model to finish loading, then full API available
+        async def _wait_for_model():
+            # Wait up to 120s for model to load
+            for _ in range(240):
+                import state as server_state
+                if server_state.model is not None:
+                    return
+                await asyncio.sleep(0.5)
+            logger.warning("Model load timeout after 120s", extra={"tag": "START"})
+
+        async def _restore_training():
+            await _restore_training_runtime()
+
+        loader.on(Stage.READY, "model_ready", _wait_for_model, timeout=130.0)
+        loader.on(Stage.READY, "training_restore", _restore_training, timeout=15.0)
+
+        await loader.run_stage(Stage.READY)
+
+        # ── Stage 3: BACKGROUND ──────────────────────────────────
+        # Non-critical services start after model is ready
+        async def _init_wandb():
+            await self._phase3_wandb()
+
+        async def _init_multimodal():
+            await self._phase4_multimodal()
+
+        async def _init_metrics():
+            # Prometheus metrics collector
+            try:
+                from domains.infrastructure.metrics import get_metrics_collector
+                get_metrics_collector()
+            except Exception as e:
+                logger.debug("Metrics init deferred: %s", e)
+
+        async def _init_autotrainer():
+            try:
+                from domains.training.auto_trainer import start_auto_trainer_if_enabled
+                start_auto_trainer_if_enabled()
+            except Exception as e:
+                logger.debug("AutoTrainer init deferred: %s", e)
+
+        async def _init_rag():
+            # RAG document ingestion (heavy, runs in background)
+            try:
+                from domains.cognitive.rag_service import get_rag_service
+                rag = get_rag_service()
+                if hasattr(rag, 'auto_ingest_repo_docs'):
+                    await asyncio.get_event_loop().run_in_executor(None, rag.auto_ingest_repo_docs)
+            except Exception as e:
+                logger.debug("RAG init deferred: %s", e)
+
+        loader.on(Stage.BACKGROUND, "wandb", _init_wandb, timeout=30.0)
+        loader.on(Stage.BACKGROUND, "multimodal", _init_multimodal, timeout=30.0)
+        loader.on(Stage.BACKGROUND, "metrics", _init_metrics, timeout=10.0)
+        loader.on(Stage.BACKGROUND, "autotrainer", _init_autotrainer, timeout=10.0)
+        loader.on(Stage.BACKGROUND, "rag_ingest", _init_rag, timeout=60.0)
+
+        # Fire background stage without waiting — these run concurrently
+        asyncio.create_task(loader.run_stage(Stage.BACKGROUND))
+
+        # Server is now READY (stage 2 complete)
+        STARTUP_PHASE.update(phase="running", step=9, total=9, message="Server running")
         await self._phase_ready()
 
     async def _phase2_model_load(self):

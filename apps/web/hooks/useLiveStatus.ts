@@ -25,9 +25,35 @@ import { trackEvent } from '@/lib/dev-log'
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'offline' | 'reloading' | 'error'
 
+export type StartupStage = 'init' | 'critical' | 'ready' | 'background' | 'unknown'
+
+export interface HookStatus {
+  name: string
+  stage: StartupStage
+  status: 'pending' | 'running' | 'ok' | 'timeout' | 'error'
+  duration_seconds: number
+  error: string | null
+}
+
+export interface StagedLoaderStatus {
+  stage: StartupStage
+  stage_value: number
+  elapsed_seconds: number
+  model_progress: number
+  model_progress_message: string
+  errors: Record<string, string>
+  hooks: Record<string, HookStatus>
+  stages: Record<string, { hooks: string[]; time: number | null }>
+}
+
 export interface LiveHealthSnapshot {
   model_loaded: boolean
   model_loading: boolean
+  startup_stage: StartupStage
+  startup_stage_value: number
+  startup_elapsed: number
+  startup_model_progress: number
+  startup_model_progress_message: string
   model_type: string | null
   device: string | null
   soul: string | null
@@ -98,9 +124,15 @@ const RELOAD_WINDOW_MS = 120_000 // 2 minutes
  */
 export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
   const healthScore = d.health_score ?? { score: 0, status: 'unknown' }
+  const stagedLoader = (d as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
   return {
     model_loaded: Boolean(d.model_loaded),
     model_loading: Boolean(d.model_loading),
+    startup_stage: stagedLoader?.stage ?? 'unknown',
+    startup_stage_value: stagedLoader?.stage_value ?? 0,
+    startup_elapsed: stagedLoader?.elapsed_seconds ?? 0,
+    startup_model_progress: stagedLoader?.model_progress ?? 0,
+    startup_model_progress_message: stagedLoader?.model_progress_message ?? '',
     model_type: d.model_type ?? null,
     device: d.device ?? null,
     soul: d.soul ?? null,
@@ -247,9 +279,15 @@ export function initLiveStatus(): () => void {
     _receivedHealthEvent = true
     stopFallbackPoll()
     const d = envelope.data as Partial<LiveHealthSnapshot>
+    const stagedLoader = (d as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
     const snap: LiveHealthSnapshot = {
       model_loaded: Boolean(d.model_loaded),
       model_loading: Boolean(d.model_loading),
+      startup_stage: stagedLoader?.stage ?? d.startup_stage ?? 'unknown',
+      startup_stage_value: stagedLoader?.stage_value ?? d.startup_stage_value ?? 0,
+      startup_elapsed: stagedLoader?.elapsed_seconds ?? d.startup_elapsed ?? 0,
+      startup_model_progress: stagedLoader?.model_progress ?? d.startup_model_progress ?? 0,
+      startup_model_progress_message: stagedLoader?.model_progress_message ?? d.startup_model_progress_message ?? '',
       model_type: d.model_type ?? null,
       device: d.device ?? null,
       soul: d.soul ?? null,
@@ -388,6 +426,10 @@ export function useLiveStatus() {
     live: connectionStatus === 'connected' && health !== null,
     /** True once health endpoint first responds — gates feature polling hooks */
     ready,
+    /** Current startup stage (init/critical/ready/background) */
+    startupStage: health?.startup_stage ?? 'unknown',
+    /** Elapsed seconds since startup began */
+    startupElapsed: health?.startup_elapsed ?? 0,
   }
 }
 
