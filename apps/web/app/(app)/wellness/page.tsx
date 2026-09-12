@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { generateTool } from '@/lib/tools-controller'
+import { useToolProfile } from '@/lib/use-tool-profile'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -19,12 +20,30 @@ const OPTIONS: { id: WellnessType; label: string; icon: string; description: str
   { id: 'affirm', label: 'Positive Affirmation', icon: '✨', description: 'Uplifting words for your day' },
 ]
 
+const ICONS: Record<WellnessType, string> = {
+  sleep: '🌙',
+  meditate: '🧘',
+  journal: '📝',
+  breathe: '💨',
+  affirm: '✨',
+}
+
 export default function WellnessPage() {
   const [selected, setSelected] = useState<WellnessType | null>(null)
   const [response, setResponse] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [preferences, setPreferences] = useState('')
   const addToast = useToastStore((s) => s.addToast)
+  const profile = useToolProfile('wellness')
+
+  const options = (profile?.options?.kind?.length
+    ? profile.options.kind.map((o) => ({
+        id: o.id as WellnessType,
+        label: o.label,
+        icon: ICONS[o.id as WellnessType] ?? '✨',
+        description: o.description,
+      }))
+    : OPTIONS)
 
   const generate = useCallback(async () => {
     if (!selected) return
@@ -63,7 +82,7 @@ export default function WellnessPage() {
 
         {/* Options Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {OPTIONS.map((opt) => (
+          {options.map((opt) => (
             <Card
               key={opt.id}
               className={`cursor-pointer transition-all hover:border-primary ${

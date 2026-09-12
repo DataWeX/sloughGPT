@@ -114,6 +114,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
   {
     labelKey: 'nav.section.tools',
     routes: [
+      { path: '/tools', labelKey: 'nav.tools', icon: 'grid', description: 'All everyday tools' },
       { path: '/writing', labelKey: 'nav.writing', icon: 'document', description: 'Writing assistant' },
       { path: '/translate', labelKey: 'nav.translate', icon: 'chat', description: 'Translate text' },
       { path: '/rewrite', labelKey: 'nav.rewrite', icon: 'sparkle', description: 'Rewrite & polish text' },
@@ -221,6 +222,7 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/plugins-cloud': IconSettings,
   '/shortcuts': IconSettings,
   '/writing': IconDocument,
+  '/tools': IconGrid,
   '/translate': IconChat,
   '/rewrite': IconSparkle,
   '/brainstorm': IconBrain,

@@ -22,12 +22,42 @@ vi.mock('@/lib/tools-controller', () => ({
   generateTool: vi.fn(),
 }))
 
+const { mockUseToolProfile } = vi.hoisted(() => ({
+  mockUseToolProfile: vi.fn(() => null as ToolProfile | null),
+}))
+
+vi.mock('@/lib/use-tool-profile', () => ({
+  useToolProfile: mockUseToolProfile,
+}))
+
 import RewritePage from './page'
 import { generateTool } from '@/lib/tools-controller'
+import type { ToolProfile } from '@/lib/tools-controller'
+
+const rewriteProfile: ToolProfile = {
+  id: 'rewrite',
+  name: 'Rewrite & Polish',
+  description: 'desc',
+  icon: 'sparkle',
+  params: [],
+  options: {
+    action: [
+      { id: 'grammar', label: 'Fix Grammar', description: '' },
+      { id: 'shorter', label: 'Make Shorter', description: '' },
+      { id: 'friendlier', label: 'Make Friendlier', description: '' },
+      { id: 'professional', label: 'Make Professional', description: '' },
+      { id: 'sound-like-me', label: 'Sound Like Me', description: '' },
+    ],
+  },
+  default_options: { action: 'grammar' },
+  system_prompt: 'sp',
+  max_tokens: 700,
+}
 
 describe('RewritePage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseToolProfile.mockReturnValue(null)
   })
 
   it('renders the page title', () => {
@@ -79,5 +109,17 @@ describe('RewritePage', () => {
         expect.any(Object)
       )
     })
+  })
+
+  it('renders option buttons from backend profile when available', () => {
+    mockUseToolProfile.mockReturnValue(rewriteProfile)
+
+    render(<RewritePage />)
+
+    expect(screen.getByText('Fix Grammar')).toBeDefined()
+    expect(screen.getByText('Make Shorter')).toBeDefined()
+    expect(screen.getByText('Make Friendlier')).toBeDefined()
+    expect(screen.getByText('Make Professional')).toBeDefined()
+    expect(screen.getByText('Sound Like Me')).toBeDefined()
   })
 })

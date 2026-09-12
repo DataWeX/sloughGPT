@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { generateTool } from '@/lib/tools-controller'
+import { useToolProfile } from '@/lib/use-tool-profile'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -24,6 +25,11 @@ export default function RewritePage() {
   const [rewritten, setRewritten] = useState('')
   const [activeAction, setActiveAction] = useState<Action | null>(null)
   const addToast = useToastStore((s) => s.addToast)
+  const profile = useToolProfile('rewrite')
+
+  const actions: { id: Action; label: string }[] = profile?.options?.action?.length
+    ? profile.options.action.map((o) => ({ id: o.id as Action, label: o.label }))
+    : ACTIONS
 
   const rewrite = useCallback(async (action: Action) => {
     if (!original.trim()) {
@@ -110,7 +116,7 @@ export default function RewritePage() {
 
       {/* Action Buttons */}
       <div className="flex flex-wrap justify-center gap-2 mt-4">
-        {ACTIONS.map((action) => (
+        {actions.map((action) => (
           <Button
             key={action.id}
             variant="outline"

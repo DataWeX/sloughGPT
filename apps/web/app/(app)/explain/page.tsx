@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { generateTool } from '@/lib/tools-controller'
+import { useToolProfile } from '@/lib/use-tool-profile'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -23,6 +24,11 @@ export default function ExplainPage() {
   const [explanation, setExplanation] = useState('')
   const [isExplaining, setIsExplaining] = useState(false)
   const addToast = useToastStore((s) => s.addToast)
+  const profile = useToolProfile('explain')
+
+  const difficulties = (profile?.options?.difficulty?.length
+    ? profile.options.difficulty
+    : DIFFICULTIES) as { id: Difficulty; label: string; description: string }[]
 
   const explain = useCallback(async () => {
     if (!topic.trim()) {
@@ -85,7 +91,7 @@ export default function ExplainPage() {
                 How detailed?
               </label>
               <div className="flex gap-2">
-                {DIFFICULTIES.map((d) => (
+                {difficulties.map((d) => (
                   <Button
                     key={d.id}
                     variant={difficulty === d.id ? 'default' : 'outline'}

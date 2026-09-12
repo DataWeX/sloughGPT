@@ -48,12 +48,7 @@ export interface RagVerificationInfo {
   hallucinated_claims: number
 }
 
-export interface ErrorInfo {
-  status: number
-  text: string
-  correlationId?: string
-  backendError?: string
-}
+export type ErrorInfo = ReturnType<typeof getErrorInfo>
 
 // ── Config (set once on init, read via getState) ─────────────────────────────
 
@@ -207,7 +202,7 @@ function flushTokens() {
   const now = Date.now()
   if (state.sessionId && now - (_lastSaveTs || 0) > 500) {
     _lastSaveTs = now
-    chatDB.saveSessions([{ id: state.sessionId, name: '', messages: updated, createdAt: '', updatedAt: '', synced: false, starred: false, pinned: false }]).catch(() => {})
+    chatDB.saveSession({ id: state.sessionId, name: '', messages: updated, createdAt: '', updatedAt: '', synced: false, starred: false, pinned: false }).catch(() => {})
   }
 }
 
@@ -385,10 +380,10 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
     const messagesWithNew = [...state.messages, userMessage, assistantMessage]
 
     // Save session
-    chatDB.saveSessions([{
+    chatDB.saveSession({
       id: state.sessionId, name: '', messages: messagesWithNew,
       createdAt: '', updatedAt: '', synced: false, starred: false, pinned: false,
-    }]).catch(() => {})
+    }).catch(() => {})
 
     // Local engine path
     if (config.useLocalEngine && !config.engineRef.current && !config.engineLoadingRef.current) {
@@ -591,9 +586,9 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
 
     // Reset target message
     if (targetIdx < state.messages.length - 1) {
-      set({ messages: [...state.messages.slice(0, targetIdx), { ...target, content: '', isError: false, reasoning: undefined }] })
+      set({ messages: [...state.messages.slice(0, targetIdx), { ...target, content: '', isError: false }] })
     } else {
-      set({ messages: state.messages.map(m => m.id === target.id ? { ...m, content: '', isError: false, reasoning: undefined } : m) })
+      set({ messages: state.messages.map(m => m.id === target.id ? { ...m, content: '', isError: false } : m) })
     }
 
     set({ loading: true, currentError: null })
@@ -690,9 +685,9 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
 
     // Reset target message
     if (targetIdx < state.messages.length - 1) {
-      set({ messages: [...state.messages.slice(0, targetIdx), { ...target, content: '', isError: false, reasoning: undefined }] })
+      set({ messages: [...state.messages.slice(0, targetIdx), { ...target, content: '', isError: false }] })
     } else {
-      set({ messages: state.messages.map(m => m.id === target.id ? { ...m, content: '', isError: false, reasoning: undefined } : m) })
+      set({ messages: state.messages.map(m => m.id === target.id ? { ...m, content: '', isError: false } : m) })
     }
 
     set({ loading: true, currentError: null })
@@ -878,7 +873,7 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
-    await chatDB.saveSessions([duplicate])
+    await chatDB.saveSession(duplicate)
     set(s => ({
       sidebarConversations: [...s.sidebarConversations, duplicate],
     }))

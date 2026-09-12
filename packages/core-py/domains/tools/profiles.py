@@ -166,7 +166,16 @@ def _translate() -> ToolProfile:
             ToolParam("text", "Source text", "Type or paste text to translate...", multiline=True),
             ToolParam("target_lang", "Target language", "Spanish", optional=True),
         ],
-        default_options={},
+        options={
+            "target_lang": [
+                ToolOption(lang, lang) for lang in (
+                    "Spanish", "French", "German", "Italian", "Portuguese",
+                    "Chinese", "Japanese", "Korean", "Arabic", "Hindi",
+                    "Russian", "Dutch", "Swedish", "Polish", "Turkish",
+                )
+            ],
+        },
+        default_options={"target_lang": "Spanish"},
         system_prompt=(
             "You are a professional translator. Output ONLY the translation, "
             "no commentary, no quotes."

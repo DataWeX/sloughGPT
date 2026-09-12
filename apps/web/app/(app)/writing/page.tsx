@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { generateTool } from '@/lib/tools-controller'
+import { useToolProfile } from '@/lib/use-tool-profile'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -37,6 +38,14 @@ export default function WritingAssistantPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const addToast = useToastStore((s) => s.addToast)
   const outputRef = useRef<HTMLTextAreaElement>(null)
+  const profile = useToolProfile('writing')
+
+  const tones: { id: Tone; label: string }[] = profile?.options?.tone?.length
+    ? profile.options.tone.map((o) => ({ id: o.id as Tone, label: o.label }))
+    : TONES
+  const types: { id: WriteType; label: string }[] = profile?.options?.type?.length
+    ? profile.options.type.map((o) => ({ id: o.id as WriteType, label: o.label }))
+    : TYPES
 
   const generate = useCallback(async (action: 'write' | 'rewrite' | 'shorter' | 'funnier') => {
     if (!input.trim()) {
@@ -86,7 +95,7 @@ export default function WritingAssistantPage() {
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Tone</label>
               <div className="flex flex-wrap gap-1">
-                {TONES.map((t) => (
+                {tones.map((t) => (
                   <Button
                     key={t.id}
                     variant={tone === t.id ? 'default' : 'outline'}
@@ -103,7 +112,7 @@ export default function WritingAssistantPage() {
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Type</label>
               <div className="flex flex-wrap gap-1">
-                {TYPES.map((t) => (
+                {types.map((t) => (
                   <Button
                     key={t.id}
                     variant={type === t.id ? 'default' : 'outline'}

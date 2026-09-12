@@ -97,6 +97,24 @@ class TestToolsEngineList:
             assert "render_prompt" not in tool
 
 
+class TestTranslateOptions:
+    def test_translate_exposes_target_lang_options(self):
+        profile = get_tool_profile("translate")
+        assert profile is not None
+        languages = profile.options.get("target_lang")
+        assert languages, "translate must declare target_lang options"
+        ids = {opt.id for opt in languages}
+        assert "Spanish" in ids
+        assert "French" in ids
+        assert "Japanese" in ids
+        assert len(languages) >= 10
+
+    def test_translate_default_target_lang_is_spanish(self):
+        profile = get_tool_profile("translate")
+        assert profile is not None
+        assert profile.default_options.get("target_lang") == "Spanish"
+
+
 class TestToolsEngineRender:
     def test_render_writing_defaults(self):
         prompt = _engine().render_prompt("writing", {"text": "hello"})

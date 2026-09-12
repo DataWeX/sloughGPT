@@ -6,17 +6,18 @@ import { PageContainer } from '@/components/PageContainer'
 import {
   Card, CardContent, CardHeader, CardTitle, Button, Input,
   Textarea, Skeleton, cn,
+  Tabs, TabsList, TabsTrigger, TabsContent,
 } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { TerminalPanel } from '@/components/shell/TerminalPanel'
+import { V86TerminalPanel } from '@/components/shell/V86TerminalPanel'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { filesController, type FileEntry } from '@/lib/files-controller'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { authFetch } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
-type DevTab = 'shell' | 'files' | 'voice' | 'api' | 'quick'
 
 const QUICK_ACTIONS = [
   { label: 'Restart Backend', description: 'Restart the FastAPI server', endpoint: '/system/restart', method: 'POST' },
@@ -28,55 +29,67 @@ const QUICK_ACTIONS = [
 ]
 
 export default function DeveloperPage() {
-  const [tab, setTab] = useState<DevTab>('shell')
+  const [tab, setTab] = useState<string>('shell')
   useRefreshShortcut(() => { window.location.reload() })
 
   return (
     <PageContainer title="Developer" subtitle="Terminal, files & quick actions">
-      <div className="flex gap-1 border-b border-border/30 mb-4" role="tablist" aria-label="Developer tools">
-        {([
-          { id: 'shell' as const, label: 'Terminal' },
-          { id: 'files' as const, label: 'Files' },
-          { id: 'voice' as const, label: 'Voice' },
-          { id: 'api' as const, label: 'API' },
-          { id: 'quick' as const, label: 'Quick Actions' },
-        ]).map(t => (
-          <button
-            type="button"
-            role="tab"
-            key={t.id}
-            aria-selected={tab === t.id}
-            aria-label={`${t.label} tab`}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
-              tab === t.id ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList aria-label="Developer tools">
+          <TabsTrigger value="shell">Terminal</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
+          <TabsTrigger value="voice">Voice</TabsTrigger>
+          <TabsTrigger value="api">API</TabsTrigger>
+          <TabsTrigger value="quick">Quick Actions</TabsTrigger>
+        </TabsList>
 
-      {tab === 'shell' && <ShellTab />}
-      {tab === 'files' && <FilesTab />}
-      {tab === 'voice' && <VoiceTab />}
-      {tab === 'api' && <ApiTab />}
-      {tab === 'quick' && <QuickActionsTab />}
+        <TabsContent value="shell"><ShellTab /></TabsContent>
+        <TabsContent value="files"><FilesTab /></TabsContent>
+        <TabsContent value="voice"><VoiceTab /></TabsContent>
+        <TabsContent value="api"><ApiTab /></TabsContent>
+        <TabsContent value="quick"><QuickActionsTab /></TabsContent>
+      </Tabs>
     </PageContainer>
   )
 }
 
 function ShellTab() {
+  const [shellMode, setShellMode] = useState<'backend' | 'v86'>('backend')
+
   return (
-    <Card className="h-[calc(100vh-8rem)]">
-      <CardHeader>
-        <CardTitle className="text-base">Dait Shell</CardTitle>
-      </CardHeader>
-      <CardContent className="h-[calc(100%-3rem)]">
-        <TerminalPanel className="h-full" />
-      </CardContent>
-    </Card>
+    <div className="space-y-3">
+      <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/30 p-1 w-fit">
+        <button
+          type="button"
+          onClick={() => setShellMode('backend')}
+          className={cn(
+            'rounded-md px-3 py-1 text-xs font-medium transition-all',
+            shellMode === 'backend'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          Backend
+        </button>
+        <button
+          type="button"
+          onClick={() => setShellMode('v86')}
+          className={cn(
+            'rounded-md px-3 py-1 text-xs font-medium transition-all',
+            shellMode === 'v86'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          Browser VM
+        </button>
+      </div>
+      {shellMode === 'backend' ? (
+        <TerminalPanel className="h-[calc(100vh-12rem)]" />
+      ) : (
+        <V86TerminalPanel className="h-[calc(100vh-12rem)]" />
+      )}
+    </div>
   )
 }
 
@@ -205,7 +218,7 @@ function VoiceTab() {
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     'w-2 h-2 rounded-full',
-                    status.server_tts ? 'bg-green-500' : 'bg-red-500',
+                    status.server_tts ? 'bg-emerald-500' : 'bg-red-500',
                   )} />
                   <span className="text-xs">{status.server_tts ? 'TTS Available' : 'TTS Unavailable'}</span>
                 </div>
@@ -411,7 +424,7 @@ function ApiTab() {
               <div className="flex items-center gap-3 text-xs">
                 <span className={cn(
                   'font-mono font-medium',
-                  responseStatus && responseStatus >= 200 && responseStatus < 300 ? 'text-green-500' :
+                  responseStatus && responseStatus >= 200 && responseStatus < 300 ? 'text-emerald-500' :
                   responseStatus && responseStatus >= 400 ? 'text-red-500' : 'text-muted-foreground',
                 )}>
                   {responseStatus}
@@ -430,7 +443,7 @@ function ApiTab() {
                 </details>
               )}
 
-              <pre className="rounded-lg border border-border/50 bg-muted/30 p-3 text-xs font-mono overflow-auto max-h-96 whitespace-pre-wrap">
+              <pre className="rounded-lg border border-border/50 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-96 whitespace-pre-wrap">
                 {response}
               </pre>
             </div>
@@ -457,7 +470,7 @@ function ApiTab() {
                 >
                   <span className={cn(
                     'font-mono font-medium w-12 shrink-0',
-                    entry.status >= 200 && entry.status < 300 ? 'text-green-500' :
+                    entry.status >= 200 && entry.status < 300 ? 'text-emerald-500' :
                     entry.status >= 400 ? 'text-red-500' : 'text-muted-foreground',
                   )}>
                     {entry.status || 'ERR'}
@@ -513,21 +526,21 @@ function QuickActionsTab() {
                 className={cn(
                   'flex flex-col items-start p-3 rounded-lg border text-left transition-all hover:-translate-y-0.5 hover:shadow-sm',
                   running === action.label ? 'border-primary/50 bg-primary/5' : 'border-border/60 hover:border-primary/30',
-                  results[action.label]?.status === 200 ? 'border-green-500/30 bg-green-500/5' :
-                  results[action.label]?.status === 404 ? 'border-yellow-500/30 bg-yellow-500/5' :
+                  results[action.label]?.status === 200 ? 'border-emerald-500/30 bg-emerald-500/5' :
+                  results[action.label]?.status === 404 ? 'border-amber-500/30 bg-amber-500/5' :
                   results[action.label]?.status === 0 ? 'border-red-500/30 bg-red-500/5' : ''
                 )}
               >
                 <div className="flex items-center gap-2 w-full">
                   <span className="text-sm font-medium">{action.label}</span>
                   {running === action.label && (
-                    <span className="ml-auto text-[10px] text-primary animate-pulse">Running...</span>
+                    <span className="ml-auto text-[10px] text-amber-500 animate-pulse">Running...</span>
                   )}
                   {results[action.label] && running !== action.label && (
                     <span className={cn(
                       'ml-auto text-[10px] font-mono',
-                      results[action.label]!.status >= 200 && results[action.label]!.status < 300 ? 'text-green-500' :
-                      results[action.label]!.status >= 400 ? 'text-yellow-500' : 'text-red-500'
+                      results[action.label]!.status >= 200 && results[action.label]!.status < 300 ? 'text-emerald-500' :
+                      results[action.label]!.status >= 400 ? 'text-amber-500' : 'text-red-500'
                     )}>
                       {results[action.label]!.status || 'ERR'} · {results[action.label]!.timeMs}ms
                     </span>
@@ -543,8 +556,11 @@ function QuickActionsTab() {
 
       {Object.entries(results).map(([label, result]) => result && (
         <Card key={label}>
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm">{label}</CardTitle>
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {result.status || 'ERR'} · {result.timeMs}ms
+            </span>
           </CardHeader>
           <CardContent>
             <pre className="text-xs font-mono bg-muted/30 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap">

@@ -38,10 +38,10 @@ interface ChatPageSectionProps {
 
 export const ChatSidebarSection = memo(function ChatSidebarSection({ controller }: ChatPageSectionProps) {
   const { chat, ui, convCollapsed, toggleConv } = controller
-  const handleStar = useCallback((e: React.MouseEvent, id: string, starred: boolean) => chat.starSession(id, starred), [chat])
-  const handlePin = useCallback((e: React.MouseEvent, id: string, pinned: boolean) => chat.pinSession(id, pinned), [chat])
-  const handleArchive = useCallback((e: React.MouseEvent, id: string, archived: boolean) => chat.archiveSession(id, archived), [chat])
-  const handleDuplicate = useCallback((e: React.MouseEvent, id: string, _name: string) => chat.duplicateSession(id), [chat])
+  const handleStar = useCallback((id: string, starred: boolean) => chat.starSession(id, starred), [chat])
+  const handlePin = useCallback((id: string, pinned: boolean) => chat.pinSession(id, pinned), [chat])
+  const handleArchive = useCallback((id: string, archived: boolean) => chat.archiveSession(id, archived), [chat])
+  const handleDuplicate = useCallback((id: string) => chat.duplicateSession(id), [chat])
   const handleCloseSidebar = useCallback(() => ui.setSidebarOpen(false), [ui])
   return (
     <ConversationSidebar

@@ -229,7 +229,7 @@ export const consciousnessController = {
     return apiPost('/consciousness/batch', { operations })
   },
 
-  connectStream(onEvent: (event: Record<string, unknown>) => void, onError?: (err: Event) => void): () => void {
+  connectStream(onEvent: (event: Record<string, unknown>) => void, onError?: (err: Error) => void): () => void {
     const { createSSEStream } = require('./sse-client') as typeof import('./sse-client')
     const stream = createSSEStream({
       url: '/consciousness/stream',

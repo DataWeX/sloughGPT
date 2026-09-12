@@ -1,7 +1,8 @@
 'use client'
 
 import { KpiGrid, StatCard, StatusDot } from '@sloughgpt/strui'
-import { IconModels, IconBrain, IconActivity, IconUsers } from '@sloughgpt/strui'
+import { IconModels, IconBrain, IconActivity } from '@sloughgpt/strui'
+import { IconUsers } from '@/components/icons/NavIcons'
 
 interface StatsGridProps {
   apiStatus: string

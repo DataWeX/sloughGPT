@@ -22,12 +22,43 @@ vi.mock('@/lib/tools-controller', () => ({
   generateTool: vi.fn(),
 }))
 
+const { mockUseToolProfile } = vi.hoisted(() => ({
+  mockUseToolProfile: vi.fn(() => null as ToolProfile | null),
+}))
+
+vi.mock('@/lib/use-tool-profile', () => ({
+  useToolProfile: mockUseToolProfile,
+}))
+
 import WritingAssistantPage from './page'
 import { generateTool } from '@/lib/tools-controller'
+import type { ToolProfile } from '@/lib/tools-controller'
+
+const writingProfile: ToolProfile = {
+  id: 'writing',
+  name: 'Writing Assistant',
+  description: 'desc',
+  icon: 'sparkle',
+  params: [],
+  options: {
+    tone: [
+      { id: 'witty', label: 'Witty', description: '' },
+      { id: 'bold', label: 'Bold', description: '' },
+    ],
+    type: [
+      { id: 'essay', label: 'Essay', description: '' },
+      { id: 'haiku', label: 'Haiku', description: '' },
+    ],
+  },
+  default_options: { tone: 'witty', type: 'essay' },
+  system_prompt: 'sp',
+  max_tokens: 700,
+}
 
 describe('WritingAssistantPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseToolProfile.mockReturnValue(null)
   })
 
   it('renders the page title', () => {
@@ -122,5 +153,17 @@ describe('WritingAssistantPage', () => {
         expect.any(Object)
       )
     })
+  })
+
+  it('renders option buttons from the backend profile when available', () => {
+    mockUseToolProfile.mockReturnValue(writingProfile)
+
+    render(<WritingAssistantPage />)
+
+    expect(screen.getByText('Witty')).toBeDefined()
+    expect(screen.getByText('Bold')).toBeDefined()
+    expect(screen.getByText('Essay')).toBeDefined()
+    expect(screen.getByText('Haiku')).toBeDefined()
+    expect(screen.queryByText('Friendly')).toBeNull()
   })
 })

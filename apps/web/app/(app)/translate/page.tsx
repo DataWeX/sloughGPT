@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Textarea, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { generateTool } from '@/lib/tools-controller'
+import { useToolProfile } from '@/lib/use-tool-profile'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 
@@ -21,6 +22,11 @@ export default function TranslatePage() {
   const [targetLang, setTargetLang] = useState('Spanish')
   const [isTranslating, setIsTranslating] = useState(false)
   const addToast = useToastStore((s) => s.addToast)
+  const profile = useToolProfile('translate')
+
+  const languages = profile?.options?.target_lang?.length
+    ? profile.options.target_lang.map((o) => o.label)
+    : LANGUAGES
 
   const translate = useCallback(async () => {
     if (!source.trim()) {
@@ -96,7 +102,7 @@ export default function TranslatePage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {LANGUAGES.map((lang) => (
+                  {languages.map((lang) => (
                     <SelectItem key={lang} value={lang}>{lang}</SelectItem>
                   ))}
                 </SelectContent>

@@ -22,12 +22,40 @@ vi.mock('@/lib/tools-controller', () => ({
   generateTool: vi.fn(),
 }))
 
+const { mockUseToolProfile } = vi.hoisted(() => ({
+  mockUseToolProfile: vi.fn(() => null as ToolProfile | null),
+}))
+
+vi.mock('@/lib/use-tool-profile', () => ({
+  useToolProfile: mockUseToolProfile,
+}))
+
 import ExplainPage from './page'
 import { generateTool } from '@/lib/tools-controller'
+import type { ToolProfile } from '@/lib/tools-controller'
+
+const explainProfile: ToolProfile = {
+  id: 'explain',
+  name: 'Explain Things Simply',
+  description: 'desc',
+  icon: 'search',
+  params: [],
+  options: {
+    difficulty: [
+      { id: 'simple', label: 'Simple', description: '' },
+      { id: 'normal', label: 'Normal', description: '' },
+      { id: 'detailed', label: 'Detailed', description: '' },
+    ],
+  },
+  default_options: { difficulty: 'normal' },
+  system_prompt: 'sp',
+  max_tokens: 900,
+}
 
 describe('ExplainPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseToolProfile.mockReturnValue(null)
   })
 
   it('renders the page title', () => {
@@ -109,5 +137,15 @@ it('disables the explain button with empty form', async () => {
         expect.any(Object)
       )
     })
+  })
+
+  it('renders option buttons from backend profile when available', () => {
+    mockUseToolProfile.mockReturnValue(explainProfile)
+
+    render(<ExplainPage />)
+
+    expect(screen.getByText('Simple')).toBeDefined()
+    expect(screen.getByText('Normal')).toBeDefined()
+    expect(screen.getByText('Detailed')).toBeDefined()
   })
 })

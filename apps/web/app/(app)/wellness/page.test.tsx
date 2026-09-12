@@ -22,12 +22,42 @@ vi.mock('@/lib/tools-controller', () => ({
   generateTool: vi.fn(),
 }))
 
+const { mockUseToolProfile } = vi.hoisted(() => ({
+  mockUseToolProfile: vi.fn(() => null as ToolProfile | null),
+}))
+
+vi.mock('@/lib/use-tool-profile', () => ({
+  useToolProfile: mockUseToolProfile,
+}))
+
 import WellnessPage from './page'
 import { generateTool } from '@/lib/tools-controller'
+import type { ToolProfile } from '@/lib/tools-controller'
+
+const wellnessProfile: ToolProfile = {
+  id: 'wellness',
+  name: 'Make Me Well',
+  description: 'desc',
+  icon: 'sparkle',
+  params: [],
+  options: {
+    kind: [
+      { id: 'sleep', label: 'Sleep Story', description: '' },
+      { id: 'meditate', label: 'Meditation', description: '' },
+      { id: 'journal', label: 'Journal Prompt', description: '' },
+      { id: 'breathe', label: 'Breathing Exercise', description: '' },
+      { id: 'affirm', label: 'Positive Affirmation', description: '' },
+    ],
+  },
+  default_options: { kind: 'sleep' },
+  system_prompt: 'sp',
+  max_tokens: 700,
+}
 
 describe('WellnessPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseToolProfile.mockReturnValue(null)
   })
 
   it('renders the page title', () => {
@@ -104,5 +134,17 @@ describe('WellnessPage', () => {
         expect.any(Object)
       )
     })
+  })
+
+  it('renders option buttons from backend profile when available', () => {
+    mockUseToolProfile.mockReturnValue(wellnessProfile)
+
+    render(<WellnessPage />)
+
+    expect(screen.getByText('Sleep Story')).toBeDefined()
+    expect(screen.getByText('Meditation')).toBeDefined()
+    expect(screen.getByText('Journal Prompt')).toBeDefined()
+    expect(screen.getByText('Breathing Exercise')).toBeDefined()
+    expect(screen.getByText('Positive Affirmation')).toBeDefined()
   })
 })

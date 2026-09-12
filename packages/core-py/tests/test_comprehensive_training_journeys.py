@@ -13,6 +13,8 @@ Requirements:
     API server at localhost:8000
     Web server at localhost:3000
 """
+from __future__ import annotations
+
 import json
 import time
 import urllib.request
