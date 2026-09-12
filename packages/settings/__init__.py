@@ -1,6 +1,11 @@
-"""Backward-compatibility shim — imports from the new ``settings`` package."""
+"""settings — Persistent user configuration.
 
-from settings import (
+Public API:
+    GenerationSettings, TrainingSettings, AdaptiveSettings, VoiceSettings, UISettings
+    AppSettings, PersistentSettings, get_settings
+"""
+
+from settings._internal.persistent import (
     GenerationSettings,
     TrainingSettings,
     AdaptiveSettings,
