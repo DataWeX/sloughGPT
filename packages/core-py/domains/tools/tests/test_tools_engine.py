@@ -1,7 +1,6 @@
 """Tests for the tools domain (profiles + engine)."""
 
 import pytest
-
 from domains.tools import (
     TOOL_PROFILES,
     ToolOption,
@@ -11,7 +10,6 @@ from domains.tools import (
     get_tool_profile,
     get_tools_engine,
 )
-
 
 PROFILE_IDS = [
     "writing",
@@ -52,7 +50,7 @@ class TestToolProfiles:
 
     def test_profiles_are_frozen(self):
         profile = TOOL_PROFILES["decide"]
-        with pytest.raises(Exception):
+        with pytest.raises(FrozenInstanceError):
             profile.max_tokens = 1  # type: ignore[misc]
 
     def test_params_are_well_formed(self):

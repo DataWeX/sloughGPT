@@ -1,8 +1,8 @@
 """Tests for the Tools API router."""
 
-import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -72,8 +72,9 @@ def mock_cancel_manager():
 
 @pytest.fixture
 def client(patch_tools_engine, mock_provider, mock_cancel_manager):
-    from apps.api.server.routers.tools import ToolsRouter
     from infrastructure.exception_handlers import register_app_error_handler
+
+    from apps.api.server.routers.tools import ToolsRouter
 
     with patch("apps.api.server.routers.tools.get_provider", return_value=mock_provider), \
          patch("apps.api.server.routers.tools.get_cancel_manager", return_value=mock_cancel_manager):
@@ -162,8 +163,9 @@ class TestToolsGenerate:
 
     def test_generate_no_provider_returns_error(self, client):
         with patch("apps.api.server.routers.tools.get_provider", return_value=None):
-            from apps.api.server.routers.tools import ToolsRouter
             from infrastructure.exception_handlers import register_app_error_handler
+
+            from apps.api.server.routers.tools import ToolsRouter
             router_obj = ToolsRouter()
             app = FastAPI()
             register_app_error_handler(app)

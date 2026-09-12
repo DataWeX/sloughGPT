@@ -7,8 +7,9 @@ router and the frontend (via ``GET /tools``) share one source of truth.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 __all__ = [
     "ToolOption",

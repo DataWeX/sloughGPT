@@ -80,7 +80,7 @@ export const ChatInputAccessories = memo(function ChatInputAccessories({
   }
 
   return (
-    <div className="flex items-center shrink-0">
+    <div className="flex items-center gap-0.5 shrink-0">
       <ImageUpload onImage={onImage} disabled={disabled || !visionAvailable} />
       {onTranscript && <VoiceInput onTranscript={onTranscript} disabled={disabled} />}
       {onPDFAnalysis && onPDFError && (
@@ -89,24 +89,24 @@ export const ChatInputAccessories = memo(function ChatInputAccessories({
       <Button
         variant="ghost"
         size="icon"
-        className="h-10 w-10 text-muted-foreground"
+        className="h-8 w-8 text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/40 transition-colors"
         disabled={disabled}
         onClick={handleCodeBlock}
         aria-label="Insert code block"
         title="Insert code block"
       >
-        <span className="font-mono text-xs font-bold">{'</>'}</span>
+        <span className="font-mono text-[11px] font-bold">{'</>'}</span>
       </Button>
       <Button
         variant="ghost"
         size="icon"
-        className="h-10 w-10 text-muted-foreground"
+        className="h-8 w-8 text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted/40 transition-colors"
         disabled={disabled || audioLoading}
         onClick={() => audioInputRef.current?.click()}
         aria-label="Upload audio"
         title="Upload audio file"
       >
-        <IconUpload className="h-4 w-4" />
+        <IconUpload className="h-3.5 w-3.5" />
       </Button>
       <input
         ref={audioInputRef}

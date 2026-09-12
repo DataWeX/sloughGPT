@@ -7,8 +7,25 @@ import { StreamingIndicator } from '@/features/chat/components/StreamingIndicato
 import { useConsciousnessStatus, getConsciousnessLevelLabel, getQualiaMood } from '@/hooks/useConsciousnessStatus'
 import { useLocale } from '@/hooks/useLocale'
 import { consciousnessController } from '@/lib/consciousness-controller'
+import { IconChat, IconEdit, IconBrain, IconVision, IconSearch, IconBolt, IconDocument, IconMic, IconSparkle, cn } from '@sloughgpt/strui'
+import { Waves } from 'lucide-react'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
+import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
+
+const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  chat: { label: 'Chat', icon: <IconChat className="h-3 w-3" />, color: 'bg-primary/10 text-primary border-primary/20' },
+  write: { label: 'Write', icon: <IconEdit className="h-3 w-3" />, color: 'bg-violet-500/10 text-violet-500 border-violet-500/20' },
+  rewrite: { label: 'Rewrite', icon: <IconSparkle className="h-3 w-3" />, color: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
+  translate: { label: 'Translate', icon: <IconVision className="h-3 w-3" />, color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
+  brainstorm: { label: 'Brainstorm', icon: <IconBolt className="h-3 w-3" />, color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
+  decide: { label: 'Decide', icon: <IconBrain className="h-3 w-3" />, color: 'bg-rose-500/10 text-rose-500 border-rose-500/20' },
+  explain: { label: 'Explain', icon: <IconSearch className="h-3 w-3" />, color: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20' },
+  wellness: { label: 'Wellness', icon: <Waves className="h-3 w-3" />, color: 'bg-teal-500/10 text-teal-500 border-teal-500/20' },
+  create: { label: 'Create', icon: <IconVision className="h-3 w-3" />, color: 'bg-pink-500/10 text-pink-500 border-pink-500/20' },
+  read: { label: 'Read', icon: <IconDocument className="h-3 w-3" />, color: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
+  talk: { label: 'Talk', icon: <IconMic className="h-3 w-3" />, color: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20' },
+}
 
 const HISTORY_KEY = 'chat-input-history'
 const MAX_HISTORY = 50
@@ -35,6 +52,7 @@ export interface ChatInputProps {
   streamingStatus?: 'thinking' | 'generating' | 'tool_call' | 'context' | 'error'
   streamingToolName?: string
   health: ApiHealthSnapshot
+  chatMode?: ChatMode
   images?: ImageAttachment[]
   onAddImage?: (dataUrl: string) => void
   onRemoveImage?: (id: string) => void
@@ -56,6 +74,7 @@ export const ChatInput = memo(function ChatInput({
   streamingStatus = 'generating',
   streamingToolName,
   health,
+  chatMode = 'chat',
   images = [],
   onAddImage,
   onRemoveImage,
@@ -180,6 +199,9 @@ export const ChatInput = memo(function ChatInput({
       : 'Loading model...'
   const hasContent = value.trim().length > 0 || images.length > 0
 
+  const modeConfig = MODE_CONFIG[chatMode] || MODE_CONFIG.chat
+  const isNonChatMode = chatMode !== 'chat'
+
   return (
     <section
       aria-label="Chat input"
@@ -205,7 +227,20 @@ export const ChatInput = memo(function ChatInput({
           </div>
         )}
 
-        <ChatInputRow
+        <div className="relative">
+          {isNonChatMode && (
+            <div className="flex items-center gap-1.5 pb-1.5">
+              <span className={cn(
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors",
+                modeConfig.color
+              )}>
+                {modeConfig.icon}
+                {modeConfig.label}
+              </span>
+              <span className="text-[10px] text-muted-foreground/30">·</span>
+            </div>
+          )}
+          <ChatInputRow
           value={value}
           onChange={onChange}
           onSend={handleSend}
@@ -226,6 +261,7 @@ export const ChatInput = memo(function ChatInput({
           onExecuteCommand={onExecuteCommand}
           onKeyDown={handleKeyDown}
         />
+        </div>
 
         {!loading && !value && hasModel && (
           <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground/40 pt-1" aria-hidden="true">

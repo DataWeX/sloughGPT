@@ -5,7 +5,6 @@ renders a prompt from the core tools domain and streams tokens through
 the default inference provider.
 """
 
-import asyncio
 import logging
 import threading
 from collections.abc import AsyncIterator
@@ -18,7 +17,7 @@ from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.sse_fallback import sse_error, sse_token
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
+from schemas.common import endpoint, success_response
 
 logger = logging.getLogger("slo.tools")
 
