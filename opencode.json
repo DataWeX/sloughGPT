@@ -27,8 +27,8 @@
       "agent": "error-fixer"
     },
     "test-training-flow": {
-      "template": "Run the training flow tests using chrome-devtools MCP. Open http://localhost:3000/training in a browser, take snapshots, click buttons, verify the training page loads correctly, check for console errors, and report results.",
-      "description": "Test training flow using browser automation",
+      "template": "Write and run a Playwright user journey test for the training flow. Navigate to http://localhost:3000/training, verify the page loads, check for training-related elements (buttons, config sections), test button clicks, and verify no console errors. Add new tests to packages/core-py/tests/test_user_journeys.py.",
+      "description": "Test training flow as a user journey",
       "agent": "test-writer"
     },
     "ui-fix": {
