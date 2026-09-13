@@ -54,6 +54,9 @@ class MetricsCollector:
         self._startup_model_progress: float = 0.0
         self._startup_hook_durations: Dict[str, float] = {}
         self._startup_stage_durations: Dict[str, float] = {}
+        self._startup_slow_count: int = 0
+        self._startup_failure_count: int = 0
+        self._startup_regression_count: int = 0
 
     # ── Recording methods ────────────────────────────────────────────
 
@@ -107,6 +110,21 @@ class MetricsCollector:
         """Record total stage duration."""
         with self._lock:
             self._startup_stage_durations[stage] = duration
+
+    def increment_startup_slow_count(self) -> None:
+        """Increment slow startup counter."""
+        with self._lock:
+            self._startup_slow_count += 1
+
+    def increment_startup_failure_count(self) -> None:
+        """Increment failed startup counter."""
+        with self._lock:
+            self._startup_failure_count += 1
+
+    def increment_startup_regression_count(self) -> None:
+        """Increment startup regression counter."""
+        with self._lock:
+            self._startup_regression_count += 1
 
     # ── Prometheus text format ────────────────────────────────────────
 
@@ -219,6 +237,19 @@ class MetricsCollector:
                 lines.append("# TYPE sloughgpt_startup_stage_duration_seconds gauge")
                 for stage, duration in sorted(self._startup_stage_durations.items()):
                     lines.append(f'sloughgpt_startup_stage_duration_seconds{{stage="{stage}"}} {duration:.2f}')
+
+            # Startup alerts
+            lines.append("# HELP sloughgpt_startup_slow_count Total slow startups detected.")
+            lines.append("# TYPE sloughgpt_startup_slow_count counter")
+            lines.append(f"sloughgpt_startup_slow_count {self._startup_slow_count}")
+
+            lines.append("# HELP sloughgpt_startup_failure_count Total failed startups.")
+            lines.append("# TYPE sloughgpt_startup_failure_count counter")
+            lines.append(f"sloughgpt_startup_failure_count {self._startup_failure_count}")
+
+            lines.append("# HELP sloughgpt_startup_regression_count Total startup regressions detected.")
+            lines.append("# TYPE sloughgpt_startup_regression_count counter")
+            lines.append(f"sloughgpt_startup_regression_count {self._startup_regression_count}")
 
         return "\n".join(lines) + "\n"
 
