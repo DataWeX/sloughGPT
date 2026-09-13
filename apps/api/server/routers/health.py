@@ -516,6 +516,32 @@ class HealthRouter:
             },
         })
 
+    @endpoint("health.startup_export")
+    async def startup_export(self) -> dict:
+        """Export startup history data.
+
+        Returns all startup records with full details for external
+        analysis or backup purposes.
+
+        Returns:
+            Envelope with exported startup data.
+        """
+        from infrastructure.startup_history import get_startup_history
+        from infrastructure.startup_profiler import get_profiler
+        from infrastructure.startup_cache import get_startup_cache
+
+        history = get_startup_history()
+        profiler = get_profiler()
+        cache = get_startup_cache()
+
+        return success_response(data={
+            "records": history.export_history(),
+            "stats": history.get_stats(),
+            "profile": profiler.get_profile().to_dict(),
+            "cache_stats": cache.get_stats().to_dict(),
+            "exported_at": time.time(),
+        })
+
     async def startup_stream(self, request: Request) -> StreamingResponse:
         """SSE stream for real-time startup progress updates.
 
