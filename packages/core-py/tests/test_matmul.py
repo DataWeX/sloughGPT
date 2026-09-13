@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from domains.inference.ops.matmul import matmul
+from domain.inference._internal.ops.matmul import matmul
 
 
 class TestMatmul:

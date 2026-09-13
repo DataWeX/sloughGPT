@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from domains.cognitive.rag import ProductionRAG
+from domain.cognitive._internal.rag import ProductionRAG
 from domains.inference.vector_store import simple_embed
 from domains.shared import find_repo_root
 

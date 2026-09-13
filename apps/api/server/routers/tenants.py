@@ -204,3 +204,6 @@ def get_tenants_router() -> TenantsRouter:
     if _tenants_router is None:
         _tenants_router = TenantsRouter()
     return _tenants_router
+
+
+router = get_tenants_router().router

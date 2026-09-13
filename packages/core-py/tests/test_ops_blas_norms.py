@@ -9,10 +9,10 @@ Covers:
 
 import numpy as np
 import pytest
-from domains.inference.ops import blas
-from domains.inference.ops.layernorm import layernorm
-from domains.inference.ops.matmul import matmul
-from domains.inference.ops.rmsnorm import rmsnorm
+from domain.inference._internal.ops import blas
+from domain.inference._internal.ops.layernorm import layernorm
+from domain.inference._internal.ops.matmul import matmul
+from domain.inference._internal.ops.rmsnorm import rmsnorm
 
 
 # ── BLAS ──────────────────────────────────────────────────────────

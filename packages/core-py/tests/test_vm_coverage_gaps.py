@@ -6,7 +6,7 @@ decoder (MOV r/m8, IMUL), and XCHG memory forms.
 """
 
 import pytest
-from domain.shell._internal.vm import (
+from domains.shell.vm import (
     CPU,
     CRC8_TABLE,
     X86CPU,
@@ -139,19 +139,19 @@ class TestDeviceTableOps:
 
     def test_dev_open(self):
         cpu = self._make_cpu_with_device_table()
-        from domain.shell._internal.vm import _op_dev_open
+        from domains.shell.vm import _op_dev_open
         _op_dev_open(cpu, ["R0", "vga"])
         assert cpu.regs[0] is not None
 
     def test_dev_open_unknown(self):
         cpu = self._make_cpu_with_device_table()
-        from domain.shell._internal.vm import _op_dev_open
+        from domains.shell.vm import _op_dev_open
         _op_dev_open(cpu, ["R0", "nonexistent"])
         assert cpu.regs[0] == ""
 
     def test_dev_call(self):
         cpu = self._make_cpu_with_device_table()
-        from domain.shell._internal.vm import _op_dev_call
+        from domains.shell.vm import _op_dev_call
         # VGADevice.call() supports "get_screen", not "info"
         _op_dev_call(cpu, ["R0", "vga", "get_screen"])
         result = cpu.regs[0]
@@ -160,13 +160,13 @@ class TestDeviceTableOps:
 
     def test_dev_call_error(self):
         cpu = self._make_cpu_with_device_table()
-        from domain.shell._internal.vm import _op_dev_call
+        from domains.shell.vm import _op_dev_call
         _op_dev_call(cpu, ["R0", "nonexistent", "read"])
         assert cpu.regs[0] is None
 
     def test_dev_info(self):
         cpu = self._make_cpu_with_device_table()
-        from domain.shell._internal.vm import _op_dev_info
+        from domains.shell.vm import _op_dev_info
         # _op_dev_info calls device.info() directly, which works for VGADevice
         _op_dev_info(cpu, ["R0", "vga"])
         info = cpu.regs[0]
@@ -174,13 +174,13 @@ class TestDeviceTableOps:
 
     def test_dev_info_error(self):
         cpu = self._make_cpu_with_device_table()
-        from domain.shell._internal.vm import _op_dev_info
+        from domains.shell.vm import _op_dev_info
         _op_dev_info(cpu, ["R0", "nonexistent"])
         assert cpu.regs[0] == {}
 
     def test_dev_close(self):
         cpu = self._make_cpu_with_device_table()
-        from domain.shell._internal.vm import _op_dev_close
+        from domains.shell.vm import _op_dev_close
         _op_dev_close(cpu, ["R0"])
 
 
@@ -379,7 +379,7 @@ class TestCPU66StringOps:
         cpu._mem[0x2000] = 0x55
         cpu._mem[0x2001] = 0x66
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert cpu._flag(FLAG_ZF)
 
     def test_cmpsw_not_equal(self):
@@ -395,7 +395,7 @@ class TestCPU66StringOps:
         cpu._mem[0x2000] = 0x77
         cpu._mem[0x2001] = 0x88
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert not cpu._flag(FLAG_ZF)
 
     def test_cmpsw_df_set(self):
@@ -424,7 +424,7 @@ class TestCPU66StringOps:
         cpu._mem[0x1000] = 0x34
         cpu._mem[0x1001] = 0x12
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert cpu._flag(FLAG_ZF)
 
     def test_scasw_not_equal(self):
@@ -438,7 +438,7 @@ class TestCPU66StringOps:
         cpu._mem[0x1000] = 0x00
         cpu._mem[0x1001] = 0x00
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert not cpu._flag(FLAG_ZF)
 
     def test_scasw_df_set(self):
@@ -544,7 +544,7 @@ class TestCPU66F7Group:
         ])
         cpu = self._make_cpu(code)
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert not cpu._flag(FLAG_ZF)
 
     def test_test_r16_imm16_zero(self):
@@ -555,7 +555,7 @@ class TestCPU66F7Group:
         ])
         cpu = self._make_cpu(code)
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert cpu._flag(FLAG_ZF)
 
     def test_not_r16(self):
@@ -577,7 +577,7 @@ class TestCPU66F7Group:
         cpu = self._make_cpu(code)
         cpu.run(10)
         assert (cpu._regs[1] & 0xFFFF) == 0xFFFB
-        from domain.shell._internal.vm import FLAG_CF
+        from domains.shell.vm import FLAG_CF
         assert cpu._flag(FLAG_CF)
 
     def test_neg_r16_zero(self):
@@ -589,7 +589,7 @@ class TestCPU66F7Group:
         cpu = self._make_cpu(code)
         cpu.run(10)
         assert (cpu._regs[1] & 0xFFFF) == 0
-        from domain.shell._internal.vm import FLAG_CF
+        from domains.shell.vm import FLAG_CF
         assert not cpu._flag(FLAG_CF)
 
     def test_mul_r16(self):
@@ -630,7 +630,7 @@ class TestCPU66F7Group:
         assert (cpu._regs[2] & 0xFFFF) == 5    # remainder
 
     def test_div_r16_by_zero(self):
-        from domain.shell._internal.vm import InsFault
+        from domains.shell.vm import InsFault
         code = bytes([
             0x66, 0xB8, 0x01, 0x00,  # MOV AX, 1
             0x66, 0xB9, 0x00, 0x00,  # MOV CX, 0
@@ -642,7 +642,7 @@ class TestCPU66F7Group:
             cpu.run(10)
 
     def test_div_r16_overflow(self):
-        from domain.shell._internal.vm import InsFault
+        from domains.shell.vm import InsFault
         code = bytes([
             0x66, 0xB8, 0x00, 0x00,  # MOV AX, 0
             0x66, 0xBA, 0x01, 0x00,  # MOV DX, 1 (dividend = 0x10000)
@@ -669,7 +669,7 @@ class TestCPU66F7Group:
         assert ax_s == -3
 
     def test_idiv_r16_by_zero(self):
-        from domain.shell._internal.vm import InsFault
+        from domains.shell.vm import InsFault
         code = bytes([
             0x66, 0xB8, 0x01, 0x00,  # MOV AX, 1
             0x66, 0xB9, 0x00, 0x00,  # MOV CX, 0
@@ -740,7 +740,7 @@ class TestCPU66MovRm8AndF6:
         assert (cpu._regs[1] & 0xFFFF) == 0x1000
 
     def test_cld_std(self):
-        from domain.shell._internal.vm import FLAG_DF
+        from domains.shell.vm import FLAG_DF
         cpu = self._make_cpu(bytes([
             0xFC,        # CLD
             0xF4,
@@ -773,7 +773,7 @@ class TestCPU66F6_8bit:
         ])
         cpu = self._make_cpu(code)
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert not cpu._flag(FLAG_ZF)
 
     def test_not_r8(self):
@@ -795,7 +795,7 @@ class TestCPU66F6_8bit:
         cpu = self._make_cpu(code)
         cpu.run(10)
         assert (cpu._regs[1] & 0xFF) == 0xFB
-        from domain.shell._internal.vm import FLAG_CF
+        from domains.shell.vm import FLAG_CF
         assert cpu._flag(FLAG_CF)
 
 
@@ -924,7 +924,7 @@ class TestCPU66ALU16:
         cpu._mem[0x1000] = 0x0A
         cpu._mem[0x1001] = 0x00
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert cpu._flag(FLAG_ZF)
 
     def test_mov_r16_rm16(self):
@@ -1026,7 +1026,7 @@ class TestCPU66AccImmALU:
             0xF4,
         ]))
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert cpu._flag(FLAG_ZF)
 
     def test_sub_ax_imm16(self):
@@ -1090,7 +1090,7 @@ class TestCPU66AccImmALU:
             0xF4,
         ]))
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert cpu._flag(FLAG_ZF)
 
 
@@ -1110,7 +1110,7 @@ class TestCPU66MiscGroup1:
             0xF4,
         ]))
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert not cpu._flag(FLAG_ZF)
 
     def test_test_ax_imm16(self):
@@ -1120,7 +1120,7 @@ class TestCPU66MiscGroup1:
             0xF4,
         ]))
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert not cpu._flag(FLAG_ZF)
 
     def test_group1_81_add_imm16(self):
@@ -1226,7 +1226,7 @@ class TestCPU66MiscGroup1:
             0xF4,
         ]))
         cpu.run(10)
-        from domain.shell._internal.vm import FLAG_ZF
+        from domains.shell.vm import FLAG_ZF
         assert cpu._flag(FLAG_ZF)
 
 
@@ -1234,7 +1234,7 @@ class TestCPU66MiscGroup1:
 
 class TestSchedulerOps:
     def test_switch_to(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         cpu = X86CPU(memory_size=0x100000)
@@ -1250,14 +1250,14 @@ class TestSchedulerOps:
         assert sched.current.pid == pcb2.pid
 
     def test_switch_to_nonexistent(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         cpu = X86CPU(memory_size=0x100000)
         assert not sched.switch_to(cpu, 999)
 
     def test_switch_to_terminated(self):
-        from domain.shell._internal.vm import X86CPU, ProcessState, ProcessTable, Scheduler
+        from domains.shell.vm import X86CPU, ProcessState, ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         cpu = X86CPU(memory_size=0x100000)
@@ -1266,7 +1266,7 @@ class TestSchedulerOps:
         assert not sched.switch_to(cpu, pcb1.pid)
 
     def test_block_current(self):
-        from domain.shell._internal.vm import X86CPU, ProcessState, ProcessTable, Scheduler
+        from domains.shell.vm import X86CPU, ProcessState, ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         cpu = X86CPU(memory_size=0x100000)
@@ -1280,14 +1280,14 @@ class TestSchedulerOps:
         assert ptable.get(pcb1.pid).state == ProcessState.WAITING
 
     def test_block_current_no_process(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         cpu = X86CPU(memory_size=0x100000)
         sched.block_current(cpu)  # should not raise
 
     def test_unblock(self):
-        from domain.shell._internal.vm import X86CPU, ProcessState, ProcessTable, Scheduler
+        from domains.shell.vm import X86CPU, ProcessState, ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         cpu = X86CPU(memory_size=0x100000)
@@ -1301,13 +1301,13 @@ class TestSchedulerOps:
         assert ptable.get(pcb1.pid).state == ProcessState.READY
 
     def test_unblock_nonexistent(self):
-        from domain.shell._internal.vm import ProcessTable, Scheduler
+        from domains.shell.vm import ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         sched.unblock(999)  # should not raise
 
     def test_exit_current(self):
-        from domain.shell._internal.vm import X86CPU, ProcessState, ProcessTable, Scheduler
+        from domains.shell.vm import X86CPU, ProcessState, ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         cpu = X86CPU(memory_size=0x100000)
@@ -1320,13 +1320,13 @@ class TestSchedulerOps:
         assert sched.current is None
 
     def test_exit_current_no_process(self):
-        from domain.shell._internal.vm import ProcessTable, Scheduler
+        from domains.shell.vm import ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         sched.exit_current(None)  # should not raise
 
     def test_stats(self):
-        from domain.shell._internal.vm import ProcessTable, Scheduler
+        from domains.shell.vm import ProcessTable, Scheduler
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
         s = sched.stats()
@@ -1341,7 +1341,7 @@ class TestSyscallHandler:
     """Direct X86SyscallHandler unit tests — exercises the individual _sys_* methods."""
 
     def _make_handler(self, with_fs=False, with_devices=False):
-        from domain.shell._internal.vm import (
+        from domains.shell.vm import (
             X86CPU, ProcessTable, Scheduler, X86SyscallHandler,
             PageFrameAllocator, FlatFS, BlockDevice,
         )
@@ -1360,7 +1360,7 @@ class TestSyscallHandler:
         pcb = ptable.create(name=name, priority=5)
         sched.enqueue(pcb.pid)
         sched._current_pid = pcb.pid
-        pcb.state = __import__('domain.shell._internal.vm', fromlist=['ProcessState']).ProcessState.RUNNING
+        pcb.state = __import__('domains.shell.vm', fromlist=['ProcessState']).ProcessState.RUNNING
         return pcb
 
     def test_tick(self):
@@ -1572,13 +1572,13 @@ class TestSyscallHandler:
         pcb = self._setup_process(ptable, sched)
         child = ptable.create(name="child")
         pcb.children.append(child.pid)
-        child.state = __import__('domain.shell._internal.vm', fromlist=['ProcessState']).ProcessState.TERMINATED
+        child.state = __import__('domains.shell.vm', fromlist=['ProcessState']).ProcessState.TERMINATED
         result = handler._sys_wait()
         assert result == child.pid
 
     def test_sys_wait_blocked(self):
         handler, cpu, ptable, sched = self._make_handler()
-        from domain.shell._internal.vm import ProcessState
+        from domains.shell.vm import ProcessState
         pcb = self._setup_process(ptable, sched)
         child = ptable.create(name="child")
         pcb.children.append(child.pid)
@@ -1621,7 +1621,7 @@ class TestSyscallHandler:
 
     def test_sys_kill_sigkill_other(self):
         handler, cpu, ptable, sched = self._make_handler()
-        from domain.shell._internal.vm import ProcessState
+        from domains.shell.vm import ProcessState
         self._setup_process(ptable, sched)
         target = ptable.create(name="target")
         target.state = ProcessState.READY
@@ -1705,7 +1705,7 @@ class TestSyscallHandler:
 
     def test_sys_serial_write(self):
         handler, cpu, _, _ = self._make_handler()
-        handler._serial = __import__('domain.shell._internal.vm', fromlist=['SerialDevice']).SerialDevice(cpu=cpu)
+        handler._serial = __import__('domains.shell.vm', fromlist=['SerialDevice']).SerialDevice(cpu=cpu)
         assert handler._sys_serial_write(65) == 0
 
     def test_sys_serial_write_no_device(self):
@@ -1714,7 +1714,7 @@ class TestSyscallHandler:
 
     def test_sys_serial_read(self):
         handler, cpu, _, _ = self._make_handler()
-        serial = __import__('domain.shell._internal.vm', fromlist=['SerialDevice']).SerialDevice(cpu=cpu)
+        serial = __import__('domains.shell.vm', fromlist=['SerialDevice']).SerialDevice(cpu=cpu)
         handler._serial = serial
         result = handler._sys_serial_read()
         assert isinstance(result, int)
@@ -1725,7 +1725,7 @@ class TestSyscallHandler:
 
     def test_sys_mouse_read(self):
         handler, cpu, _, _ = self._make_handler()
-        mouse = __import__('domain.shell._internal.vm', fromlist=['MouseDevice']).MouseDevice()
+        mouse = __import__('domains.shell.vm', fromlist=['MouseDevice']).MouseDevice()
         handler._mouse = mouse
         result = handler._sys_mouse_read(0x1000)
         assert result == -1  # no packet available
@@ -1736,8 +1736,8 @@ class TestSyscallHandler:
 
     def test_sys_rtc_gettime(self):
         handler, cpu, _, _ = self._make_handler()
-        clock = __import__('domain.shell._internal.vm', fromlist=['ClockDevice']).ClockDevice(freq=100)
-        rtc = __import__('domain.shell._internal.vm', fromlist=['CMOSDevice']).CMOSDevice(cpu=cpu, clock=clock)
+        clock = __import__('domains.shell.vm', fromlist=['ClockDevice']).ClockDevice(freq=100)
+        rtc = __import__('domains.shell.vm', fromlist=['CMOSDevice']).CMOSDevice(cpu=cpu, clock=clock)
         handler._rtc = rtc
         result = handler._sys_rtc_gettime(0x1000)
         assert isinstance(result, int)
@@ -1748,8 +1748,8 @@ class TestSyscallHandler:
 
     def test_sys_disk_read(self):
         handler, cpu, _, _ = self._make_handler()
-        block = __import__('domain.shell._internal.vm', fromlist=['BlockDevice']).BlockDevice()
-        disk = __import__('domain.shell._internal.vm', fromlist=['DiskDevice']).DiskDevice(block_device=block)
+        block = __import__('domains.shell.vm', fromlist=['BlockDevice']).BlockDevice()
+        disk = __import__('domains.shell.vm', fromlist=['DiskDevice']).DiskDevice(block_device=block)
         handler._disk = disk
         result = handler._sys_disk_read(0, 0x1000, 1)
         assert result == 512
@@ -1760,15 +1760,15 @@ class TestSyscallHandler:
 
     def test_sys_disk_read_zero_count(self):
         handler, cpu, _, _ = self._make_handler()
-        block = __import__('domain.shell._internal.vm', fromlist=['BlockDevice']).BlockDevice()
-        disk = __import__('domain.shell._internal.vm', fromlist=['DiskDevice']).DiskDevice(block_device=block)
+        block = __import__('domains.shell.vm', fromlist=['BlockDevice']).BlockDevice()
+        disk = __import__('domains.shell.vm', fromlist=['DiskDevice']).DiskDevice(block_device=block)
         handler._disk = disk
         assert handler._sys_disk_read(0, 0x1000, 0) == -1
 
     def test_sys_disk_write(self):
         handler, cpu, _, _ = self._make_handler()
-        block = __import__('domain.shell._internal.vm', fromlist=['BlockDevice']).BlockDevice()
-        disk = __import__('domain.shell._internal.vm', fromlist=['DiskDevice']).DiskDevice(block_device=block)
+        block = __import__('domains.shell.vm', fromlist=['BlockDevice']).BlockDevice()
+        disk = __import__('domains.shell.vm', fromlist=['DiskDevice']).DiskDevice(block_device=block)
         handler._disk = disk
         cpu._mem[0x1000:0x1004] = b'test'
         result = handler._sys_disk_write(0, 0x1000, 1)
@@ -1780,14 +1780,14 @@ class TestSyscallHandler:
 
     def test_sys_disk_write_zero_count(self):
         handler, cpu, _, _ = self._make_handler()
-        block = __import__('domain.shell._internal.vm', fromlist=['BlockDevice']).BlockDevice()
-        disk = __import__('domain.shell._internal.vm', fromlist=['DiskDevice']).DiskDevice(block_device=block)
+        block = __import__('domains.shell.vm', fromlist=['BlockDevice']).BlockDevice()
+        disk = __import__('domains.shell.vm', fromlist=['DiskDevice']).DiskDevice(block_device=block)
         handler._disk = disk
         assert handler._sys_disk_write(0, 0x1000, 0) == -1
 
     def test_sys_net_send(self):
         handler, cpu, _, _ = self._make_handler()
-        nic = __import__('domain.shell._internal.vm', fromlist=['NICDevice']).NICDevice()
+        nic = __import__('domains.shell.vm', fromlist=['NICDevice']).NICDevice()
         handler._nic = nic
         cpu._mem[0x1000:0x1004] = b'data'
         result = handler._sys_net_send(0x1000, 4)
@@ -1799,13 +1799,13 @@ class TestSyscallHandler:
 
     def test_sys_net_send_zero_length(self):
         handler, cpu, _, _ = self._make_handler()
-        nic = __import__('domain.shell._internal.vm', fromlist=['NICDevice']).NICDevice()
+        nic = __import__('domains.shell.vm', fromlist=['NICDevice']).NICDevice()
         handler._nic = nic
         assert handler._sys_net_send(0x1000, 0) == -1
 
     def test_sys_net_recv(self):
         handler, cpu, _, _ = self._make_handler()
-        nic = __import__('domain.shell._internal.vm', fromlist=['NICDevice']).NICDevice()
+        nic = __import__('domains.shell.vm', fromlist=['NICDevice']).NICDevice()
         handler._nic = nic
         result = handler._sys_net_recv(0x1000, 100)
         assert result == -1  # no packet
@@ -1823,7 +1823,7 @@ class TestSyscallHandler:
 
     def test_handle_permission_denied(self):
         handler, cpu, ptable, sched = self._make_handler()
-        from domain.shell._internal.vm import ProcessState
+        from domains.shell.vm import ProcessState
         pcb = self._setup_process(ptable, sched)
         pcb.state = ProcessState.RUNNING
         # SYS_KILL requires PROCESS_KILL — a normal user doesn't have it
@@ -1852,7 +1852,7 @@ class TestPITDeviceCoverage:
     """PITDevice unit tests for uncovered lines."""
 
     def test_read_counter_no_latch(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler, PITDevice
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler, PITDevice
         cpu = X86CPU(memory_size=0x400000)
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
@@ -1862,7 +1862,7 @@ class TestPITDeviceCoverage:
         assert isinstance(val, int)
 
     def test_write_counter(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler, PITDevice
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler, PITDevice
         cpu = X86CPU(memory_size=0x400000)
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
@@ -1871,7 +1871,7 @@ class TestPITDeviceCoverage:
         assert pit._counters[0] & 0xFF == 0x42
 
     def test_tick_irq_fires(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler, PITDevice
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler, PITDevice
         cpu = X86CPU(memory_size=0x400000)
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
@@ -1884,7 +1884,7 @@ class TestPITDeviceCoverage:
         assert pit._counters[0] == pit._divider
 
     def test_tick_channels_1_and_2(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler, PITDevice
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler, PITDevice
         cpu = X86CPU(memory_size=0x400000)
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
@@ -1896,7 +1896,7 @@ class TestPITDeviceCoverage:
         assert pit._tick_count == 0  # no IRQ from ch1/ch2
 
     def test_tick_with_clock_and_syscall(self):
-        from domain.shell._internal.vm import (
+        from domains.shell.vm import (
             X86CPU, ProcessTable, Scheduler, PITDevice,
             X86SyscallHandler, PageFrameAllocator, ClockDevice,
         )
@@ -1920,7 +1920,7 @@ class TestX86VirtualSystemCoverage:
     """X86VirtualSystem unit tests for uncovered lines."""
 
     def test_init_with_filesystem(self):
-        from domain.shell._internal.vm import X86VirtualSystem, FlatFS, BlockDevice
+        from domains.shell.vm import X86VirtualSystem, FlatFS, BlockDevice
         block = BlockDevice()
         fs = FlatFS(block)
         vs = X86VirtualSystem(filesystem=fs)
@@ -1928,13 +1928,13 @@ class TestX86VirtualSystemCoverage:
         assert vs._block is block
 
     def test_init_default_filesystem(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem()
         assert vs._fs is not None
         assert vs._block is not None
 
     def test_properties(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem()
         assert vs.cpu is vs._cpu
         assert vs.scheduler is vs._scheduler
@@ -1947,34 +1947,34 @@ class TestX86VirtualSystemCoverage:
         assert vs.nic is vs._nic
 
     def test_load_kernel(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem()
         vs.load_kernel('[BITS 32]\nMOV EAX, 1\nRET')
         assert vs._kernel.eip == 0x1000
 
     def test_spawn(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem()
         pid = vs.spawn("user", '[BITS 32]\nNOP\nRET')
         assert pid is not None
         assert pid > 1
 
     def test_spawn_stack_overflow(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem(memory_size=0x400000)
         # Spawn at an address where stack would exceed memory
         pid = vs.spawn("user", '[BITS 32]\nNOP', org=0x3F0000)
         assert pid is not None
 
     def test_run_cycles(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem()
         vs.load_kernel('[BITS 32]\nRET')
         cycles = vs.run(max_cycles=100)
         assert cycles >= 0
 
     def test_run_fault(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem()
         # Invalid opcode causes InsFault
         vs._cpu._mem[0x1000] = 0x0F  # invalid two-byte opcode prefix
@@ -1984,7 +1984,7 @@ class TestX86VirtualSystemCoverage:
         assert cycles >= 0
 
     def test_status(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem()
         s = vs.status()
         assert 'cpu' in s
@@ -1995,7 +1995,7 @@ class TestX86VirtualSystemCoverage:
         assert 'syscall_ticks' in s
 
     def test_reset(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem()
         vs.load_kernel('[BITS 32]\nRET')
         vs.run(max_cycles=10)
@@ -2004,7 +2004,7 @@ class TestX86VirtualSystemCoverage:
         assert vs._ptable.count() == 1
 
     def test_keyboard_handler(self):
-        from domain.shell._internal.vm import X86VirtualSystem
+        from domains.shell.vm import X86VirtualSystem
         vs = X86VirtualSystem()
         # The keyboard handler is registered — verify it exists in the IDT
         assert 1 in vs._cpu._idt_handlers
@@ -2016,7 +2016,7 @@ class TestDeviceRegisterMapCoverage:
     """DeviceRegisterMap tests for uncovered lines."""
 
     def test_register_device(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         mock_dev = type('Dev', (), {'ioctl': lambda self, *a: None})()
         drm.register_device("test_dev", mock_dev, base_addr=0x1000)
@@ -2024,24 +2024,24 @@ class TestDeviceRegisterMapCoverage:
         assert drm.BASE_ADDRESSES["test_dev"] == 0x1000
 
     def test_register_device_no_base_raises(self):
-        from domain.shell._internal.vm import DeviceRegisterMap, DeviceFault
+        from domains.shell.vm import DeviceRegisterMap, DeviceFault
         drm = DeviceRegisterMap()
         mock_dev = type('Dev', (), {})()
         with pytest.raises(DeviceFault):
             drm.register_device("unknown_dev", mock_dev)
 
     def test_read_unknown_address(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         assert drm.read(0xDEAD) == 0
 
     def test_write_unknown_address(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         drm.write(0xDEAD, 42)  # should not raise
 
     def test_write_command_register(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         # Use a predefined base address so registers are initialized
         base = drm.BASE_ADDRESSES["tensor"]
@@ -2056,14 +2056,14 @@ class TestDeviceRegisterMapCoverage:
         assert drm._registers[base + drm.REG_RESULT] == 42
 
     def test_write_command_device_none(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         base = drm.BASE_ADDRESSES["tensor"]
         drm.register_device("tensor", None)
         drm.write(base + drm.REG_COMMAND, 1)  # no device, should not raise
 
     def test_write_non_command_register(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         base = drm.BASE_ADDRESSES["tensor"]
         mock_dev = type('Dev', (), {'ioctl': lambda self, *a: None})()
@@ -2072,13 +2072,13 @@ class TestDeviceRegisterMapCoverage:
         assert drm._registers[base + drm.REG_ARG0] == 99
 
     def test_write_non_command_no_device_name(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         # Write to an address that's not in any device block
         drm.write(0x5000, 42)
 
     def test_execute_command_result_types(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         base = drm.BASE_ADDRESSES["npu"]
 
@@ -2091,7 +2091,7 @@ class TestDeviceRegisterMapCoverage:
         assert drm._registers[base + drm.REG_RESULT] == 1
 
     def test_execute_command_error(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         base = drm.BASE_ADDRESSES["storage"]
 
@@ -2104,7 +2104,7 @@ class TestDeviceRegisterMapCoverage:
         assert drm._registers[base + drm.REG_ERROR] == 1
 
     def test_dispatch_ioctl_with_success_attr(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         base = drm.BASE_ADDRESSES["network"]
 
@@ -2120,7 +2120,7 @@ class TestDeviceRegisterMapCoverage:
         assert drm._registers[base + drm.REG_RESULT] == 99
 
     def test_dispatch_ioctl_failure(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         base = drm.BASE_ADDRESSES["display"]
 
@@ -2136,7 +2136,7 @@ class TestDeviceRegisterMapCoverage:
         assert drm._registers[base + drm.REG_ERROR] == 1
 
     def test_dispatch_call_method(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         base = drm.BASE_ADDRESSES["input"]
 
@@ -2149,7 +2149,7 @@ class TestDeviceRegisterMapCoverage:
         assert drm._registers[base + drm.REG_RESULT] == 77
 
     def test_dispatch_no_ioctl_no_call(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         # Register with a custom address that has initialized registers
         drm.BASE_ADDRESSES["bare"] = 0x8000
@@ -2164,7 +2164,7 @@ class TestDeviceRegisterMapCoverage:
         assert drm._registers[0x8000 + drm.REG_ERROR] == 1
 
     def test_get_block_base(self):
-        from domain.shell._internal.vm import DeviceRegisterMap
+        from domains.shell.vm import DeviceRegisterMap
         drm = DeviceRegisterMap()
         assert drm.get_block_base("tensor") == drm.BASE_ADDRESSES["tensor"]
         assert drm.get_block_base("nonexistent") == 0
@@ -2176,7 +2176,7 @@ class TestTrainingSyscalls:
     """Test _sys_train_* methods via the training bridge."""
 
     def test_train_start(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler, X86SyscallHandler, PageFrameAllocator
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler, X86SyscallHandler, PageFrameAllocator
         cpu = X86CPU(memory_size=0x400000)
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
@@ -2188,7 +2188,7 @@ class TestTrainingSyscalls:
         assert isinstance(result, int)
 
     def test_train_status_not_found(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler, X86SyscallHandler, PageFrameAllocator
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler, X86SyscallHandler, PageFrameAllocator
         cpu = X86CPU(memory_size=0x400000)
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
@@ -2198,7 +2198,7 @@ class TestTrainingSyscalls:
         assert result == -1
 
     def test_train_get_result_not_found(self):
-        from domain.shell._internal.vm import X86CPU, ProcessTable, Scheduler, X86SyscallHandler, PageFrameAllocator
+        from domains.shell.vm import X86CPU, ProcessTable, Scheduler, X86SyscallHandler, PageFrameAllocator
         cpu = X86CPU(memory_size=0x400000)
         ptable = ProcessTable()
         sched = Scheduler(ptable, quantum=10)
@@ -2214,7 +2214,7 @@ class TestCPU66MoreOpcodes:
     """Additional 0x66-prefix opcode coverage tests."""
 
     def _make_cpu(self, code_bytes):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._mem[0x100:0x100 + len(code_bytes)] = code_bytes
         cpu._eip = 0x100
@@ -2222,7 +2222,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_mov_rm8_r8(self):
         # 0x66 0x88 ModRM: MOV r/m8, r8 with 16-bit operand override
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         # 0x66 prefix + 0x88 + ModRM(C0=AL,AL) + ... but 0x88 is 8-bit, unaffected by 0x66
@@ -2234,7 +2234,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_mov_r8_rm8(self):
         # 0x66 0x8A ModRM: MOV r8, r/m8
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         cpu._regs[0] = 0x42
@@ -2245,7 +2245,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_mov_rm8_imm8(self):
         # 0x66 0xC6 /0 ModRM: MOV r/m8, imm8
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         code = bytes([0x66, 0xC6, 0xC0, 0x55])  # MOV AL, 0x55
@@ -2256,7 +2256,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_imul_r16_rm16_imm16(self):
         # 0x66 0x69: IMUL r16, r/m16, imm16
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         # IMUL CX, AX, 3  (69 C8 03 00 = IMUL CX, AX, imm16=3)
@@ -2269,7 +2269,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_imul_r16_rm16_negative_imm(self):
         # 0x66 0x69 with negative imm16
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         # IMUL CX, AX, -2 (69 C8 FE FF = imm16 = 0xFFFE = -2)
@@ -2282,7 +2282,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_imul_r16_rm16_reg(self):
         # 0x0F 0xAF without 0x66 prefix: IMUL r32, r/m32 (standard 32-bit)
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         # IMUL ECX, EAX (0F AF C8)
@@ -2296,7 +2296,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_mov_r16_imm16(self):
         # 0x66 0xB8+r: MOV r16, imm16
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         # MOV AX, 0x1234 (66 B8 34 12)
@@ -2308,7 +2308,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_mov_rm16_r16(self):
         # 0x66 0x89: MOV r/m16, r16
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         # MOV AX, CX (66 89 C8)
@@ -2321,7 +2321,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_mov_r16_rm16(self):
         # 0x66 0x8B: MOV r16, r/m16
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         # MOV CX, AX (66 8B C8)
@@ -2334,7 +2334,7 @@ class TestCPU66MoreOpcodes:
 
     def test_66_mov_rm16_imm16(self):
         # 0x66 0xC7 /0: MOV r/m16, imm16
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._eip = 0x100
         # MOV AX, 0x4321 (66 C7 C0 21 43)
@@ -2351,7 +2351,7 @@ class TestSyscallExecEdgeCases:
     """Additional exec edge case tests for uncovered lines."""
 
     def _make_handler(self):
-        from domain.shell._internal.vm import (
+        from domains.shell.vm import (
             X86CPU, ProcessTable, Scheduler, X86SyscallHandler,
             PageFrameAllocator, FlatFS, BlockDevice,
         )
@@ -2367,7 +2367,7 @@ class TestSyscallExecEdgeCases:
         return handler, cpu, ptable, sched
 
     def _setup_process(self, ptable, sched):
-        from domain.shell._internal.vm import ProcessState
+        from domains.shell.vm import ProcessState
         pcb = ptable.create(name="test", priority=5)
         sched.enqueue(pcb.pid)
         sched._current_pid = pcb.pid
@@ -2407,7 +2407,7 @@ class TestSyscallExecEdgeCases:
 
     def test_kill_role_escalation_guard(self):
         handler, cpu, ptable, sched = self._make_handler()
-        from domain.shell._internal.vm_permissions import Role
+        from domains.shell.vm_permissions import Role
         pcb = self._setup_process(ptable, sched)
         handler._rbac.assign(pcb.pid, Role.USER)
         target = ptable.create(name="target")
@@ -2427,7 +2427,7 @@ class TestSyscallExecEdgeCases:
 
     def test_mouse_read_with_packet(self):
         handler, cpu, ptable, sched = self._make_handler()
-        from domain.shell._internal.vm import MouseDevice
+        from domains.shell.vm import MouseDevice
         mouse = MouseDevice()
         handler._mouse = mouse
         mouse.move(10, 5)
@@ -2437,7 +2437,7 @@ class TestSyscallExecEdgeCases:
 
     def test_net_recv_with_packet(self):
         handler, cpu, ptable, sched = self._make_handler()
-        from domain.shell._internal.vm import NICDevice
+        from domains.shell.vm import NICDevice
         nic = NICDevice()
         handler._nic = nic
         nic.inject_packet(b'\x01\x02\x03')
@@ -2446,7 +2446,7 @@ class TestSyscallExecEdgeCases:
 
     def test_net_recv_truncated(self):
         handler, cpu, ptable, sched = self._make_handler()
-        from domain.shell._internal.vm import NICDevice
+        from domains.shell.vm import NICDevice
         nic = NICDevice()
         handler._nic = nic
         nic.inject_packet(b'\x01\x02\x03\x04\x05')
@@ -2460,12 +2460,12 @@ class TestCPUTensorOps:
     """Test CPU-level tensor ops (the _op_* functions) via the CPU class."""
 
     def _make_cpu(self):
-        from domain.shell._internal.vm import CPU
+        from domains.shell.vm import CPU
         return CPU()
 
     def test_isub(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_isub
+        from domains.shell.vm import _op_isub
         _op_isub(cpu, ['R0', 'R0', 'R1'])
         cpu.regs[0] = 10
         cpu.regs[1] = 3
@@ -2476,7 +2476,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 3
         cpu.regs[1] = 10
-        from domain.shell._internal.vm import _op_isub
+        from domains.shell.vm import _op_isub
         _op_isub(cpu, ['R2', 'R0', 'R1'])
         assert cpu._carry_flag is True
 
@@ -2484,7 +2484,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 6
         cpu.regs[1] = 7
-        from domain.shell._internal.vm import _op_imul
+        from domains.shell.vm import _op_imul
         _op_imul(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 42
 
@@ -2492,7 +2492,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 10
         cpu.regs[1] = 3
-        from domain.shell._internal.vm import _op_idiv
+        from domains.shell.vm import _op_idiv
         _op_idiv(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 3
 
@@ -2500,7 +2500,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 10
         cpu.regs[1] = 0
-        from domain.shell._internal.vm import _op_idiv
+        from domains.shell.vm import _op_idiv
         _op_idiv(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 0
 
@@ -2508,7 +2508,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 0xFF
         cpu.regs[1] = 0x0F
-        from domain.shell._internal.vm import _op_iand
+        from domains.shell.vm import _op_iand
         _op_iand(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 0x0F
 
@@ -2516,7 +2516,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 0xF0
         cpu.regs[1] = 0x0F
-        from domain.shell._internal.vm import _op_ior
+        from domains.shell.vm import _op_ior
         _op_ior(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 0xFF
 
@@ -2524,7 +2524,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 0xFF
         cpu.regs[1] = 0x0F
-        from domain.shell._internal.vm import _op_ixor
+        from domains.shell.vm import _op_ixor
         _op_ixor(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 0xF0
 
@@ -2532,7 +2532,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 1
         cpu.regs[1] = 4
-        from domain.shell._internal.vm import _op_ishl
+        from domains.shell.vm import _op_ishl
         _op_ishl(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 16
 
@@ -2540,28 +2540,28 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 16
         cpu.regs[1] = 2
-        from domain.shell._internal.vm import _op_ishr
+        from domains.shell.vm import _op_ishr
         _op_ishr(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 4
 
     def test_ineg(self):
         cpu = self._make_cpu()
         cpu.regs[0] = 42
-        from domain.shell._internal.vm import _op_ineg
+        from domains.shell.vm import _op_ineg
         _op_ineg(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == -42
 
     def test_inc(self):
         cpu = self._make_cpu()
         cpu.regs[0] = 5
-        from domain.shell._internal.vm import _op_inc
+        from domains.shell.vm import _op_inc
         _op_inc(cpu, ['R0'])
         assert cpu.regs[0] == 6
 
     def test_dec(self):
         cpu = self._make_cpu()
         cpu.regs[0] = 5
-        from domain.shell._internal.vm import _op_dec
+        from domains.shell.vm import _op_dec
         _op_dec(cpu, ['R0'])
         assert cpu.regs[0] == 4
 
@@ -2569,7 +2569,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 5
         cpu.regs[1] = 3
-        from domain.shell._internal.vm import _op_icmp
+        from domains.shell.vm import _op_icmp
         _op_icmp(cpu, ['R0', 'R1'])
         assert cpu._cmp_flag == 1
         cpu.regs[0] = 2
@@ -2584,26 +2584,26 @@ class TestCPUTensorOps:
     def test_neg(self):
         cpu = self._make_cpu()
         cpu.regs[0] = 42
-        from domain.shell._internal.vm import _op_neg
+        from domains.shell.vm import _op_neg
         _op_neg(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == -42
 
     def test_neg_none(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_neg
+        from domains.shell.vm import _op_neg
         _op_neg(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 0
 
     def test_abs(self):
         cpu = self._make_cpu()
         cpu.regs[0] = -42
-        from domain.shell._internal.vm import _op_abs
+        from domains.shell.vm import _op_abs
         _op_abs(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 42
 
     def test_abs_none(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_abs
+        from domains.shell.vm import _op_abs
         _op_abs(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 0
 
@@ -2611,19 +2611,19 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 5
         cpu.regs[1] = 3
-        from domain.shell._internal.vm import _op_cmp
+        from domains.shell.vm import _op_cmp
         _op_cmp(cpu, ['R0', 'R1'])
         assert cpu._cmp_flag == 1
 
     def test_cmp_string(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_cmp
+        from domains.shell.vm import _op_cmp
         _op_cmp(cpu, ['b', 'a'])
         assert cpu._cmp_flag == 1
 
     def test_test(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_test
+        from domains.shell.vm import _op_test
         _op_test(cpu, [1])
         assert cpu._cmp_flag == 1
         _op_test(cpu, [0])
@@ -2633,7 +2633,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 1.5
         cpu.regs[1] = 2.5
-        from domain.shell._internal.vm import _op_fadd
+        from domains.shell.vm import _op_fadd
         _op_fadd(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 4.0
 
@@ -2641,7 +2641,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 5.0
         cpu.regs[1] = 2.0
-        from domain.shell._internal.vm import _op_fsub
+        from domains.shell.vm import _op_fsub
         _op_fsub(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 3.0
 
@@ -2649,7 +2649,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 3.0
         cpu.regs[1] = 4.0
-        from domain.shell._internal.vm import _op_fmul
+        from domains.shell.vm import _op_fmul
         _op_fmul(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 12.0
 
@@ -2657,7 +2657,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 10.0
         cpu.regs[1] = 2.0
-        from domain.shell._internal.vm import _op_fdiv
+        from domains.shell.vm import _op_fdiv
         _op_fdiv(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 5.0
 
@@ -2665,14 +2665,14 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = 10.0
         cpu.regs[1] = 0.0
-        from domain.shell._internal.vm import _op_fdiv, InsFault
+        from domains.shell.vm import _op_fdiv, InsFault
         with pytest.raises(InsFault):
             _op_fdiv(cpu, ['R2', 'R0', 'R1'])
 
     def test_relu(self):
         cpu = self._make_cpu()
         cpu.regs[0] = -5
-        from domain.shell._internal.vm import _op_relu
+        from domains.shell.vm import _op_relu
         _op_relu(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 0
         cpu.regs[0] = 5
@@ -2682,27 +2682,27 @@ class TestCPUTensorOps:
     def test_gelu(self):
         cpu = self._make_cpu()
         cpu.regs[0] = 1.0
-        from domain.shell._internal.vm import _op_gelu
+        from domains.shell.vm import _op_gelu
         _op_gelu(cpu, ['R1', 'R0'])
         assert cpu.regs[1] > 0
 
     def test_sigmoid(self):
         cpu = self._make_cpu()
         cpu.regs[0] = 0.0
-        from domain.shell._internal.vm import _op_sigmoid
+        from domains.shell.vm import _op_sigmoid
         _op_sigmoid(cpu, ['R1', 'R0'])
         assert abs(cpu.regs[1] - 0.5) < 0.01
 
     def test_tanh(self):
         cpu = self._make_cpu()
         cpu.regs[0] = 0.0
-        from domain.shell._internal.vm import _op_tanh
+        from domains.shell.vm import _op_tanh
         _op_tanh(cpu, ['R1', 'R0'])
         assert abs(cpu.regs[1]) < 0.01
 
     def test_randn(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_randn
+        from domains.shell.vm import _op_randn
         _op_randn(cpu, ['R0', 2, 3])
         import numpy as np
         assert isinstance(cpu.regs[0], np.ndarray)
@@ -2710,7 +2710,7 @@ class TestCPUTensorOps:
 
     def test_randunif(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_randunif
+        from domains.shell.vm import _op_randunif
         _op_randunif(cpu, ['R0', 2, 3, -1.0, 1.0])
         import numpy as np
         assert isinstance(cpu.regs[0], np.ndarray)
@@ -2721,7 +2721,7 @@ class TestCPUTensorOps:
         import numpy as np
         cpu.regs[0] = np.array([1, 2, 3])
         cpu.regs[1] = np.array([4, 5, 6])
-        from domain.shell._internal.vm import _op_matmul
+        from domains.shell.vm import _op_matmul
         _op_matmul(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] is not None
 
@@ -2730,7 +2730,7 @@ class TestCPUTensorOps:
         import numpy as np
         cpu.regs[0] = np.array(5)
         cpu.regs[1] = np.array(3)
-        from domain.shell._internal.vm import _op_matmul
+        from domains.shell.vm import _op_matmul
         _op_matmul(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] is not None
 
@@ -2738,7 +2738,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([[1, 2], [3, 4]])
-        from domain.shell._internal.vm import _op_transpose
+        from domains.shell.vm import _op_transpose
         _op_transpose(cpu, ['R1', 'R0'])
         assert cpu.regs[1].shape == (2, 2)
 
@@ -2747,7 +2747,7 @@ class TestCPUTensorOps:
         import numpy as np
         cpu.regs[0] = np.array([1, 2, 3])
         cpu.regs[1] = np.array([4, 5, 6])
-        from domain.shell._internal.vm import _op_dot
+        from domains.shell.vm import _op_dot
         _op_dot(cpu, ['R2', 'R0', 'R1'])
         assert cpu.regs[2] == 32.0
 
@@ -2755,7 +2755,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([3, 4])
-        from domain.shell._internal.vm import _op_norm
+        from domains.shell.vm import _op_norm
         _op_norm(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 5.0
 
@@ -2763,7 +2763,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1, 2, 3])
-        from domain.shell._internal.vm import _op_sum
+        from domains.shell.vm import _op_sum
         _op_sum(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 6.0
 
@@ -2771,7 +2771,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1, 2, 3])
-        from domain.shell._internal.vm import _op_mean
+        from domains.shell.vm import _op_mean
         _op_mean(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 2.0
 
@@ -2779,7 +2779,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1, 5, 3])
-        from domain.shell._internal.vm import _op_max
+        from domains.shell.vm import _op_max
         _op_max(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 5.0
 
@@ -2787,7 +2787,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1, 5, 3])
-        from domain.shell._internal.vm import _op_argmax
+        from domains.shell.vm import _op_argmax
         _op_argmax(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 1
 
@@ -2795,7 +2795,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1, 2, 3, 4, 5, 6])
-        from domain.shell._internal.vm import _op_reshape
+        from domains.shell.vm import _op_reshape
         _op_reshape(cpu, ['R1', 'R0', 2, 3])
         assert cpu.regs[1].shape == (2, 3)
 
@@ -2803,7 +2803,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([[1, 2], [3, 4], [5, 6]])
-        from domain.shell._internal.vm import _op_shape
+        from domains.shell.vm import _op_shape
         _op_shape(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == [3, 2]
 
@@ -2811,7 +2811,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1, 2, 3, 4, 5])
-        from domain.shell._internal.vm import _op_size
+        from domains.shell.vm import _op_size
         _op_size(cpu, ['R1', 'R0'])
         assert cpu.regs[1] == 5
 
@@ -2819,7 +2819,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1.0, 2.0, 3.0])
-        from domain.shell._internal.vm import _op_softmax
+        from domains.shell.vm import _op_softmax
         _op_softmax(cpu, ['R1', 'R0'])
         assert abs(float(np.sum(cpu.regs[1])) - 1.0) < 0.01
 
@@ -2827,7 +2827,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1.0, 2.0, 3.0, 4.0])
-        from domain.shell._internal.vm import _op_layernorm
+        from domains.shell.vm import _op_layernorm
         _op_layernorm(cpu, ['R1', 'R0'])
         assert abs(float(np.mean(cpu.regs[1]))) < 0.01
 
@@ -2835,7 +2835,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1.0, 2.0, 3.0, 4.0])
-        from domain.shell._internal.vm import _op_rmsnorm
+        from domains.shell.vm import _op_rmsnorm
         _op_rmsnorm(cpu, ['R1', 'R0'])
         assert cpu.regs[1] is not None
 
@@ -2844,7 +2844,7 @@ class TestCPUTensorOps:
         import numpy as np
         a = np.array([1, 2, 3])
         b = np.array([1, 2, 3])
-        from domain.shell._internal.vm import _op_cmp
+        from domains.shell.vm import _op_cmp
         _op_cmp(cpu, [a, b])
         assert cpu._cmp_flag == 0
 
@@ -2853,7 +2853,7 @@ class TestCPUTensorOps:
         import numpy as np
         a = np.array([1, 2, 3])
         b = np.array([4, 5, 6])
-        from domain.shell._internal.vm import _op_cmp
+        from domains.shell.vm import _op_cmp
         _op_cmp(cpu, [a, b])
         assert cpu._cmp_flag == -1
 
@@ -2862,7 +2862,7 @@ class TestCPUTensorOps:
         import numpy as np
         a = np.array([4, 5, 6])
         b = np.array([1, 2, 3])
-        from domain.shell._internal.vm import _op_cmp
+        from domains.shell.vm import _op_cmp
         _op_cmp(cpu, [a, b])
         assert cpu._cmp_flag == 1
 
@@ -2871,7 +2871,7 @@ class TestCPUTensorOps:
         import numpy as np
         a = np.array([1, 5, 3])
         b = np.array([4, 2, 6])
-        from domain.shell._internal.vm import _op_cmp
+        from domains.shell.vm import _op_cmp
         _op_cmp(cpu, [a, b])
         assert cpu._cmp_flag == 0
 
@@ -2880,7 +2880,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         cpu.regs[0] = np.array([1.0, 2.0])
         cpu.regs[1] = np.array([0.0, 1.0])
-        from domain.shell._internal.vm import _op_div
+        from domains.shell.vm import _op_div
         _op_div(cpu, ['R2', 'R0', 'R1'])
         result = cpu.regs[2]
         assert float(result[1]) == 2.0
@@ -2889,7 +2889,7 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([1, -2, 3])
-        from domain.shell._internal.vm import _op_neg
+        from domains.shell.vm import _op_neg
         _op_neg(cpu, ['R1', 'R0'])
         assert list(cpu.regs[1]) == [-1, 2, -3]
 
@@ -2897,42 +2897,42 @@ class TestCPUTensorOps:
         cpu = self._make_cpu()
         import numpy as np
         cpu.regs[0] = np.array([-1, 2, -3])
-        from domain.shell._internal.vm import _op_abs
+        from domains.shell.vm import _op_abs
         _op_abs(cpu, ['R1', 'R0'])
         assert list(cpu.regs[1]) == [1, 2, 3]
 
     def test_dev_table_open_no_adapter(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_dev_table_open
+        from domains.shell.vm import _op_dev_table_open
         _op_dev_table_open(cpu, ['R0', "test"])
         assert cpu.regs[0] == -1
 
     def test_dev_table_call_no_adapter(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_dev_table_call
+        from domains.shell.vm import _op_dev_table_call
         _op_dev_table_call(cpu, ['R0', 0, "READ"])
         assert cpu.regs[0] is None
 
     def test_dev_table_close_no_adapter(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_dev_table_close
+        from domains.shell.vm import _op_dev_table_close
         _op_dev_table_close(cpu, [0])  # should not raise
 
     def test_dev_table_info_no_adapter(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_dev_table_info
+        from domains.shell.vm import _op_dev_table_info
         _op_dev_table_info(cpu, ['R0', 0])
         assert cpu.regs[0] == {}
 
     def test_dev_reg_read_no_map(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_dev_reg_read
+        from domains.shell.vm import _op_dev_reg_read
         _op_dev_reg_read(cpu, ['R0', 0xF000])
         assert cpu.regs[0] == 0
 
     def test_dev_reg_write_no_map(self):
         cpu = self._make_cpu()
-        from domain.shell._internal.vm import _op_dev_reg_write
+        from domains.shell.vm import _op_dev_reg_write
         _op_dev_reg_write(cpu, [0xF000, 42])  # should not raise
 
 
@@ -2943,7 +2943,7 @@ class TestPersistentBlockDevice:
 
     def test_persistent_block_device_init(self):
         import tempfile, os
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         path = tempfile.mktemp(suffix='.blk')
         try:
             bd = BlockDevice(path=path, create=True)
@@ -2956,7 +2956,7 @@ class TestPersistentBlockDevice:
 
     def test_persistent_block_device_open_existing(self):
         import tempfile, os
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         path = tempfile.mktemp(suffix='.blk')
         try:
             bd1 = BlockDevice(path=path, create=True)
@@ -2970,13 +2970,13 @@ class TestPersistentBlockDevice:
                 os.unlink(path)
 
     def test_persistent_block_device_open_nonexistent(self):
-        from domain.shell._internal.vm import BlockDevice, DeviceFault
+        from domains.shell.vm import BlockDevice, DeviceFault
         with pytest.raises(DeviceFault):
             BlockDevice(path="/tmp/nonexistent_vm_block_test_999.blk")
 
     def test_persistent_get_sector_usage(self):
         import tempfile, os
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         path = tempfile.mktemp(suffix='.blk')
         try:
             bd = BlockDevice(path=path, create=True)
@@ -2992,7 +2992,7 @@ class TestPersistentBlockDevice:
 
     def test_persistent_get_disk_usage(self):
         import tempfile, os
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         path = tempfile.mktemp(suffix='.blk')
         try:
             bd = BlockDevice(path=path, create=True)
@@ -3005,7 +3005,7 @@ class TestPersistentBlockDevice:
 
     def test_persistent_call_dispatch(self):
         import tempfile, os
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         path = tempfile.mktemp(suffix='.blk')
         try:
             bd = BlockDevice(path=path, create=True)
@@ -3018,7 +3018,7 @@ class TestPersistentBlockDevice:
             usage = bd.call("get_sector_usage")
             assert isinstance(usage, dict)
             # Unknown method falls through to super() which raises
-            from domain.shell._internal.vm import DeviceFault
+            from domains.shell.vm import DeviceFault
             with pytest.raises(DeviceFault):
                 bd.call("unknown_method")
             bd.close()
@@ -3027,7 +3027,7 @@ class TestPersistentBlockDevice:
                 os.unlink(path)
 
     def test_non_persistent_get_sector_usage(self):
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         bd = BlockDevice()
         usage = bd.get_sector_usage()
         assert usage["total"] > 0
@@ -3035,12 +3035,12 @@ class TestPersistentBlockDevice:
         assert usage["usage_pct"] == 100.0
 
     def test_non_persistent_get_disk_usage(self):
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         bd = BlockDevice()
         assert bd._get_disk_usage() == 0
 
     def test_close_non_persistent(self):
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         bd = BlockDevice()
         bd.close()  # should not raise
 
@@ -3051,7 +3051,7 @@ class TestLoadConstStringParsing:
     """Test _op_load_const string-to-array parsing (lines 3213-3235)."""
 
     def test_load_const_json_list(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         _op_load_const(cpu, ['R0', '[1, 2, 3]'])
         import numpy as np
@@ -3059,7 +3059,7 @@ class TestLoadConstStringParsing:
         assert list(cpu.regs[0]) == [1.0, 2.0, 3.0]
 
     def test_load_const_bracket_floats(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         _op_load_const(cpu, ['R0', '[1.5, 2.5]'])
         import numpy as np
@@ -3067,7 +3067,7 @@ class TestLoadConstStringParsing:
         assert list(cpu.regs[0]) == [1.5, 2.5]
 
     def test_load_const_bracket_mixed(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         _op_load_const(cpu, ['R0', '[1, 2, 3]'])
         import numpy as np
@@ -3075,7 +3075,7 @@ class TestLoadConstStringParsing:
         assert len(cpu.regs[0]) == 3
 
     def test_load_const_bracket_empty(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         _op_load_const(cpu, ['R0', '[]'])
         import numpy as np
@@ -3083,13 +3083,13 @@ class TestLoadConstStringParsing:
         assert len(cpu.regs[0]) == 0
 
     def test_load_const_plain_int(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         _op_load_const(cpu, ['R0', 42])
         assert cpu.regs[0] == 42
 
     def test_load_const_plain_string(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         _op_load_const(cpu, ['R0', 'hello'])
         assert cpu.regs[0] == 'hello'
@@ -3101,7 +3101,7 @@ class TestCMOSBinaryRTC:
     """CMOS binary-mode RTC refresh (lines 1782-1795)."""
 
     def test_rtc_binary_24h(self):
-        from domain.shell._internal.vm import CMOSDevice, ClockDevice, X86CPU
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
         cpu = X86CPU(memory_size=0x400000)
         clock = ClockDevice(freq=100)
         cmos = CMOSDevice(cpu=cpu, clock=clock)
@@ -3112,7 +3112,7 @@ class TestCMOSBinaryRTC:
         assert cmos._cmos[cmos.REG_SECONDS] < 60
 
     def test_rtc_binary_12h(self):
-        from domain.shell._internal.vm import CMOSDevice, ClockDevice, X86CPU
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
         cpu = X86CPU(memory_size=0x400000)
         clock = ClockDevice(freq=100)
         cmos = CMOSDevice(cpu=cpu, clock=clock)
@@ -3128,7 +3128,7 @@ class TestCPU66MovRm16Memory:
     """0x66-prefix MOV r/m16 with memory operands (lines 6244-6261)."""
 
     def test_66_mov_rm16_imm16_mem(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         # MOV word [0x1000], 0x1234 — 66 C7 05 00 10 00 00 34 12
         code = bytes([0x66, 0xC7, 0x05, 0x00, 0x10, 0x00, 0x00, 0x34, 0x12])
@@ -3141,7 +3141,7 @@ class TestCPU66MovRm16Memory:
         assert val == 0x1234
 
     def test_66_mov_mem_r16(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         # MOV word [0x1000], CX — 66 89 0D 00 10 00 00
         code = bytes([0x66, 0x89, 0x0D, 0x00, 0x10, 0x00, 0x00])
@@ -3155,7 +3155,7 @@ class TestCPU66MovRm16Memory:
         assert val == 0xBEEF
 
     def test_66_mov_r16_mem(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         # MOV CX, word [0x1000] — 66 8B 0D 00 10 00 00
         code = bytes([0x66, 0x8B, 0x0D, 0x00, 0x10, 0x00, 0x00])
@@ -3173,7 +3173,7 @@ class TestCPU66Xchg8Mem:
     """0x66 XCHG r8, [mem] memory path (lines 6320-6324)."""
 
     def test_xchg_al_mem(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         # XCHG byte [0x1000], AL — 86 05 00 10 00 00
         code = bytes([0x86, 0x05, 0x00, 0x10, 0x00, 0x00])
@@ -3191,7 +3191,7 @@ class TestCPU66Xchg8Mem:
 
 class TestFileDeviceCloseAll:
     def test_close_all_with_broken_handle(self):
-        from domain.shell._internal.vm import FileDevice
+        from domains.shell.vm import FileDevice
         fd = FileDevice()
         def bad_close():
             raise IOError("broken")
@@ -3204,27 +3204,27 @@ class TestFileDeviceCloseAll:
 
 class TestSerialDeviceCall:
     def test_call_read_byte(self):
-        from domain.shell._internal.vm import SerialDevice
+        from domains.shell.vm import SerialDevice
         sd = SerialDevice()
         sd.push_byte(0x41)
         assert sd.call("read_byte") == 0x41
 
     def test_call_write_byte(self):
-        from domain.shell._internal.vm import SerialDevice
+        from domains.shell.vm import SerialDevice
         sd = SerialDevice()
         result = sd.call("write_byte", 0x42)
         assert result is True
         assert sd._tx_buffer == bytearray(b'B')
 
     def test_call_has_data(self):
-        from domain.shell._internal.vm import SerialDevice
+        from domains.shell.vm import SerialDevice
         sd = SerialDevice()
         assert sd.call("has_data") is False
         sd.push_byte(1)
         assert sd.call("has_data") is True
 
     def test_call_flush(self):
-        from domain.shell._internal.vm import SerialDevice
+        from domains.shell.vm import SerialDevice
         sd = SerialDevice()
         sd.call("flush")
         assert sd._tx_count == 0
@@ -3234,7 +3234,7 @@ class TestSerialDeviceCall:
 
 class TestBlockDeviceWriteSectors:
     def test_write_sectors_multi(self):
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         bd = BlockDevice(num_sectors=8)
         data = b'\x01' * (bd.SECTOR_SIZE * 3)
         bd.write_sectors(1, data)
@@ -3242,7 +3242,7 @@ class TestBlockDeviceWriteSectors:
         assert bd.read_sector(2) == data[bd.SECTOR_SIZE:bd.SECTOR_SIZE*2]
 
     def test_write_sectors_unaligned(self):
-        from domain.shell._internal.vm import BlockDevice, DeviceFault
+        from domains.shell.vm import BlockDevice, DeviceFault
         bd = BlockDevice(num_sectors=4)
         with pytest.raises(DeviceFault):
             bd.write_sectors(0, b'\x00' * 100)
@@ -3252,32 +3252,32 @@ class TestBlockDeviceWriteSectors:
 
 class TestLoadConstBracketNonJson:
     def test_bracket_comma_mixed_nums(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         _op_load_const(cpu, ['R0', '[1, 2.5, 3]'])
         assert list(cpu.regs[0]) == [1.0, 2.5, 3.0]
 
     def test_bracket_single_int(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         _op_load_const(cpu, ['R0', '[42]'])
         assert list(cpu.regs[0]) == [42.0]
 
     def test_bracket_empty(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         _op_load_const(cpu, ['R0', '[]'])
         assert len(cpu.regs[0]) == 0
 
     def test_bracket_non_json_with_strings(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         # Fails JSON parse (trailing comma), hits comma-split fallback, strings crash at np.array
         with pytest.raises(ValueError):
             _op_load_const(cpu, ['R0', '[hello, world]'])
 
     def test_bracket_trailing_comma(self):
-        from domain.shell._internal.vm import CPU, _op_load_const
+        from domains.shell.vm import CPU, _op_load_const
         cpu = CPU()
         # Trailing comma makes JSON fail; empty string crashes at np.array
         with pytest.raises(ValueError):
@@ -3288,13 +3288,13 @@ class TestLoadConstBracketNonJson:
 
 class TestDevTableIoctlResult:
     def _make_cpu(self, adapter):
-        from domain.shell._internal.vm import CPU
+        from domains.shell.vm import CPU
         cpu = CPU()
         cpu._device_table_adapter = adapter
         return cpu
 
     def test_ioctl_result_with_success(self):
-        from domain.shell._internal.vm import _op_dev_table_call
+        from domains.shell.vm import _op_dev_table_call
         class MockResult:
             success = True
             value = 42
@@ -3306,7 +3306,7 @@ class TestDevTableIoctlResult:
         assert cpu.regs[0] == 42
 
     def test_ioctl_result_failure(self):
-        from domain.shell._internal.vm import _op_dev_table_call
+        from domains.shell.vm import _op_dev_table_call
         class MockResult:
             success = False
             error = "bad"
@@ -3319,7 +3319,7 @@ class TestDevTableIoctlResult:
         assert cpu.regs[0] is None
 
     def test_ioctl_result_plain(self):
-        from domain.shell._internal.vm import _op_dev_table_call
+        from domains.shell.vm import _op_dev_table_call
         class MockAdapter:
             def ioctl(self, fd, cmd, *a):
                 return 99
@@ -3332,7 +3332,7 @@ class TestDevTableIoctlResult:
 
 class TestX86CPUPopad:
     def test_popad(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         cpu._regs[4] = 0x2000  # ESP
         vals = [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
@@ -3350,7 +3350,7 @@ class TestX86CPUPopad:
 
 class TestCMOSHourEdgeCases:
     def test_cmos_12h_hour_zero(self):
-        from domain.shell._internal.vm import CMOSDevice, ClockDevice, X86CPU
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
         cpu = X86CPU(memory_size=0x400000)
         clock = ClockDevice(freq=100)
         cmos = CMOSDevice(cpu=cpu, clock=clock)
@@ -3361,7 +3361,7 @@ class TestCMOSHourEdgeCases:
         assert (h & 0x7F) == 12
 
     def test_cmos_12h_hour_pm(self):
-        from domain.shell._internal.vm import CMOSDevice, ClockDevice, X86CPU
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
         cpu = X86CPU(memory_size=0x400000)
         clock = ClockDevice(freq=100)
         cmos = CMOSDevice(cpu=cpu, clock=clock)
@@ -3376,7 +3376,7 @@ class TestCMOSHourEdgeCases:
 
 class TestAssemblerGroup1Ops:
     def _asm(self, lines):
-        from domain.shell._internal.vm import X86Assembler
+        from domains.shell.vm import X86Assembler
         return X86Assembler().assemble("\n".join(lines))
 
     def test_add_eax_imm32_large(self):
@@ -3424,7 +3424,7 @@ class TestAssemblerGroup1Ops:
 
 class TestAssemblerGroup1_16bit:
     def _asm(self, lines):
-        from domain.shell._internal.vm import X86Assembler
+        from domains.shell.vm import X86Assembler
         return X86Assembler().assemble("\n".join(lines))
 
     def test_add_ax_imm16_large_32bit_mode(self):
@@ -3445,7 +3445,7 @@ class TestAssemblerGroup1_16bit:
 
 class TestAssemblerRemainingOps:
     def _asm(self, lines):
-        from domain.shell._internal.vm import X86Assembler
+        from domains.shell.vm import X86Assembler
         return X86Assembler().assemble("\n".join(lines))
 
     def test_mov_r16_imm16_32bit_mode(self):
@@ -3467,7 +3467,7 @@ class TestExec16BitMemoryOps:
     """Test memory-operand paths in _exec_16bit (lines 7136-7568)."""
 
     def _make_cpu(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x400000)
         return cpu
 
@@ -3838,7 +3838,7 @@ class TestExec16BitMemoryOps:
 class TestBlockDeviceRepr:
     def test_repr_persistent(self):
         import tempfile, os
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         path = tempfile.mktemp(suffix='.blk')
         try:
             bd = BlockDevice(path=path, create=True)
@@ -3851,14 +3851,14 @@ class TestBlockDeviceRepr:
                 os.unlink(path)
 
     def test_repr_in_memory(self):
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         bd = BlockDevice(num_sectors=4)
         r = repr(bd)
         assert "sectors=" in r
 
     def test_persistent_block_map_with_entries(self):
         import tempfile, os
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         path = tempfile.mktemp(suffix='.blk')
         try:
             bd1 = BlockDevice(path=path, create=True)
@@ -3878,12 +3878,12 @@ class TestBlockDeviceRepr:
 
 class TestConsoleDeviceCall:
     def test_call_read(self):
-        from domain.shell._internal.vm import ConsoleDevice
+        from domains.shell.vm import ConsoleDevice
         cd = ConsoleDevice(0, stdin_fn=lambda: "hello")
         assert cd.call("read") == "hello"
 
     def test_call_write(self):
-        from domain.shell._internal.vm import ConsoleDevice
+        from domains.shell.vm import ConsoleDevice
         out = []
         cd = ConsoleDevice(1, stdout_fn=lambda x: out.append(x))
         cd.call("write", "world")
@@ -3894,12 +3894,12 @@ class TestConsoleDeviceCall:
 
 class TestPS2KeyboardDeviceCall:
     def test_call_read_key(self):
-        from domain.shell._internal.vm import PS2KeyboardDevice
+        from domains.shell.vm import PS2KeyboardDevice
         kb = PS2KeyboardDevice()
         assert kb.call("read_key") == 0
 
     def test_call_has_key(self):
-        from domain.shell._internal.vm import PS2KeyboardDevice
+        from domains.shell.vm import PS2KeyboardDevice
         kb = PS2KeyboardDevice()
         assert kb.call("has_key") is False
 
@@ -3908,7 +3908,7 @@ class TestPS2KeyboardDeviceCall:
 
 class TestBlockCompressorAlgos:
     def test_compress_decompress_none(self):
-        from domain.shell._internal.vm import BlockCompressor, CompressionAlgo
+        from domains.shell.vm import BlockCompressor, CompressionAlgo
         bc = BlockCompressor(CompressionAlgo.NONE)
         data = b'\x42' * 100
         assert bc.compress(data) == data
@@ -3918,7 +3918,7 @@ class TestBlockCompressorAlgos:
         import importlib
         if not importlib.util.find_spec("lz4"):
             pytest.skip("lz4 not installed")
-        from domain.shell._internal.vm import BlockCompressor, CompressionAlgo
+        from domains.shell.vm import BlockCompressor, CompressionAlgo
         bc = BlockCompressor(CompressionAlgo.LZ4)
         data = b'\x42' * 200
         compressed = bc.compress(data)
@@ -3926,7 +3926,7 @@ class TestBlockCompressorAlgos:
         assert decompressed == data
 
     def test_compress_decompress_gzip(self):
-        from domain.shell._internal.vm import BlockCompressor, CompressionAlgo
+        from domains.shell.vm import BlockCompressor, CompressionAlgo
         bc = BlockCompressor(CompressionAlgo.GZIP)
         data = b'\x42' * 200
         compressed = bc.compress(data)
@@ -3937,7 +3937,7 @@ class TestBlockCompressorAlgos:
         import importlib
         if not importlib.util.find_spec("zstandard"):
             pytest.skip("zstandard not installed")
-        from domain.shell._internal.vm import BlockCompressor, CompressionAlgo
+        from domains.shell.vm import BlockCompressor, CompressionAlgo
         bc = BlockCompressor(CompressionAlgo.ZSTD)
         data = b'\x42' * 200
         compressed = bc.compress(data)
@@ -3948,7 +3948,7 @@ class TestBlockCompressorAlgos:
         import importlib
         if not importlib.util.find_spec("snappy"):
             pytest.skip("snappy not installed")
-        from domain.shell._internal.vm import BlockCompressor, CompressionAlgo
+        from domains.shell.vm import BlockCompressor, CompressionAlgo
         bc = BlockCompressor(CompressionAlgo.SNAPPY)
         data = b'\x42' * 200
         compressed = bc.compress(data)
@@ -3960,14 +3960,14 @@ class TestBlockCompressorAlgos:
 
 class TestSerialDeviceLSR:
     def test_lsr_with_rx_data(self):
-        from domain.shell._internal.vm import SerialDevice
+        from domains.shell.vm import SerialDevice
         sd = SerialDevice()
         sd.push_byte(0x41)
         lsr = sd._read_lsr()
         assert lsr & 0x01 == 1  # RX ready
 
     def test_lsr_empty(self):
-        from domain.shell._internal.vm import SerialDevice
+        from domains.shell.vm import SerialDevice
         sd = SerialDevice()
         lsr = sd._read_lsr()
         assert lsr & 0x01 == 0  # no RX data
@@ -3977,7 +3977,7 @@ class TestSerialDeviceLSR:
 
 class TestCMOS12hDecode:
     def _make_cmos(self, h24=False):
-        from domain.shell._internal.vm import CMOSDevice, ClockDevice, X86CPU
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
         cpu = X86CPU(memory_size=0x400000)
         clock = ClockDevice(freq=100)
         cmos = CMOSDevice(cpu=cpu, clock=clock)
@@ -4013,7 +4013,7 @@ class TestCMOS12hDecode:
 
 class TestCPUFormatTrace:
     def test_format_trace(self):
-        from domain.shell._internal.vm import CPU
+        from domains.shell.vm import CPU
         cpu = CPU()
         cpu._trace = [type('TraceEntry', (), {
             'cycle': 1, 'pc': 0, 'instruction': 'NOP',
@@ -4028,7 +4028,7 @@ class TestCPUFormatTrace:
 
 class TestCPUDevIn:
     def test_dev_in_exception(self):
-        from domain.shell._internal.vm import CPU, _op_in
+        from domains.shell.vm import CPU, _op_in
         cpu = CPU()
         def bad_read():
             raise IOError("no")
@@ -4038,7 +4038,7 @@ class TestCPUDevIn:
         assert cpu.regs[0] == 0
 
     def test_dev_in_no_status(self):
-        from domain.shell._internal.vm import CPU, _op_in
+        from domains.shell.vm import CPU, _op_in
         cpu = CPU()
         dev = type('Dev', (), {})()
         cpu._devices = type('Bus', (), {'_devices': {'0': dev}})()
@@ -4046,7 +4046,7 @@ class TestCPUDevIn:
         assert cpu.regs[0] == 0
 
     def test_dev_in_int_value(self):
-        from domain.shell._internal.vm import CPU, _op_in
+        from domains.shell.vm import CPU, _op_in
         cpu = CPU()
         dev = type('Dev', (), {'read': lambda self: 42})()
         cpu._devices = type('Bus', (), {'_devices': {'0': dev}})()
@@ -4054,7 +4054,7 @@ class TestCPUDevIn:
         assert cpu.regs[0] == 42
 
     def test_dev_in_float_value(self):
-        from domain.shell._internal.vm import CPU, _op_in
+        from domains.shell.vm import CPU, _op_in
         cpu = CPU()
         dev = type('Dev', (), {'read': lambda self: "3.14"})()
         cpu._devices = type('Bus', (), {'_devices': {'0': dev}})()
@@ -4062,7 +4062,7 @@ class TestCPUDevIn:
         assert cpu.regs[0] == 3.14
 
     def test_dev_in_string_value(self):
-        from domain.shell._internal.vm import CPU, _op_in
+        from domains.shell.vm import CPU, _op_in
         cpu = CPU()
         dev = type('Dev', (), {'read': lambda self: "hello"})()
         cpu._devices = type('Bus', (), {'_devices': {'0': dev}})()
@@ -4070,7 +4070,7 @@ class TestCPUDevIn:
         assert cpu.regs[0] == "hello"
 
     def test_dev_in_no_device(self):
-        from domain.shell._internal.vm import CPU, _op_in
+        from domains.shell.vm import CPU, _op_in
         cpu = CPU()
         cpu._devices = type('Bus', (), {'_devices': {}})()
         _op_in(cpu, ["R0", 0])
@@ -4081,7 +4081,7 @@ class TestCPUDevIn:
 
 class TestX86CPU_PushadPopadXchgMem:
     def _make_cpu(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         return X86CPU(memory_size=0x400000)
 
     def test_pushad(self):
@@ -4139,10 +4139,10 @@ class TestX86CPU_PushadPopadXchgMem:
 
 class TestAssemblerXchgMemoryMore:
     def _asm(self, lines):
-        from domain.shell._internal.vm import X86Assembler
+        from domains.shell.vm import X86Assembler
         return X86Assembler().assemble("\n".join(lines))
     def _asm(self, lines):
-        from domain.shell._internal.vm import X86Assembler
+        from domains.shell.vm import X86Assembler
         return X86Assembler().assemble("\n".join(lines))
 
     def test_lea_eax_ecx_4(self):
@@ -4182,14 +4182,13 @@ class TestAssemblerXchgMemoryMore:
 
 class TestRemainingSmallBlocks:
     def _asm(self, lines):
-        from domain.shell._internal.vm import X86Assembler
+        from domains.shell.vm import X86Assembler
         return X86Assembler().assemble("\n".join(lines))
 
     def test_exec_exception_handler(self):
         from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x1000)
         cpu.load(b'\x90', org=0)  # NOP
-        original_exec = cpu._exec_one
         def bad_exec():
             raise RuntimeError("test fault")
         cpu._exec_one = bad_exec
@@ -4197,46 +4196,46 @@ class TestRemainingSmallBlocks:
         assert result is False
 
     def test_call_stack_overflow(self):
-        from domain.shell._internal.vm import CPU, Halt, _op_call
+        from domains.shell.vm import CPU, Halt, _op_call
         cpu = CPU()
         cpu._call_stack = [0] * 512
         with pytest.raises(Halt):
             _op_call(cpu, ["0"])
 
     def test_resolve_label_digit(self):
-        from domain.shell._internal.vm import _resolve_label, CPU
+        from domains.shell.vm import _resolve_label, CPU
         cpu = CPU()
         assert _resolve_label(cpu, "42") == 42
 
     def test_resolve_label_invalid(self):
-        from domain.shell._internal.vm import _resolve_label, CPU, InsFault
+        from domains.shell.vm import _resolve_label, CPU, InsFault
         cpu = CPU()
         with pytest.raises(InsFault):
             _resolve_label(cpu, "not_a_number_or_label")
 
     def test_is_truthy_ndarray(self):
-        from domain.shell._internal.vm import CPU
+        from domains.shell.vm import CPU
         cpu = CPU()
         import numpy as np
         assert cpu._truthy(np.array([1.0])) is True
         assert cpu._truthy(np.array([])) is False
 
     def test_fetch_word(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x1000)
         cpu._mem[0:2] = b'\x34\x12'
         v = cpu._fetch_word()
         assert v == 0x1234
 
     def test_fetch_dword(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x1000)
         cpu._mem[0:4] = b'\x78\x56\x34\x12'
         v = cpu._fetch_dword()
         assert v == 0x12345678
 
     def test_dev_call_exception(self):
-        from domain.shell._internal.vm import CPU, _op_dev_call
+        from domains.shell.vm import CPU, _op_dev_call
         cpu = CPU()
         mock_device = type('D', (), {'call': lambda s, *a: 1/0})()
         cpu._devices = type('Dev', (), {'_devices': {'42': mock_device}})()
@@ -4244,8 +4243,8 @@ class TestRemainingSmallBlocks:
         assert cpu.regs[0] is None
 
     def test_dev_table_open_with_adapter(self):
-        from domain.shell._internal.vm import CPU, _op_dev_table_open
-        import domain.shell._internal.vm as vm_mod
+        from domains.shell.vm import CPU, _op_dev_table_open
+        import domains.shell.vm as vm_mod
         cpu = CPU()
         mock_adapter = type('A', (), {'open': lambda s, n: -1})()
         vm_mod._device_table_adapter = mock_adapter
@@ -4256,7 +4255,7 @@ class TestRemainingSmallBlocks:
             vm_mod._device_table_adapter = None
 
     def test_exec_16bit_unknown_opcode(self):
-        from domain.shell._internal.vm import X86CPU, InsFault
+        from domains.shell.vm import X86CPU, InsFault
         cpu = X86CPU(memory_size=0x1000)
         cpu._mem[0] = 0x66
         cpu._mem[1] = 0xFF
@@ -4264,7 +4263,7 @@ class TestRemainingSmallBlocks:
             cpu.step()
 
     def test_neg_f6_register(self):
-        from domain.shell._internal.vm import X86CPU
+        from domains.shell.vm import X86CPU
         cpu = X86CPU(memory_size=0x1000)
         code = bytes([
             0xB8, 0x05, 0x00, 0x00, 0x00,
@@ -4276,7 +4275,7 @@ class TestRemainingSmallBlocks:
         assert (cpu._regs[0] & 0xFF) == 0xFB
 
     def test_serial_read_data(self):
-        from domain.shell._internal.vm import SerialDevice
+        from domains.shell.vm import SerialDevice
         sd = SerialDevice()
         val = sd._read_data()
         assert val == 0
@@ -4313,7 +4312,7 @@ class TestRemainingSmallBlocks:
         assert 0x8B in code
 
     def test_cmos_bcd_12h_pm(self):
-        from domain.shell._internal.vm import CMOSDevice, ClockDevice, X86CPU
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
         cpu = X86CPU(memory_size=0x400000)
         clock = ClockDevice(freq=100)
         cmos = CMOSDevice(cpu=cpu, clock=clock)
@@ -4323,7 +4322,7 @@ class TestRemainingSmallBlocks:
         assert result["hour"] == 15
 
     def test_cmos_bcd_12h_midnight(self):
-        from domain.shell._internal.vm import CMOSDevice, ClockDevice, X86CPU
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
         cpu = X86CPU(memory_size=0x400000)
         clock = ClockDevice(freq=100)
         cmos = CMOSDevice(cpu=cpu, clock=clock)
@@ -4333,7 +4332,7 @@ class TestRemainingSmallBlocks:
         assert result["hour"] == 0
 
     def test_cmos_bcd_12h_noon(self):
-        from domain.shell._internal.vm import CMOSDevice, ClockDevice, X86CPU
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
         cpu = X86CPU(memory_size=0x400000)
         clock = ClockDevice(freq=100)
         cmos = CMOSDevice(cpu=cpu, clock=clock)
@@ -4343,7 +4342,7 @@ class TestRemainingSmallBlocks:
         assert result["hour"] == 12
 
     def test_blockdevice_read_sectors(self):
-        from domain.shell._internal.vm import BlockDevice
+        from domains.shell.vm import BlockDevice
         bd = BlockDevice(num_sectors=8)
         bd.write_sector(1, b'\xAA' * 512)
         bd.write_sector(2, b'\xBB' * 512)
@@ -4353,8 +4352,8 @@ class TestRemainingSmallBlocks:
         assert data[512:] == b'\xBB' * 512
 
     def test_train_get_result_completed(self):
-        from domain.shell._internal.vm import X86SyscallHandler
-        import domain.shell._internal.vm_training_bridge as bridge_mod
+        from domains.shell.vm import X86SyscallHandler
+        import domains.shell.vm_training_bridge as bridge_mod
         original_bridge = bridge_mod._bridge
 
         class MockBridge:
@@ -4400,8 +4399,8 @@ class TestRemainingSmallBlocks:
             bridge_mod._bridge = original
 
     def test_train_status(self):
-        from domain.shell._internal.vm import X86SyscallHandler
-        import domain.shell._internal.vm_training_bridge as bridge_mod
+        from domains.shell.vm import X86SyscallHandler
+        import domains.shell.vm_training_bridge as bridge_mod
         original = bridge_mod._bridge
 
         class MockBridge:

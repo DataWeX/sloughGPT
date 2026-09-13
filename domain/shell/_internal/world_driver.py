@@ -43,13 +43,15 @@ from .simulation import (
     WorldParams,
 )
 
+from . import simulation as _sim_mod
+
 _MATERIAL_NAMES: dict[int, str] = {
-    getattr(sys.modules["domains.shell.simulation"], _const): _const
+    getattr(_sim_mod, _const): _const
     .removeprefix("MATERIAL_")
     .lower()
-    for _const in dir(sys.modules["domains.shell.simulation"])
+    for _const in dir(_sim_mod)
     if _const.startswith("MATERIAL_")
-    and isinstance(getattr(sys.modules["domains.shell.simulation"], _const), int)
+    and isinstance(getattr(_sim_mod, _const), int)
 }
 
 

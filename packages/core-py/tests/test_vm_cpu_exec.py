@@ -16,7 +16,7 @@ swallow a deliberate InsFault (DIV by zero / overflow).
 
 import pytest
 
-from domain.shell._internal.vm import (
+from domains.shell.vm import (
     X86CPU,
     InsFault,
     FLAG_CF,
@@ -24,7 +24,6 @@ from domain.shell._internal.vm import (
     FLAG_ZF,
     FLAG_SF,
     FLAG_OF,
-    FLAG_DF,
     FLAG_IF,
 )
 

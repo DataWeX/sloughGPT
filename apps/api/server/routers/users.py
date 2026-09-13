@@ -270,3 +270,6 @@ def get_users_router() -> UsersRouter:
     if _users_router is None:
         _users_router = UsersRouter()
     return _users_router
+
+
+router = get_users_router().router

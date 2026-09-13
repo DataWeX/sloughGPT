@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 
 from domains.infrastructure.slnc.spec import compute_header_size
-from domains.inference.native import bindings as B
-from domains.inference.native.engine import (
+from domain.inference._internal.native import bindings as B
+from domain.inference._internal.native.engine import (
     NativeEngine,
     NativeTransformerProvider,
     _detect_model_type,
@@ -31,7 +31,7 @@ from domains.inference.native.engine import (
     get_engine,
     sample_token,
 )
-from domains.inference.native.weight_mapper import map_slnc_to_native
+from domain.inference._internal.native.weight_mapper import map_slnc_to_native
 from domain.inference._internal.ct_provider import CTransformProvider
 
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
@@ -564,7 +564,7 @@ class TestTokenizerWiring:
         assert isinstance(out, str)
 
     def test_hf_id_from_slnc_path(self):
-        from domains.inference.native.engine import _hf_id_from_slnc_path
+        from domain.inference._internal.native.engine import _hf_id_from_slnc_path
         assert _hf_id_from_slnc_path(
             "/x/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/snapshots/a/model.slnc"
         ) == "Qwen/Qwen2.5-0.5B-Instruct"

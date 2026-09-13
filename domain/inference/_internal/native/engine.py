@@ -500,7 +500,7 @@ class NativeTransformerProvider:
 
     @property
     def capabilities(self):
-        from domain.models._internal.provider import ModelCapabilities
+        from domains.models.provider import ModelCapabilities
         return ModelCapabilities(chat=True, streaming=True, embedding=False, vision=False)
 
     async def chat_stream(self, messages, max_tokens=512, temperature=0.8,

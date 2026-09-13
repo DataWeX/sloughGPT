@@ -35,7 +35,7 @@ _LAZY = {
 
 def __getattr__(name):
     if name in _LAZY:
-        from . import multi
+        from domain.agents._internal import multi
         val = getattr(multi, name)
         globals()[name] = val
         return val

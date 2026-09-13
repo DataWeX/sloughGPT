@@ -18,8 +18,8 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence, Union
 from pathlib import Path
 import logging
-from domains.shared import find_repo_root
-from domains.inference.forward_pass import ForwardPassResult
+from domains.shared import find_repo_root  # noqa: F401 — kept for compatibility
+from domain.inference._internal.forward_pass import ForwardPassResult
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("slo.slonet")

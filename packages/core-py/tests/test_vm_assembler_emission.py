@@ -20,9 +20,8 @@ documented quirks:
 
 import pytest
 
-import numpy as np  # imported first to avoid a coverage+numpy extension reload quirk
 
-from domain.shell._internal.vm import (
+from domains.shell.vm import (
     X86Assembler,
     X86CPU,
     FLAG_ZF,

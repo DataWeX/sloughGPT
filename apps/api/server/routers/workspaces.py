@@ -1425,3 +1425,6 @@ def get_workspaces_router() -> WorkspacesRouter:
     if _workspaces_router is None:
         _workspaces_router = WorkspacesRouter()
     return _workspaces_router
+
+
+router = get_workspaces_router().router

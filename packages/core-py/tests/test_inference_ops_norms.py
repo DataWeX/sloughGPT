@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from domains.inference.ops.layernorm import layernorm
-from domains.inference.ops.rmsnorm import rmsnorm
+from domain.inference._internal.ops.layernorm import layernorm
+from domain.inference._internal.ops.rmsnorm import rmsnorm
 
 
 def _expected_layernorm(x, weight, bias, eps):

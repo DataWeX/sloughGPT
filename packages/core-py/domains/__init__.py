@@ -12,12 +12,11 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Optional, Protocol, runtime_checkable
 
-from .chat.domain import ChatDomain, get_chat_domain
-from .benchmark.domain import BenchmarkDomain, get_benchmark_domain
-from .infrastructure.errors import AppError
+from domain.chat._internal.domain import ChatDomain, get_chat_domain
+from domain.benchmark._internal.domain import BenchmarkDomain, get_benchmark_domain
+from domain.infrastructure._internal.errors import AppError
 
-# Companion is in companion.py (not companion/)
-from .companion import get_companion, CompanionSystem
+from domain.companion import get_companion, CompanionSystem
 
 
 class BaseComponent:

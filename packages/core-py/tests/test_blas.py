@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from domains.inference.ops.blas import sgemm, is_available
+from domain.inference._internal.ops.blas import sgemm, is_available
 
 
 class TestSgemm:
@@ -223,7 +223,7 @@ class TestSgemm:
 
 class TestSgemmExtended:
     def test_cblas_constants(self):
-        from domains.inference.ops.blas import CBLAS_ROW_MAJOR, CBLAS_NO_TRANS, CBLAS_TRANS
+        from domain.inference._internal.ops.blas import CBLAS_ROW_MAJOR, CBLAS_NO_TRANS, CBLAS_TRANS
         assert CBLAS_ROW_MAJOR == 101
         assert CBLAS_NO_TRANS == 111
         assert CBLAS_TRANS == 112
@@ -232,7 +232,7 @@ class TestSgemmExtended:
         import sys
         if sys.platform != "linux":
             pytest.skip("not Linux")
-        from domains.inference.ops.blas import _load_accelerate
+        from domain.inference._internal.ops.blas import _load_accelerate
         result = _load_accelerate()
         assert result is None
 

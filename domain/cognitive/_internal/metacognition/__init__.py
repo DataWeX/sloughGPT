@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from ...__init__ import (
+from domains import (
     BaseComponent as BaseComponent,
     ComponentException as ComponentException,
     IMetacognitiveMonitor as IMetacognitiveMonitor,
