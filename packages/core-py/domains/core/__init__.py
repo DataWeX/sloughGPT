@@ -1,12 +1,9 @@
-"""
-domains/core/ - Slo Core Architecture
+"""Backward-compatibility shim — imports from the new ``domain.core`` package."""
 
-SloEngine is THE core model wrapper. All inference flows through here.
-Cognitive and reasoning engines are first-class citizens, built INTO the soul.
-"""
+from domain.core import (
+    get_db,
+)
 
-from __future__ import annotations
-
-from .soul import SloEngine, GenerationContext
-
-__all__ = ["SloEngine", "GenerationContext"]
+__all__ = [
+    "get_db",
+]

@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.benchmark")
 

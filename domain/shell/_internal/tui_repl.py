@@ -1,0 +1,1399 @@
+"""
+TuiRepl — split-panel curses shell with three fixed regions.
+
+Layout:
+  ┌─ Console Panel (infra logs) ─────────────────── top 30% ─┐
+  │ 16:56:37 INF [startup] Task queue initialized            │
+  │ 16:56:38 WRN [runtime] Orphan process 21415 killed       │
+  ├─ Shell Output (command results) ─────────────── remainder ┤
+  │ $ models                                                  │
+  │ gpt2   124M   loaded                                      │
+  ├───────────────────────────────────────────────────────────┤
+  │ [OUTPUT] LIVE  ai "2+2"                    120x24 (fixed) │
+  │ λ _                                           (fixed line) │
+  └───────────────────────────────────────────────────────────┘
+
+Follows the split-window model: ``pane.PaneLayout`` (pure geometry) is the
+arranger, ``surface`` objects draw their own content into the assigned
+regions, and this module is only the *display layer* — it blits surfaces
+onto the curses screen and forwards keys.  Command dispatch runs on a
+background thread so the UI stays responsive.
+"""
+
+from __future__ import annotations
+
+import os
+import curses
+import threading
+from typing import TYPE_CHECKING
+
+try:
+    import ctypes
+    _SET_ASYNC_EXC = ctypes.pythonapi.PyThreadState_SetAsyncExc
+except (ImportError, AttributeError):
+    _SET_ASYNC_EXC = None
+
+from .pane import Pane, PaneLayout, Rect
+from .surface import LogSurface, RenderLine, STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL, TextSurface
+
+if TYPE_CHECKING:
+    from .repl import ShellREPL
+    from .log_buffer import LogBuffer
+
+# ── Colour pairs ──────────────────────────────────────────────────────────
+
+_P_LOG_INFO = 1
+_P_LOG_WARN = 2
+_P_LOG_ERROR = 3
+_P_LOG_DEBUG = 4
+_P_LOG_CRITICAL = 5
+_P_PROMPT = 6
+_P_BORDER = 7
+
+_STYLE_PAIRS = {
+    STYLE_INFO: _P_LOG_INFO,
+    STYLE_WARN: _P_LOG_WARN,
+    STYLE_ERROR: _P_LOG_ERROR,
+    STYLE_DEBUG: _P_LOG_DEBUG,
+    STYLE_CRITICAL: _P_LOG_CRITICAL,
+}
+
+# Python's ``_curses`` does not expose the ncurses extended-keypad
+# modifiers; the folded key values for Ctrl+Left / Ctrl+Right on an
+# xterm-256color terminal are stable (554 / 569) but some ncurses builds
+# name them, so prefer the named constant when present.
+_KEY_CTRL_LEFT = getattr(curses, "KEY_CTRL_LEFT", 554)
+_KEY_CTRL_RIGHT = getattr(curses, "KEY_CTRL_RIGHT", 569)
+
+
+def _init_pairs() -> None:
+    if curses.has_colors():
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(_P_LOG_INFO, curses.COLOR_GREEN, -1)
+        curses.init_pair(_P_LOG_WARN, curses.COLOR_YELLOW, -1)
+        curses.init_pair(_P_LOG_ERROR, curses.COLOR_RED, -1)
+        curses.init_pair(_P_LOG_DEBUG, curses.COLOR_CYAN, -1)
+        curses.init_pair(_P_LOG_CRITICAL, curses.COLOR_MAGENTA, -1)
+        curses.init_pair(_P_PROMPT, curses.COLOR_CYAN, -1)
+        curses.init_pair(_P_BORDER, curses.COLOR_WHITE, -1)
+
+
+def _complete_path(token: str) -> list[str]:
+    """Filesystem matches for a path token (``~`` expanded)."""
+    base = os.path.expanduser(token)
+    if "/" in base:
+        d, prefix = os.path.split(base)
+        d = d or "/"
+    else:
+        d, prefix = ".", base
+    try:
+        entries = sorted(os.listdir(d))
+    except OSError:
+        return []
+    return [os.path.join(d, e) for e in entries if e.startswith(prefix)]
+
+
+_ESC_FINALS = frozenset(
+    "ABCDEFHZ~"  # arrow / function-sequence final bytes
+)
+
+
+def _read_escape_remainder(stdscr, alt_map, restore_ms: int = 100):
+    """Resolve what follows a bare ESC key press.
+
+    Curses reports Alt+<key> and modified-arrow chords as an ESC prefix
+    followed by the rest of the sequence (it only folds them into a single
+    key when the terminal's terminfo names them).  This polls the next few
+    bytes with a 0 ms timeout so a lone Esc resolves instantly and Alt
+    chords are decoded.
+
+    Args:
+        stdscr: the curses window; ``getch`` is polled non-blocking.
+        alt_map: dict of printable Alt+char → callback name string.
+        restore_ms: input timeout (ms) to restore before returning; the
+            caller's poll interval.
+
+    Returns:
+        the decoded action string (``alt:f``, ``seq:ctrl-left``, ...) or
+        ``None`` when the press was a lone Esc.
+
+    Side effects:
+        - temporarily switches the window to a 0 ms input timeout, restoring
+          ``restore_ms`` before returning.
+    """
+    stdscr.timeout(0)
+    try:
+        first = stdscr.getch()
+        if first in (-1, 27):
+            return None
+        if first == ord("["):
+            parts = []
+            while True:
+                b = stdscr.getch()
+                if b == -1:
+                    break
+                parts.append(chr(b))
+                if chr(b) in _ESC_FINALS:
+                    break
+            seq = "".join(parts)
+            if seq.endswith("C") and "5" in seq:
+                return "seq:ctrl-right"
+            if seq.endswith("D") and "5" in seq:
+                return "seq:ctrl-left"
+            return None
+        if 32 <= first < 127:
+            name = alt_map.get(chr(first))
+            return f"alt:{name}" if name else None
+        return None
+    finally:
+        stdscr.timeout(restore_ms)
+
+
+# ── TuiIo — routes command output into a TextSurface ──────────────────────
+
+class TuiIo:
+    """ShellIO-compatible writer that feeds a TextSurface."""
+
+    def __init__(self, surface: TextSurface) -> None:
+        self._surface = surface
+
+    def write(self, text: str, end: str = "\n") -> None:
+        self._surface.write(text, end)
+
+    def flush(self) -> None:
+        pass
+
+    def read(self, prompt: str = "") -> str:
+        raise NotImplementedError("input comes from the curses event loop")
+
+
+# ── TuiRepl ───────────────────────────────────────────────────────────────
+
+class TuiRepl:
+    """Three-pane curses shell composing a PaneLayout with surfaces."""
+
+    CONSOLE_RATIO = 0.3
+    CONSOLE_MIN = 4
+    OUTPUT_MIN = 6
+
+    def __init__(self, repl: ShellREPL, log_buffer: LogBuffer) -> None:
+        self._repl = repl
+        self._log_buffer = log_buffer
+        self._running = False
+        self._cmd_history: list[str] = []
+        self._history_pos = 0
+        self._search_fwd = False
+        self._search_failed = False
+        self._out_search_q = ""
+        self._out_search_sel = -1
+        self._out_search_save = 0
+        self._out_search_failed = False
+
+        self._kill_ring: list[str] = []
+        self._yank_active = False
+        self._yank_idx = -1
+        self._yank_start = 0
+        self._yank_len = 0
+
+        self._repl_lock = threading.Lock()
+        self._output_surface = TextSurface()
+        self._input_surface = TextSurface()
+        self._tui_io = TuiIo(self._output_surface)
+
+        # Wire interactive prompts into Console
+        self._repl.console._tui_repl = self
+
+        # Interactive select state (thread-safe signal between command thread and UI thread)
+        self._select_event = threading.Event()
+        self._select_title = ""
+        self._select_options: list[str] = []
+        self._select_result: str | None = None
+        self._select_idx = 0
+        self._select_scroll = 0
+        self._select_filter = ""
+
+        # Interactive confirm state
+        self._confirm_event = threading.Event()
+        self._confirm_message = ""
+        self._confirm_default = False
+        self._confirm_result: bool | None = None
+
+        # Interactive ask state
+        self._ask_event = threading.Event()
+        self._ask_message = ""
+        self._ask_default = ""
+        self._ask_result: str | None = None
+        self._ask_buf: list[str] = []
+        self._ask_cursor = 0
+
+        self._old_io = None
+        self._old_console_io = None
+        self._log_surface = LogSurface(log_buffer)
+
+        # Panes (arranger) — pure geometry, no rendering knowledge.
+        self._layout = PaneLayout([
+            Pane("console", ratio=self.CONSOLE_RATIO, min_rows=self.CONSOLE_MIN),
+            Pane("output", ratio=1.0 - self.CONSOLE_RATIO, min_rows=self.OUTPUT_MIN),
+            Pane("status", fixed=1),
+            Pane("input", fixed=1),
+        ])
+
+    def _repeat_out_search(self, rows: int, fwd: bool) -> None:
+        """Repeat the last accepted output-pane search from the current match.
+
+        ``n``/``N`` at an empty prompt move to the next/previous match of
+        ``_out_search_last`` (wrapping), leaving the search mode closed.
+        """
+        if not self._out_search_last:
+            return
+        self._out_search_q = self._out_search_last
+        self._apply_out_search(
+            rows,
+            start=self._out_search_sel + (1 if fwd else -1),
+            fwd=fwd,
+        )
+        self._out_search_q = ""
+
+    # ── Interactive prompts (called from command threads) ──────────────
+
+    def prompt_select(self, title: str, options: list[str]) -> str:
+        """Block the calling thread until the user picks an option."""
+        if not options:
+            return ""
+        self._select_title = title
+        self._select_options = list(options)
+        self._select_idx = 0
+        self._select_scroll = 0
+        self._select_filter = ""
+        self._select_result = None
+        self._select_event.clear()
+        self._select_event.wait(timeout=300)
+        return self._select_result if self._select_result is not None else options[0]
+
+    def prompt_confirm(self, message: str, default: bool = False) -> bool:
+        """Block the calling thread until the user confirms yes/no."""
+        self._confirm_message = message
+        self._confirm_default = default
+        self._confirm_result = None
+        self._confirm_event.clear()
+        self._confirm_event.wait(timeout=300)
+        return self._confirm_result if self._confirm_result is not None else default
+
+    def prompt_ask(self, message: str, default: str = "") -> str:
+        """Block the calling thread until the user provides text input."""
+        self._ask_message = message
+        self._ask_default = default
+        self._ask_result = None
+        self._ask_buf = list(default) if default else []
+        self._ask_cursor = len(self._ask_buf)
+        self._ask_event.clear()
+        self._ask_event.wait(timeout=300)
+        return self._ask_result if self._ask_result is not None else default
+
+    def _render_select(self, regions: dict, win_output) -> None:
+        """Render the interactive select overlay on the output pane."""
+        filtered = [o for o in self._select_options if self._select_filter.lower() in o.lower()]
+        if not filtered:
+            filtered = list(self._select_options)
+        rows = regions["output"].rows
+        cols = regions["output"].cols
+        max_show = min(len(filtered), rows - 2)
+        lines: list[str] = []
+        lines.append(f"  {self._select_title}")
+        if self._select_filter:
+            lines.append(f"  Filter: {self._select_filter}_")
+        lines.append("")
+        for i in range(max_show):
+            idx = self._select_scroll + i
+            if idx >= len(filtered):
+                break
+            prefix = " > " if idx == self._select_idx else "   "
+            text = filtered[idx]
+            if len(prefix) + len(text) > cols - 2:
+                text = text[:cols - 2 - len(prefix)]
+            lines.append(f"{prefix}{text}")
+        if len(filtered) > max_show:
+            lines.append(f"   ({len(filtered)} items, {self._select_idx + 1}/{len(filtered)})")
+        lines.append("")
+        lines.append("  Enter: select  Esc: cancel  Type to filter")
+        self._output_surface.clear()
+        for line in lines:
+            self._output_surface.write(line)
+        self._blit(win_output, self._output_surface.render(rows, 0))
+
+    def _render_confirm(self, regions: dict, win_input) -> None:
+        """Render the confirm prompt overlay on the input pane."""
+        hint = "Y/n" if self._confirm_default else "y/N"
+        prompt = f"  {self._confirm_message} [{hint}] "
+        self._input_surface.clear()
+        self._input_surface.write(prompt)
+        self._blit(win_input, self._input_surface.render(1, 0))
+
+    def _render_ask(self, regions: dict, win_input) -> None:
+        """Render the ask prompt overlay on the input pane."""
+        suffix = f" [{self._ask_default}]" if self._ask_default else ""
+        prompt = f"  {self._ask_message}{suffix}: "
+        display = prompt + "".join(self._ask_buf) + "_"
+        self._input_surface.clear()
+        self._input_surface.write(display)
+        self._blit(win_input, self._input_surface.render(1, 0))
+
+    def run(self) -> None:
+        """Enter curses mode and start the event loop."""
+        self._running = True
+        history = getattr(self._repl, "_history", None)
+        self._cmd_history = list(history) if history else []
+        self._history_pos = len(self._cmd_history)
+
+        try:
+            from domains.logging.cli_logger import set_cli_terminal
+        except ImportError:
+            set_cli_terminal = None
+        if set_cli_terminal is not None:
+            set_cli_terminal(False)
+        try:
+            curses.wrapper(self._main)
+        finally:
+            if set_cli_terminal is not None:
+                set_cli_terminal(True)
+
+    # ── Rendering ─────────────────────────────────────────────────────────
+
+    def _draw_borders(self, stdscr: curses._CursesWindow, regions: dict[str, Rect]) -> None:
+        """Draw border characters for all panes that have borders configured.
+
+        Borders are drawn directly on the stdscr (the full terminal), not on
+        the pane's curses window.  This avoids overlapping content areas.
+        """
+        attr = curses.color_pair(_P_BORDER) if curses.has_colors() else 0
+        for pane in self._layout.panes:
+            if not pane.visible or pane.border.is_empty:
+                continue
+            r = regions.get(pane.name)
+            if not r:
+                continue
+            h_attr = attr
+            if pane.border.ch:
+                # Use custom character if provided.
+                pass
+            # Horizontal borders (top / bottom edges).
+            if pane.border.top and r.rows > 0:
+                ch = pane.border.ch or "\u2500"
+                try:
+                    stdscr.addnstr(r.top, r.left, ch * r.cols, r.cols, h_attr)
+                except curses.error:
+                    pass
+            if pane.border.bottom and r.rows > 1:
+                ch = pane.border.ch or "\u2500"
+                try:
+                    stdscr.addnstr(r.top + r.rows - 1, r.left, ch * r.cols, r.cols, h_attr)
+                except curses.error:
+                    pass
+            # Vertical borders (left / right edges).
+            if pane.border.left and r.cols > 0:
+                ch = pane.border.ch or "\u2502"
+                for y in range(r.top, r.top + r.rows):
+                    try:
+                        stdscr.addch(y, r.left, ch, attr)
+                    except curses.error:
+                        pass
+            if pane.border.right and r.cols > 1:
+                ch = pane.border.ch or "\u2502"
+                for y in range(r.top, r.top + r.rows):
+                    try:
+                        stdscr.addch(y, r.left + r.cols - 1, ch, attr)
+                    except curses.error:
+                        pass
+        try:
+            stdscr.refresh()
+        except curses.error:
+            pass
+
+    def _blit(self, win: curses._CursesWindow, lines: list[RenderLine],
+              offset_y: int = 0, offset_x: int = 0) -> None:
+        """Write *lines* into *win*, starting at (offset_y, offset_x).
+
+        Offsets are used when the pane has borders or padding so content
+        is drawn inside the border/padding area, not on top of it.
+        """
+        try:
+            win.erase()
+        except curses.error:
+            return
+        h, w = win.getmaxyx()
+        for y, ln in enumerate(lines):
+            wy = offset_y + y
+            if wy >= h:
+                break
+            pair = _STYLE_PAIRS.get(ln.style)
+            attr = curses.color_pair(pair) if pair else 0
+            text = ln.text[: w - offset_x - 1] if offset_x < w else ""
+            try:
+                if text:
+                    win.addstr(wy, offset_x, text, attr)
+            except curses.error:
+                pass
+        try:
+            win.refresh()
+        except curses.error:
+            pass
+
+    def _render_all(self, stdscr, regions, win_console, win_output, win_status, win_input) -> None:
+        self._draw_borders(stdscr, regions)
+        # Compute content offsets from borders.
+        for pane in self._layout.panes:
+            if pane.name == "console":
+                oy = pane.border_top + pane.pad_top
+                ox = pane.border_left + pane.pad_left
+                self._blit(win_console, self._log_surface.render(regions["console"].rows - pane.border_top - pane.border_bottom, self._log_scroll), oy, ox)
+            elif pane.name == "output":
+                oy = pane.border_top + pane.pad_top
+                ox = pane.border_left + pane.pad_left
+                self._blit(win_output, self._output_surface.render(regions["output"].rows - pane.border_top - pane.border_bottom, self._out_scroll), oy, ox)
+        self._render_status(win_status, regions["status"].cols)
+        self._render_input(win_input, regions["input"].cols)
+
+    def _input_view(self, cols: int, buf: str, caret: int) -> tuple[str, int]:
+        """Compute the visible input line and its caret column.
+
+        ``cols`` is the window width; returns ``(line, caret_col)`` where
+        ``line`` fits the window (prompt + ``buf``) and ``caret_col`` is the
+        absolute window column the cursor should occupy.  When the buffer is
+        wider than the window the view scrolls horizontally so the caret
+        stays visible; a buffer at the window edge reveals its tail.
+        """
+        prompt = "\u03bb "
+        max_w = max(cols - len(prompt) - 1, 0)
+        caret = min(max(caret, 0), len(buf))
+        if len(buf) <= max_w:
+            return buf, len(prompt) + caret
+        start = min(caret, len(buf) - max_w)
+        return buf[start:start + max_w], len(prompt) + (caret - start)
+
+    def _render_input(self, win: curses._CursesWindow, cols: int) -> None:
+        """Draw the command line: prompt plus the buffered input, with the
+        terminal cursor parked on the caret."""
+        try:
+            win.erase()
+            prompt = "\u03bb "
+            buf = "".join(self._input_buf)
+            line, caret_col = self._input_view(cols, buf, self._input_cursor)
+            win.addstr(0, 0, prompt, curses.color_pair(_P_PROMPT))
+            if line:
+                win.addstr(0, len(prompt), line)
+            try:
+                win.move(0, min(max(caret_col, 0), max(cols - 1, 0)))
+            except curses.error:
+                pass
+            win.refresh()
+        except curses.error:
+            pass
+
+    def _render_status(self, win: curses._CursesWindow, cols: int) -> None:
+        """Draw the chrome bar: scroll focus, live/scroll state, active
+        command, terminal size, or the incremental-search prompt while
+        active (``reverse-i-search`` for Ctrl+R, ``forward-i-search`` for
+        Ctrl+S)."""
+        try:
+            win.erase()
+        except curses.error:
+            return
+        if cols <= 0:
+            return
+        try:
+            if self._searching:
+                label = "forward-i-search" if self._search_fwd else "reverse-i-search"
+                if self._search_failed:
+                    label = f"failed {label}"
+                prompt = f"({label})\u0060{self._search_q}\u0060:"
+                win.addstr(0, 0, prompt[: cols - 2], curses.color_pair(_P_PROMPT))
+                win.refresh()
+                return
+            if self._out_searching:
+                label = "output-search"
+                if self._out_search_failed:
+                    label = f"failed {label}"
+                prompt = f"({label})\u0060{self._out_search_q}\u0060:"
+                win.addstr(0, 0, prompt[: cols - 2], curses.color_pair(_P_PROMPT))
+                win.refresh()
+                return
+            target = "OUTPUT" if self._scroll_target == 0 else "LOG"
+            scroll = self._out_scroll if self._scroll_target == 0 else self._log_scroll
+            scroll_txt = f"SCROLL \u2191{scroll}" if scroll > 0 else "LIVE"
+            head = f"[{target}]"
+            win.addstr(0, 0, head, curses.color_pair(_P_PROMPT))
+            col = len(head) + 1
+            if col < cols:
+                attr = curses.color_pair(_P_LOG_WARN) if scroll > 0 else curses.color_pair(_P_LOG_INFO)
+                win.addstr(0, col, scroll_txt, attr)
+                col += len(scroll_txt) + 1
+            if col < cols and self._active_cmd:
+                cmd = self._active_cmd[: cols - col - 4]
+                win.addstr(0, col, cmd)
+                col += len(cmd) + 1
+            suffix = f"{cols}x{self._rows}"
+            if cols - len(suffix) - 1 >= col:
+                win.addstr(0, cols - len(suffix) - 1, suffix, curses.color_pair(_P_BORDER))
+            win.refresh()
+        except curses.error:
+            pass
+
+    # ── Completion ──────────────────────────────────────────────────────
+
+    def _complete(self) -> None:
+        """Tab-complete the token under the caret: commands on the leading
+        token, filesystem paths anywhere (incl. a fallback when no command
+        matches)."""
+        buf = "".join(self._input_buf)
+        caret = self._input_cursor
+        start = buf.rfind(" ", 0, caret) + 1
+        token = buf[start:caret]
+        leading = " " not in buf[:start]
+        if leading and not token.startswith((".", "/", "~")):
+            matches = [k for k in self._repl.COMMANDS if k.startswith(token)]
+            if len(matches) == 1:
+                self._set_token(start, caret, matches[0] + " ")
+                return
+            if matches:
+                common = os.path.commonprefix(matches)
+                if len(common) > len(token):
+                    self._set_token(start, caret, common)
+                else:
+                    self._output_surface.write("  " + "  ".join(matches))
+                return
+        self._complete_path_token(start, caret, token)
+
+    def _complete_path_token(self, start: int, caret: int, token: str) -> None:
+        matches = _complete_path(token)
+        if not matches:
+            return
+        if len(matches) == 1:
+            suffix = "/" if os.path.isdir(matches[0]) else " "
+            self._set_token(start, caret, matches[0] + suffix)
+            return
+        common = os.path.commonprefix(matches)
+        if len(common) > len(token):
+            self._set_token(start, caret, common)
+        else:
+            self._output_surface.write("  " + "  ".join(matches))
+
+    def _set_token(self, start: int, caret: int, text: str) -> None:
+        self._input_buf[start:caret] = list(text)
+        self._input_cursor = start + len(text)
+
+    # ── Line editing (readline-style) ──────────────────────────────────
+
+    _KILL_RING_MAX = 10
+
+    def _move_home(self) -> None:
+        """Move the caret to the start of the line."""
+        self._input_cursor = 0
+
+    def _move_end(self) -> None:
+        """Move the caret to the end of the line."""
+        self._input_cursor = len(self._input_buf)
+
+    def _history_back(self) -> None:
+        """Step to the previous (older) history entry, filling the input row.
+
+        No-op at the oldest entry; mirrors readline ``previous-history``.
+        """
+        if self._cmd_history and self._history_pos > 0:
+            self._history_pos -= 1
+            self._input_buf = list(self._cmd_history[self._history_pos])
+            self._input_cursor = len(self._input_buf)
+
+    def _history_fwd(self) -> None:
+        """Step to the next (newer) history entry; past the newest clears
+        the input row (readline ``next-history``)."""
+        if self._cmd_history and self._history_pos < len(self._cmd_history) - 1:
+            self._history_pos += 1
+            self._input_buf = list(self._cmd_history[self._history_pos])
+            self._input_cursor = len(self._input_buf)
+        else:
+            self._history_pos = len(self._cmd_history)
+            self._input_buf.clear()
+            self._input_cursor = 0
+
+    def _move_word_forward(self) -> None:
+        """Move the caret to the end of the next word (Alt+F / Ctrl+Right).
+
+        Words are maximal runs of non-whitespace characters.  From the
+        caret, skip any whitespace, then advance to just past the end of
+        the word; from mid-word this lands at the end of the current word
+        (readline ``forward-word`` semantics).
+        """
+        n = len(self._input_buf)
+        i = self._input_cursor
+        while i < n and self._input_buf[i] == " ":
+            i += 1
+        while i < n and self._input_buf[i] != " ":
+            i += 1
+        self._input_cursor = i
+
+    def _move_word_backward(self) -> None:
+        """Move the caret to the start of the current or previous word
+        (Alt+B / Ctrl+Left).
+
+        Mirrors readline's ``backward-word``: from the caret, skip back
+        over any whitespace, then back over the word, landing at its first
+        character.
+        """
+        i = self._input_cursor
+        while i > 0 and self._input_buf[i - 1] == " ":
+            i -= 1
+        while i > 0 and self._input_buf[i - 1] != " ":
+            i -= 1
+        self._input_cursor = i
+
+    def _transpose_chars(self) -> None:
+        """Swap the character before the caret with the one at the caret
+        (Ctrl+T).
+
+        Mirrors readline's ``transpose-chars``: with a character on both
+        sides the pair swaps and the caret advances past them; at the end
+        of the line the last two characters swap and the caret stays at the
+        end.  No-op at the start of the line or on a one-character line.
+        """
+        i = self._input_cursor
+        n = len(self._input_buf)
+        if i == 0:
+            return
+        if i == n:
+            if n >= 2:
+                self._input_buf[n - 2], self._input_buf[n - 1] = (
+                    self._input_buf[n - 1],
+                    self._input_buf[n - 2],
+                )
+                self._input_cursor = n
+            return
+        self._input_buf[i - 1], self._input_buf[i] = (
+            self._input_buf[i],
+            self._input_buf[i - 1],
+        )
+        self._input_cursor = i + 1
+
+    def _push_kill(self, text: str) -> None:
+        """Add killed text to the kill ring (most recent last, capped).
+
+        Any push cancels an in-progress yank cycle.
+
+        Args:
+            text: the killed substring; empty text is ignored.
+
+        Side effects:
+            - appends to ``_kill_ring`` (oldest entry dropped past the cap)
+            - resets ``_yank_active`` / ``_yank_idx``
+        """
+        if not text:
+            return
+        self._kill_ring.append(text)
+        if len(self._kill_ring) > self._KILL_RING_MAX:
+            del self._kill_ring[: len(self._kill_ring) - self._KILL_RING_MAX]
+        self._yank_active = False
+        self._yank_idx = -1
+
+    def _kill_to_start(self) -> None:
+        """Delete the text before the caret (Ctrl+U); pushed to the ring."""
+        killed = "".join(self._input_buf[: self._input_cursor])
+        self._input_buf = self._input_buf[self._input_cursor:]
+        self._input_cursor = 0
+        self._push_kill(killed)
+
+    def _kill_to_end(self) -> None:
+        """Delete the text from the caret to the end (Ctrl+K); pushed to ring."""
+        killed = "".join(self._input_buf[self._input_cursor:])
+        self._input_buf = self._input_buf[: self._input_cursor]
+        self._push_kill(killed)
+
+    def _delete_at_cursor(self) -> None:
+        """Delete the character under the caret, if any (Ctrl+D / Delete).
+
+        Single-character deletion is not pushed to the kill ring (readline
+        behaviour).
+        """
+        if self._input_cursor < len(self._input_buf):
+            self._input_buf.pop(self._input_cursor)
+
+    def _delete_word_back(self) -> None:
+        """Delete the word (and any trailing whitespace) before the caret.
+
+        Mirrors readline's ``unix-word-rubout``: from the caret, skip back
+        over whitespace, then back over the word, and delete that range.
+        The deleted word is pushed to the kill ring.
+        """
+        end = self._input_cursor
+        i = end
+        while i > 0 and self._input_buf[i - 1] == " ":
+            i -= 1
+        while i > 0 and self._input_buf[i - 1] != " ":
+            i -= 1
+        killed = "".join(self._input_buf[i:end])
+        del self._input_buf[i:end]
+        self._input_cursor = i
+        self._push_kill(killed)
+
+    def _delete_word_forward(self) -> None:
+        """Delete the word (and any leading whitespace) after the caret.
+
+        Mirrors readline's ``kill-word``: from the caret, skip forward
+        over whitespace, then over the word, and delete that range; the
+        caret does not move.  The deleted word is pushed to the kill ring.
+        """
+        start = self._input_cursor
+        i = start
+        n = len(self._input_buf)
+        while i < n and self._input_buf[i] == " ":
+            i += 1
+        while i < n and self._input_buf[i] != " ":
+            i += 1
+        killed = "".join(self._input_buf[start:i])
+        del self._input_buf[start:i]
+        self._push_kill(killed)
+
+    def _yank(self) -> None:
+        """Insert the most recent kill at the caret; repeat to cycle (Ctrl+Y).
+
+        The first press pastes the newest ring entry at the caret.  An
+        immediately following press replaces it with the next-older entry.
+        If the buffer no longer contains the previously yanked text at the
+        yank position (e.g. the line was edited), the next press starts a
+        fresh yank from the newest entry.
+        """
+        if not self._kill_ring:
+            return
+        if self._yank_active:
+            prev = self._kill_ring[self._yank_idx]
+            here = "".join(self._input_buf[self._yank_start:self._yank_start + len(prev)])
+            if here != prev:
+                self._yank_active = False  # line was edited since — start fresh
+        if not self._yank_active:
+            self._yank_active = True
+            self._yank_idx = len(self._kill_ring) - 1
+            self._yank_start = self._input_cursor
+            text = self._kill_ring[self._yank_idx]
+        else:
+            prev = self._kill_ring[self._yank_idx]
+            del self._input_buf[self._yank_start:self._yank_start + len(prev)]
+            self._input_cursor = self._yank_start
+            self._yank_idx = max(self._yank_idx - 1, 0)
+            text = self._kill_ring[self._yank_idx]
+        self._input_buf[self._yank_start:self._yank_start] = list(text)
+        self._input_cursor = self._yank_start + len(text)
+
+    # ── Interrupt (Ctrl+C) ─────────────────────────────────────────────
+
+    def _interrupt_active(self) -> None:
+        """Raise ``KeyboardInterrupt`` in the running command thread.
+
+        The command executes ``ShellREPL._dispatch`` on a background thread;
+        raising ``KeyboardInterrupt`` there lets the REPL's own handler print
+        "Aborted" and record the exit code.  Best-effort: a thread blocked in
+        a syscall (e.g. ``time.sleep``) is interrupted once it returns to
+        Python code.  No-op when no command is running or the async-exc
+        facility is unavailable.
+
+        Side effects:
+            - interrupts the thread executing the active command
+        """
+        thread = self._active_thread
+        if _SET_ASYNC_EXC is None or thread is None:
+            return
+        if not thread.is_alive():
+            return
+        tid = thread.ident
+        if tid is None or tid == threading.get_ident():
+            return
+        try:
+            res = _SET_ASYNC_EXC(ctypes.c_long(tid), ctypes.py_object(KeyboardInterrupt))
+            if res == 0:
+                return  # thread already finished
+            if res != 1:
+                _SET_ASYNC_EXC(ctypes.c_long(tid), None)
+        except (ValueError, SystemError, TypeError, RuntimeError):
+            pass
+
+    # ── Reverse history search ─────────────────────────────────────────
+
+    def _search_back(self, start: int, fwd: bool = False) -> int:
+        """Nearest history index to ``start`` whose entry contains the query.
+
+        Returns -1 when the query is empty, the history is empty, or no
+        entry matches.  ``start`` may equal ``len(history)`` (the position
+        past the newest entry) — backward search then begins at the newest
+        entry instead of falling off the end.
+        """
+        q = self._search_q
+        n = len(self._cmd_history)
+        if not q or n == 0:
+            return max(min(start, n - 1), 0)
+        if fwd:
+            if start >= n:
+                return -1
+            idx = max(start, 0)
+        else:
+            if start < 0:
+                return -1
+            idx = min(start, n - 1)
+        step = 1 if fwd else -1
+        while 0 <= idx < n:
+            if q in self._cmd_history[idx]:
+                return idx
+            idx += step
+        return -1
+
+    def _apply_search(self) -> None:
+        """Fill the input row with the match nearest to ``_search_idx``.
+
+        Scans in the active direction (``_search_fwd`` False → backward to
+        older entries, True → forward to newer entries) starting at
+        ``_search_idx`` inclusive, so a fresh query starts from the far end
+        of the history and navigation restarts just past the last match.
+        Sets ``_search_failed`` when the query matches no entry.
+        """
+        self._search_failed = False
+        if self._search_q and self._cmd_history:
+            found = self._search_back(self._search_idx, fwd=self._search_fwd)
+            if found >= 0:
+                self._search_idx = found
+                self._input_buf = list(self._cmd_history[found])
+                self._input_cursor = len(self._input_buf)
+            else:
+                self._search_failed = True
+        elif self._search_save is not None:
+            self._input_buf = list(self._search_save[0])
+            self._input_cursor = self._search_save[1]
+
+    def _end_search(self, restore: bool) -> None:
+        self._searching = False
+        self._search_q = ""
+        if restore and self._search_save is not None:
+            self._input_buf = list(self._search_save[0])
+            self._input_cursor = self._search_save[1]
+        self._search_save = None
+
+    # ── Output-pane content search ─────────────────────────────────────────
+
+    def _out_find(self, start: int, fwd: bool) -> int:
+        """Nearest capture index to ``start`` whose line contains the query.
+
+        Case-insensitive substring match over the output buffer, wrapping
+        from the tail back to the head (and vice versa for ``fwd`` False).
+        Returns -1 when the query is empty, the buffer is empty, or no line
+        matches.
+        """
+        q = self._out_search_q.lower()
+        lines = self._output_surface.capture
+        n = len(lines)
+        if not q or n == 0:
+            return -1
+        if start < 0:
+            start = 0 if fwd else n - 1
+        if fwd:
+            for idx in range(start, n):
+                if q in lines[idx].lower():
+                    return idx
+            for idx in range(0, start):
+                if q in lines[idx].lower():
+                    return idx
+        else:
+            for idx in range(start, -1, -1):
+                if q in lines[idx].lower():
+                    return idx
+            for idx in range(n - 1, start, -1):
+                if q in lines[idx].lower():
+                    return idx
+        return -1
+
+    def _apply_out_search(self, rows: int, start: int | None = None, fwd: bool = True) -> None:
+        """Jump the output pane to the nearest line matching the query.
+
+        ``_out_scroll`` is set so the matched line lands at the top of the
+        pane (relative to the live tail).  ``_out_search_sel`` tracks the
+        current match so n/N can cycle; ``_out_search_failed`` is raised when
+        nothing matches.
+        """
+        self._out_search_failed = False
+        lines = self._output_surface.capture
+        n = len(lines)
+        if self._out_search_q and n > 0:
+            found = self._out_find(start if start is not None else self._out_search_sel, fwd)
+            if found >= 0:
+                self._out_search_sel = found
+                self._out_scroll = max(n - rows - found, 0)
+            else:
+                self._out_search_failed = True
+        else:
+            self._out_search_sel = -1
+
+    # ── Main loop ─────────────────────────────────────────────────────────
+
+    def _main(self, stdscr: curses._CursesWindow) -> None:
+        _init_pairs()
+        curses.curs_set(1)
+        curses.raw()
+        stdscr.keypad(True)
+        try:
+            curses.set_escdelay(25)
+        except Exception:
+            pass
+
+        rows, cols = stdscr.getmaxyx()
+        self._rows = rows
+        self._cols = cols
+        self._input_buf: list[str] = []
+        self._input_cursor = 0
+        self._history_pos = len(self._cmd_history)
+        self._out_scroll = 0
+        self._log_scroll = 0
+        self._scroll_target = 0  # 0 = output pane, 1 = log pane
+        self._active_cmd: str | None = None
+        self._active_thread: threading.Thread | None = None
+        self._searching = False
+        self._search_q = ""
+        self._search_idx = 0
+        self._search_save: tuple[list[str], int] | None = None
+        self._out_searching = False
+        self._out_search_q = ""
+        self._out_search_last = ""
+        self._out_search_sel = -1
+        self._out_search_save = 0
+        self._out_search_failed = False
+
+        # Poll key input so background command output streams live.
+        stdscr.timeout(100)
+
+        # Bind I/O once.
+        self._old_io = self._repl.io
+        self._old_console_io = getattr(self._repl.console, "_io", None)
+        self._repl.io = self._tui_io
+        if self._old_console_io is not None:
+            self._repl.console._io = self._tui_io
+
+        regions = self._layout.compute(rows, cols)
+        self._log_surface.set_width(regions["console"].cols)
+        self._output_surface.set_width(regions["output"].cols)
+        win_console = curses.newwin(regions["console"].rows, regions["console"].cols, regions["console"].top, regions["console"].left)
+        win_output = curses.newwin(regions["output"].rows, regions["output"].cols, regions["output"].top, regions["output"].left)
+        win_status = curses.newwin(regions["status"].rows, regions["status"].cols, regions["status"].top, regions["status"].left)
+        win_input = curses.newwin(regions["input"].rows, regions["input"].cols, regions["input"].top, regions["input"].left)
+
+        def _redraw() -> None:
+            self._render_all(stdscr, regions, win_console, win_output, win_status, win_input)
+
+        def _resize(nrows: int, ncols: int) -> None:
+            """Rebuild the layout and windows at ``nrows`` x ``ncols``.
+
+            The terminal size changed (ncurses KEY_RESIZE or a poll-detected
+            ``SIGWINCH`` that readline claimed); recompute pane regions, size
+            the surfaces, recreate the curses windows and redraw everything.
+            """
+            nonlocal regions, win_console, win_output, win_status, win_input
+            self._rows = nrows
+            self._cols = ncols
+            regions = self._layout.compute(nrows, ncols)
+            self._log_surface.set_width(regions["console"].cols)
+            self._output_surface.set_width(regions["output"].cols)
+            win_console = curses.newwin(regions["console"].rows, regions["console"].cols, regions["console"].top, regions["console"].left)
+            win_output = curses.newwin(regions["output"].rows, regions["output"].cols, regions["output"].top, regions["output"].left)
+            win_status = curses.newwin(regions["status"].rows, regions["status"].cols, regions["status"].top, regions["status"].left)
+            win_input = curses.newwin(regions["input"].rows, regions["input"].cols, regions["input"].top, regions["input"].left)
+            _redraw()
+
+        def _detect_resize(stdscr) -> bool:
+            """Return True and resync curses when the kernel window size
+            changed but ncurses never reported KEY_RESIZE.
+
+            ``readline`` (imported by the shell for line-mode history) claims
+            SIGWINCH before curses starts, so ncurses skips its own handler and
+            getch() never returns KEY_RESIZE.  Polling the terminal size each
+            poll tick recovers the event.  Without readline this is a no-op
+            because KEY_RESIZE is delivered normally.
+            """
+            try:
+                ts = os.get_terminal_size()
+            except OSError:
+                return False
+            nrows, ncols = ts.lines, ts.columns
+            if nrows <= 0 or ncols <= 0:
+                return False
+            if nrows == self._rows and ncols == self._cols:
+                return False
+            try:
+                curses.resizeterm(nrows, ncols)
+            except curses.error:
+                return False
+            self._rows = nrows
+            self._cols = ncols
+            return True
+
+        _redraw()
+
+        while self._running:
+            try:
+                ch = stdscr.getch()
+            except KeyboardInterrupt:
+                self._running = False
+                break
+
+            if ch == -1:
+                # Poll tick: refresh every pane so background output streams
+                # live and the status/input rows survive curses' screen clears.
+                if self._active_thread is not None and not self._active_thread.is_alive():
+                    self._active_cmd = None
+                    self._active_thread = None
+                if _detect_resize(stdscr):
+                    _resize(self._rows, self._cols)
+                self._blit(win_output, self._output_surface.render(regions["output"].rows, self._out_scroll))
+                self._blit(win_console, self._log_surface.render(regions["console"].rows, self._log_scroll))
+                self._render_status(win_status, regions["status"].cols)
+                self._render_input(win_input, regions["input"].cols)
+                continue
+
+            # ── Interactive select mode ──────────────────────────────────
+            if self._select_event.is_set():
+                filtered = [o for o in self._select_options if self._select_filter.lower() in o.lower()]
+                if not filtered:
+                    filtered = list(self._select_options)
+                max_show = min(len(filtered), regions["output"].rows - 2)
+                if ch in (27, 7, 3):  # Esc / Ctrl+G / Ctrl+C — cancel
+                    self._select_result = None
+                    self._select_event.clear()
+                    _redraw()
+                elif ch == ord("\n"):  # Enter — accept
+                    if 0 <= self._select_idx < len(filtered):
+                        self._select_result = filtered[self._select_idx]
+                    else:
+                        self._select_result = None
+                    self._select_event.clear()
+                    _redraw()
+                elif ch in (curses.KEY_UP, 16):  # Up / Ctrl+P
+                    self._select_idx = max(0, self._select_idx - 1)
+                    if self._select_idx < self._select_scroll:
+                        self._select_scroll = self._select_idx
+                    _redraw()
+                elif ch in (curses.KEY_DOWN, 14):  # Down / Ctrl+N
+                    self._select_idx = min(len(filtered) - 1, self._select_idx + 1)
+                    if self._select_idx >= self._select_scroll + max_show:
+                        self._select_scroll = self._select_idx - max_show + 1
+                    _redraw()
+                elif ch == curses.KEY_PPAGE:  # Page Up
+                    self._select_idx = max(0, self._select_idx - max_show)
+                    self._select_scroll = max(0, self._select_scroll - max_show)
+                    _redraw()
+                elif ch == curses.KEY_NPAGE:  # Page Down
+                    self._select_idx = min(len(filtered) - 1, self._select_idx + max_show)
+                    if self._select_idx >= self._select_scroll + max_show:
+                        self._select_scroll = self._select_idx - max_show + 1
+                    _redraw()
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):  # Backspace — filter
+                    self._select_filter = self._select_filter[:-1]
+                    self._select_idx = 0
+                    self._select_scroll = 0
+                    _redraw()
+                elif 32 <= ch < 127:  # Printable — filter
+                    self._select_filter += chr(ch)
+                    self._select_idx = 0
+                    self._select_scroll = 0
+                    _redraw()
+                elif ch == -1:
+                    self._render_select(regions, win_output)
+                    continue
+                if self._select_event.is_set():
+                    self._render_select(regions, win_output)
+                continue
+
+            # ── Interactive confirm mode ──────────────────────────────────
+            if self._confirm_event.is_set():
+                if ch in (27, 7, 3):  # Esc / Ctrl+G / Ctrl+C — cancel
+                    self._confirm_result = not self._confirm_default
+                    self._confirm_event.clear()
+                    _redraw()
+                elif ch == ord("\n"):  # Enter — use default
+                    self._confirm_result = self._confirm_default
+                    self._confirm_event.clear()
+                    _redraw()
+                elif ch in (ord("y"), ord("Y")):
+                    self._confirm_result = True
+                    self._confirm_event.clear()
+                    _redraw()
+                elif ch in (ord("n"), ord("N")):
+                    self._confirm_result = False
+                    self._confirm_event.clear()
+                    _redraw()
+                elif ch == -1:
+                    self._render_confirm(regions, win_input)
+                    continue
+                if self._confirm_event.is_set():
+                    self._render_confirm(regions, win_input)
+                continue
+
+            # ── Interactive ask mode ──────────────────────────────────────
+            if self._ask_event.is_set():
+                if ch in (27, 7, 3):  # Esc / Ctrl+G / Ctrl+C — cancel
+                    self._ask_result = self._ask_default
+                    self._ask_event.clear()
+                    _redraw()
+                elif ch == ord("\n"):  # Enter — accept
+                    self._ask_result = "".join(self._ask_buf)
+                    self._ask_event.clear()
+                    _redraw()
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    if self._ask_buf:
+                        self._ask_buf.pop()
+                        self._ask_cursor = max(0, self._ask_cursor - 1)
+                    _redraw()
+                elif ch == curses.KEY_LEFT:
+                    self._ask_cursor = max(0, self._ask_cursor - 1)
+                    _redraw()
+                elif ch == curses.KEY_RIGHT:
+                    self._ask_cursor = min(len(self._ask_buf), self._ask_cursor + 1)
+                    _redraw()
+                elif 32 <= ch < 127:  # Printable — insert
+                    self._ask_buf.insert(self._ask_cursor, chr(ch))
+                    self._ask_cursor += 1
+                    _redraw()
+                elif ch == -1:
+                    self._render_ask(regions, win_input)
+                    continue
+                if self._ask_event.is_set():
+                    self._render_ask(regions, win_input)
+                continue
+
+            if self._searching:
+                # Incremental history search: Ctrl+R scans backward (older),
+                # Ctrl+S / Ctrl+F scan forward (newer).  Typing a character
+                # restarts from the far end of the current direction.
+                if ch in (18, 19, 6):  # Ctrl+R / Ctrl+S / Ctrl+F — direction
+                    self._search_fwd = ch in (19, 6)
+                    if self._search_fwd:
+                        self._search_idx = self._search_idx + 1 if self._search_idx >= 0 else 0
+                    else:
+                        self._search_idx -= 1
+                elif ch in (27, 7, 3):  # Esc / Ctrl+G / Ctrl+C — cancel
+                    self._end_search(restore=True)
+                elif ch == ord("\n"):
+                    self._end_search(restore=False)
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    self._search_q = self._search_q[:-1]
+                    self._search_idx = -1 if self._search_fwd else self._history_pos
+                elif 32 <= ch < 127:
+                    self._search_q += chr(ch)
+                    self._search_idx = -1 if self._search_fwd else self._history_pos
+                self._apply_search()
+                self._render_status(win_status, regions["status"].cols)
+                continue
+
+            if self._out_searching:
+                # Output-pane content search (/): typing refines the query
+                # (n/N are literal here), Enter accepts, Esc/Ctrl+G/Ctrl+C
+                # cancel.  After accepting, n/N at an empty prompt repeat the
+                # search from the current match.
+                if ch in (27, 7, 3):  # Esc / Ctrl+G / Ctrl+C — cancel
+                    self._out_searching = False
+                    self._out_search_q = ""
+                    self._out_search_sel = -1
+                    self._out_scroll = self._out_search_save
+                    _redraw()
+                elif ch == ord("\n"):  # Enter — accept, keep scroll at match
+                    if self._out_search_q:
+                        self._out_search_last = self._out_search_q
+                    self._out_searching = False
+                    self._out_search_q = ""
+                    _redraw()
+                elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                    self._out_search_q = self._out_search_q[:-1]
+                    self._out_search_sel = -1
+                    self._apply_out_search(regions["output"].rows)
+                    _redraw()
+                elif 32 <= ch < 127:
+                    self._out_search_q += chr(ch)
+                    self._apply_out_search(regions["output"].rows)
+                    _redraw()
+                continue
+
+            if ch == ord("\n"):
+                cmd = "".join(self._input_buf).strip()
+                self._input_buf.clear()
+                self._input_cursor = 0
+                if cmd:
+                    self._cmd_history.append(cmd)
+                    self._history_pos = len(self._cmd_history)
+                    if cmd in ("exit", "q", "quit"):
+                        self._running = False
+                        break
+                    self._output_surface.write(f"\u03bb {cmd}")
+                    def _run() -> None:
+                        with self._repl_lock:
+                            self._repl._dispatch(cmd)
+                    self._active_cmd = cmd
+                    self._active_thread = threading.Thread(target=_run, daemon=True)
+                    self._active_thread.start()
+                _redraw()
+
+            elif ch in (curses.KEY_UP, 16):  # UP / Ctrl+P — previous history
+                self._history_back()
+                _redraw()
+
+            elif ch in (curses.KEY_DOWN, 14):  # DOWN / Ctrl+N — next history
+                self._history_fwd()
+                _redraw()
+
+            elif ch == curses.KEY_LEFT:
+                if self._input_cursor > 0:
+                    self._input_cursor -= 1
+                    _redraw()
+
+            elif ch == curses.KEY_RIGHT:
+                if self._input_cursor < len(self._input_buf):
+                    self._input_cursor += 1
+                    _redraw()
+
+            elif ch == 27:  # Esc / Alt+<key> / Ctrl+<arrow> prefix
+                action = _read_escape_remainder(stdscr, {"f": "fwd", "b": "bwd", "d": "delword"})
+                if action == "alt:fwd":
+                    self._move_word_forward()
+                    _redraw()
+                elif action == "alt:bwd":
+                    self._move_word_backward()
+                    _redraw()
+                elif action == "alt:delword":
+                    self._delete_word_forward()
+                    _redraw()
+                elif action == "seq:ctrl-right":
+                    self._move_word_forward()
+                    _redraw()
+                elif action == "seq:ctrl-left":
+                    self._move_word_backward()
+                    _redraw()
+
+            elif ch in (_KEY_CTRL_LEFT, _KEY_CTRL_RIGHT):  # Ctrl+Left / Ctrl+Right
+                if ch == _KEY_CTRL_RIGHT:
+                    self._move_word_forward()
+                else:
+                    self._move_word_backward()
+                _redraw()
+
+            elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                if self._input_cursor > 0:
+                    self._input_buf.pop(self._input_cursor - 1)
+                    self._input_cursor -= 1
+                    _redraw()
+
+            elif ch == curses.KEY_DC:
+                self._delete_at_cursor()
+                _redraw()
+
+            elif ch == 9:  # Tab completion (commands or paths)
+                self._complete()
+                _redraw()
+
+            elif ch == 12:  # Ctrl+L clear
+                self._output_surface.clear()
+                self._out_scroll = 0
+                _redraw()
+
+            elif ch == 15:  # Ctrl+O — toggle log/output focus for scrollback
+                self._scroll_target = 1 - self._scroll_target
+                _redraw()
+
+            elif ch in (18, 19):  # Ctrl+R / Ctrl+S — enter reverse / forward history search
+                self._searching = True
+                self._search_fwd = ch == 19
+                self._search_q = ""
+                self._search_idx = -1 if ch == 19 else self._history_pos
+                self._search_save = (list(self._input_buf), self._input_cursor)
+                _redraw()
+
+            elif ch == 47 and not self._input_buf:  # / on empty prompt — output-pane search
+                self._out_searching = True
+                self._out_search_q = ""
+                self._out_search_sel = -1
+                self._out_search_save = self._out_scroll
+                self._out_search_failed = False
+                _redraw()
+
+            elif ch == curses.KEY_PPAGE:
+                if self._scroll_target == 1:
+                    self._log_scroll += 10
+                else:
+                    self._out_scroll += 10
+                _redraw()
+
+            elif ch == curses.KEY_NPAGE:
+                if self._scroll_target == 1:
+                    self._log_scroll = max(self._log_scroll - 10, 0)
+                else:
+                    self._out_scroll = max(self._out_scroll - 10, 0)
+                _redraw()
+
+            elif ch == curses.KEY_RESIZE:
+                _resize(*stdscr.getmaxyx())
+
+            elif ch in (1, curses.KEY_HOME):  # Ctrl+A / Home — start of line
+                self._move_home()
+                _redraw()
+
+            elif ch in (5, curses.KEY_END):  # Ctrl+E / End — end of line
+                self._move_end()
+                _redraw()
+
+            elif ch == 21:  # Ctrl+U — kill to start of line
+                self._kill_to_start()
+                _redraw()
+
+            elif ch == 11:  # Ctrl+K — kill to end of line
+                self._kill_to_end()
+                _redraw()
+
+            elif ch == 23:  # Ctrl+W — delete word before caret
+                self._delete_word_back()
+                _redraw()
+
+            elif ch == 4:  # Ctrl+D — delete char at caret
+                self._delete_at_cursor()
+                _redraw()
+
+            elif ch == 25:  # Ctrl+Y — yank the most recent kill (repeat to cycle)
+                self._yank()
+                _redraw()
+
+            elif ch == 20:  # Ctrl+T — transpose chars before/at caret
+                self._transpose_chars()
+                _redraw()
+
+            elif ch in (110, 78) and not self._input_buf and self._out_search_last and self._out_scroll > 0:
+                # n / N — repeat the last output-pane search.  Only at an
+                # empty prompt while scrolled back (reading mode), so command
+                # text keeps its 'n'/'N'.
+                self._repeat_out_search(regions["output"].rows, fwd=ch == 110)
+                _redraw()
+
+            elif ch == 3:  # Ctrl+C — interrupt the running command, else exit
+                if self._active_thread is not None and self._active_thread.is_alive():
+                    self._interrupt_active()
+                    self._output_surface.write("^C")
+                    _redraw()
+                else:
+                    self._running = False
+                    break
+
+            elif 32 <= ch < 127:
+                self._input_buf.insert(self._input_cursor, chr(ch))
+                self._input_cursor += 1
+                _redraw()
+
+            else:
+                # Background command output: refresh output pane each frame.
+                self._blit(win_output, self._output_surface.render(regions["output"].rows, self._out_scroll))
+                self._blit(win_console, self._log_surface.render(regions["console"].rows, self._log_scroll))
+
+        # ── Restore ──
+        if self._old_io is not None:
+            self._repl.io = self._old_io
+        if self._old_console_io is not None:
+            self._repl.console._io = self._old_console_io
+        if rows > 0:
+            stdscr.move(rows - 1, 0)
+        stdscr.refresh()

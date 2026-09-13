@@ -1,0 +1,4652 @@
+"""
+ShellREPL — interactive shell with pipelines, backgrounds, readline,
+state persistence, and LLM-powered natural language interpretation.
+
+Features:
+  - 40+ built-in commands delegating to real backend endpoints
+  - Pipeline chaining (|) — passes captured output as next command's args
+  - Background execution (&) — spawns in a thread
+  - Command chaining (&&, ||, ;) with exit code tracking ($?)
+  - AI-domain commands: gen, chat, ai, models, souls, train, datasets, ...
+  - Shell essentials: history, alias, export, py, jobs, watch, ...
+  - readline tab completion for command names
+  - Persistent history and aliases (~/.config/sloughgpt/shell_state.json)
+  - LLM-powered natural language interpretation (ai <query>)
+  - Alias management (alias / unalias)
+"""
+
+from __future__ import annotations
+
+import io
+import os
+import re
+import sys
+import json
+import time
+import shutil
+import logging
+import glob
+import threading
+import logging.handlers
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from .runtime import DaitRuntime
+from .commands import ShellCommands
+from .console import Console
+from .cmds import CmdModule
+from .io import ShellIO
+from .state import ShellState
+from .cmds.linux import LinuxCommandsMixin
+
+_EM = "\u2014"  # em dash
+logger = logging.getLogger("slo.shell.repl")
+
+# ── Process-wide log handlers (shared by every ShellREPL instance) ───
+#
+# A RotatingFileHandler holds an open file descriptor, and a LogBufferHandler
+# accumulates on the shared "slo" logger. Creating one per ShellREPL instance
+# leaks one fd per instance and multiplies log writes. Both handlers are
+# created once per process and attached idempotently.
+
+_file_handler: "logging.handlers.RotatingFileHandler | None" = None
+_buf_handler: "logging.Handler | None" = None
+
+
+def _get_file_handler() -> "logging.handlers.RotatingFileHandler | None":
+    """Return the process-wide shell_infra.log handler, creating it once.
+
+    Returns:
+        The shared RotatingFileHandler, or None if it could not be created.
+
+    Side effects:
+        - creates ~/.config/sloughgpt/ and shell_infra.log on first call
+    """
+    global _file_handler
+    if _file_handler is not None and not getattr(_file_handler, "closed", False):
+        return _file_handler
+    try:
+        _log_dir = Path.home() / ".config" / "sloughgpt"
+        _log_dir.mkdir(parents=True, exist_ok=True)
+        handler = logging.handlers.RotatingFileHandler(
+            str(_log_dir / "shell_infra.log"),
+            maxBytes=10 * 1024 * 1024,
+            backupCount=3,
+        )
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s %(levelname)-7s %(name)s  %(message)s"
+        ))
+        handler.setLevel(logging.DEBUG)
+        _file_handler = handler
+    except Exception:
+        return None
+    return _file_handler
+
+
+def _get_log_buffer_handler() -> "logging.Handler | None":
+    """Return the process-wide log-buffer handler, creating it once.
+
+    Returns:
+        The shared LogBufferHandler, or None if the log buffer module is
+        unavailable.
+
+    Side effects:
+        - attaches to the shared log buffer on first call
+    """
+    global _buf_handler
+    if _buf_handler is not None and not getattr(_buf_handler, "closed", False):
+        return _buf_handler
+    try:
+        from .log_buffer import get_log_buffer, LogBufferHandler
+        _buf_handler = LogBufferHandler(get_log_buffer())
+        _buf_handler.setLevel(logging.DEBUG)
+    except Exception:
+        return None
+    return _buf_handler
+
+# ── ANSI color constants (disabled via NO_COLOR env var) ─────────────
+
+_COLOR_ENABLED = not os.environ.get("NO_COLOR")
+if _COLOR_ENABLED:
+    _C_CYAN = "\033[36m"
+    _C_GREEN = "\033[32m"
+    _C_YELLOW = "\033[33m"
+    _C_RED = "\033[31m"
+    _C_DIM = "\033[2m"
+    _C_BOLD = "\033[1m"
+    _C_RESET = "\033[0m"
+else:
+    _C_CYAN = _C_GREEN = _C_YELLOW = _C_RED = _C_DIM = _C_BOLD = _C_RESET = ""
+
+
+def _color(text: str, code: str) -> str:
+    """Wrap text in an ANSI color code, unless NO_COLOR is set."""
+    return f"{code}{text}{_C_RESET}" if _COLOR_ENABLED and code else text
+
+# ── readline (optional) ──────────────────────────────────────────────
+
+_HAS_READLINE = False
+try:
+    import readline  # noqa: F401
+    _HAS_READLINE = True
+except ImportError:
+    pass
+
+
+# ── Completion cache fetchers (API-backed) ──────────────────────────
+
+def _fetch_model_names() -> list[str]:
+    """Fetch available model names from the API for tab completion."""
+    import requests
+    try:
+        from .commands import get_api_base
+        r = requests.get(f"{get_api_base()}/models", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            models = data if isinstance(data, list) else data.get("models", [])
+            return sorted(set(m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)))
+    except Exception as e:
+        logger.debug("model names fetch failed: %s", e)
+    return []
+
+def _fetch_soul_names() -> list[str]:
+    """Fetch soul names from the API for tab completion."""
+    import requests
+    try:
+        from .commands import get_api_base
+        r = requests.get(f"{get_api_base()}/souls", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            souls = data if isinstance(data, list) else data.get("souls", [])
+            return sorted(set(s.get("name", "") for s in souls if isinstance(s, dict)))
+    except Exception as e:
+        logger.debug("soul names fetch failed: %s", e)
+    return []
+
+def _fetch_dataset_names() -> list[str]:
+    """Fetch dataset names from the API for tab completion."""
+    import requests
+    try:
+        from .commands import get_api_base
+        r = requests.get(f"{get_api_base()}/datasets", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            datasets = data if isinstance(data, list) else data.get("datasets", [])
+            return sorted(set(d.get("name", "") for d in datasets if isinstance(d, dict)))
+    except Exception as e:
+        logger.debug("dataset names fetch failed: %s", e)
+    return []
+
+def _fetch_checkpoint_names() -> list[str]:
+    """Fetch checkpoint names from the API for tab completion."""
+    import requests
+    try:
+        from .commands import get_api_base
+        r = requests.get(f"{get_api_base()}/auto-train/checkpoints", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            cps = data if isinstance(data, list) else data.get("checkpoints", [])
+            return sorted(set(c.get("name", "") for c in cps if isinstance(c, dict)))
+    except Exception as e:
+        logger.debug("checkpoint names fetch failed: %s", e)
+    return []
+
+_COMMAND_CACHE_FETCHERS: dict[str, callable] = {
+    "load": _fetch_model_names,
+    "unload": _fetch_model_names,
+    "gen": _fetch_model_names,
+    "protect": _fetch_model_names,
+    "unprotect": _fetch_model_names,
+    "switch": _fetch_soul_names,
+    "datasets": _fetch_dataset_names,
+    "dataset": _fetch_dataset_names,
+    "checkpoints": _fetch_checkpoint_names,
+}
+
+
+# ── Output capture context manager ───────────────────────────────────
+
+
+class _CaptureOutput:
+    """Captures all write() output within a with-block. Test-only utility.
+
+    If repl is provided, swaps repl.io to a MemoryIO buffer (proper capture).
+    If no repl, falls back to capturing sys.stdout (legacy behavior).
+    """
+
+    def __init__(self, repl=None):
+        self._repl = repl
+        self._mem = None
+        self._old_io = None
+        self._buf = None
+        self._old_stdout = None
+
+    def __enter__(self):
+        if self._repl is not None:
+            from .io import MemoryIO
+            self._mem = MemoryIO()
+            self._old_io = self._repl.io
+            self._old_console_io = getattr(self._repl.console, '_io', None)
+            self._repl.io = self._mem
+            if self._old_console_io is not None:
+                self._repl.console._io = self._mem
+        else:
+            self._buf = io.StringIO()
+            self._old_stdout = sys.stdout
+            sys.stdout = self._buf
+        return self
+
+    def __exit__(self, *exc):
+        if self._repl is not None and self._old_io is not None:
+            self._repl.io = self._old_io
+            if self._old_console_io is not None:
+                self._repl.console._io = self._old_console_io
+        elif self._old_stdout is not None:
+            sys.stdout = self._old_stdout
+
+    def getvalue(self) -> str:
+        if self._mem is not None:
+            return self._mem.get_output()
+        if self._buf is not None:
+            return self._buf.getvalue()
+        return ""
+
+
+# ── REPL ─────────────────────────────────────────────────────────────
+
+
+class ShellREPL(LinuxCommandsMixin):
+    """Interactive REPL with built-in commands and AI-assisted mode.
+
+    For programmatic / TUI usage, call ``execute(line)`` directly —
+    it returns ``(output, exit_code)`` without touching readline or
+    the terminal.
+    """
+
+
+    def __init__(self, os: DaitRuntime, cmds: ShellCommands | None = None,
+                 io: "ShellIO | None" = None, use_tui: bool | None = None):
+        self.os = os
+        self.cmds = cmds or ShellCommands()
+        self.state = ShellState()
+        self._history: list[str] = self.state.history[:]
+        self._running = False
+        # Line mode is the default interactive shell; the curses TUI is
+        # opt-in via MAN_TUI=1 or the `tui` command / --tui flag.
+        if use_tui is None:
+            import os as _os
+            try:
+                use_tui = _os.environ.get("MAN_TUI") == "1"
+            except (OSError, ValueError):
+                use_tui = False
+        self._use_tui = use_tui
+        self._bg_threads: dict[int, threading.Thread] = {}
+        self._next_bg_id = 1
+        self._piped_input: str = ""
+        self._aborted = False
+        self._env: dict[str, str] = {
+            "PS1": "\u03bb",
+            "SHELL": "sloughgpt",
+            "HOME": str(Path.home()),
+            "TERM": "xterm-256color",
+        }
+        self._env.update(self.state.env)
+        self._update_color_state()
+
+        # I/O layer — swap for TUI via ``io=TuiIO()``
+        from .io import ConsoleIO
+        self.io = io or ConsoleIO()
+
+        # Structured console output — tables, boxes, status, progress
+        from .console import Console
+        self.console = Console(self.io, has_readline=_HAS_READLINE)
+
+        # Structured logger — inherit from domains.logging
+        from domains.logging import ShellLogger, LogLevel
+        self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)
+
+        # Log buffer — captures infra + API server logs for the console panel
+        from .log_buffer import get_log_buffer, LogEntry
+        self._log_buffer = get_log_buffer()
+        _wrap_emit = self.log.emit
+        def _buffered_emit(record):
+            _wrap_emit(record)
+            self._log_buffer.append(LogEntry(
+                timestamp=record.timestamp,
+                level=record.level.value.upper(),
+                source=record.logger,
+                message=record.message,
+                context=dict(record.context),
+            ))
+        self.log.emit = _buffered_emit
+        _log_buf_handler = _get_log_buffer_handler()
+        if _log_buf_handler is not None:
+            _slo_logger = logging.getLogger("slo")
+            if _log_buf_handler not in _slo_logger.handlers:
+                _slo_logger.addHandler(_log_buf_handler)
+            # Also attach directly to child loggers that disable propagation during boot
+            for _child_name in ("slo.kernel", "slo.shell.runtime", "slo.shell.init"):
+                _child = logging.getLogger(_child_name)
+                if _log_buf_handler not in _child.handlers:
+                    _child.addHandler(_log_buf_handler)
+        _log_dir = _audit_dir = Path.home() / ".config" / "sloughgpt"
+        _log_dir.mkdir(parents=True, exist_ok=True)
+        _file_handler = _get_file_handler()
+        if _file_handler is not None:
+            _slo_logger = logging.getLogger("slo")
+            if _file_handler not in _slo_logger.handlers:
+                _slo_logger.addHandler(_file_handler)
+
+        self._log_buffer_bridge_setup = True
+
+        # Line-mode log display — status badge + ``logs`` command
+        from .log_display import LineModeLogDisplay
+        self._log_display = LineModeLogDisplay(self._log_buffer)
+
+        # Audit logger — every command is logged to JSONL
+        from .audit import get_shell_audit_logger
+        self._audit = get_shell_audit_logger()
+
+        # Permissions manager — gates destructive operations
+        from .permissions import ShellPermissions
+        self._perms = ShellPermissions()
+
+        self._aliases: dict[str, str] = dict(self.state.aliases)
+        self._aliases.update({
+            "q": "exit", "quit": "exit", "h": "help",
+            "?": "help",
+            "jobs": "bg",
+        })
+
+        self._last_exit_code = 0
+        self._cmd_count = 0
+        self._dir_stack: list[str] = []
+        self._chat_session_id: str | None = None
+        self._chat_history: list[dict[str, str]] = []
+
+        # Dynamic completion cache — TTL-based, shared with completion.py
+        try:
+            from core.completion import get_cache
+            self._completion_cache_obj = get_cache()
+        except ImportError:
+            self._completion_cache_obj = None
+        self._completion_cache: dict[str, tuple[float, list[str]]] = {}
+
+        # External commands from commands/ directory
+        from .cmds import discover as _discover
+        self._ext_cmds = _discover()
+
+        if _HAS_READLINE:
+            self._setup_readline()
+
+        self._load_rc()
+
+    # ── Permission gate ─────────────────────────────────────────────
+
+    def _check_permission(self, cmd: str, args_str: str, interactive: bool = True) -> bool:
+        """Check if a command is allowed. Returns True if allowed, False if denied.
+
+        In interactive mode, prompts the user when a command is blocked.
+        In programmatic mode (execute()), silently denies.
+        """
+        from .permissions import Risk
+        try:
+            self._perms.check(cmd, args_str)
+            return True
+        except PermissionError:
+            risk = self._perms.classify(cmd, args_str)
+            if not interactive:
+                self._print(f"  {_C_RED}Permission denied:{_C_RESET} {cmd} (risk={risk})")
+                self._print(f"  Use `permit {cmd}` to grant, or `permit --all-{risk}` for all {risk} commands.")
+                return False
+            risk_colors = {
+                Risk.SAFE: _C_GREEN,
+                Risk.ELEVATED: _C_YELLOW,
+                Risk.DANGEROUS: _C_RED,
+                Risk.CRITICAL: _C_RED,
+            }
+            color = risk_colors.get(risk, _C_RED)
+            self._print(f"  {_C_YELLOW}\u26a1 {cmd}{_C_RESET} requires {_C_BOLD}{color}{risk}{_C_RESET} permissions.")
+            try:
+                self.io.write(f"  Allow this command? [y/N/always] [{_C_DIM}n{_C_RESET}]: ", end="")
+                answer = self.io.read("").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                answer = ""
+            if answer == "always":
+                self._perms.grant(cmd, persist=True)
+                self._print(f"  {_C_GREEN}\u2713 Granted (persistent){_C_RESET} \u2014 {cmd} allowed for this and future sessions.")
+                return True
+            elif answer in ("y", "yes"):
+                self._perms.grant(cmd)
+                self._print(f"  {_C_GREEN}\u2713 Granted{_C_RESET} \u2014 {cmd} allowed this session.")
+                return True
+            else:
+                self._print(f"  {_C_DIM}Denied{_C_RESET} \u2014 {cmd} skipped.")
+                return False
+
+    # ── Programmatic API (TUI / tests) ─────────────────────────────
+
+    def execute(self, line: str) -> tuple[str, int]:
+        """Execute a command line, return (output, exit_code).
+
+        Does NOT touch readline or the terminal — safe for TUI usage.
+        Still audit-logs every execution.
+        """
+        import time as _time
+        from .io import MemoryIO
+
+        if not line.strip():
+            return "", 0
+
+        mem = MemoryIO()
+        old_io = self.io
+        old_console_io = self.console._io
+        self.io = mem
+        self.console._io = mem
+        old_print = self._print
+
+        def _captured_print(*args, **kwargs):
+            end = kwargs.get("end", "\n")
+            text = " ".join(str(a) for a in args)
+            self.io.write(text, end=end)
+
+        self._print = _captured_print  # type: ignore
+
+        t0 = _time.time()
+        try:
+            self._cmd_count += 1
+            self._history.append(line)
+            self.state.add_history(line)
+            self.state.save()
+            self._aborted = False
+            self._piped_input = ""
+
+            commands, is_bg, should_time = self._parse_pipeline(line)
+
+            if not commands:
+                self._print(f"  {_C_DIM}(empty pipeline){_C_RESET}")
+                self._last_exit_code = 0
+                self.io = old_io
+                self.console._io = old_console_io
+                self._print = old_print
+                return mem.get_output(), 0
+
+            if is_bg:
+                if len(commands) > 1:
+                    self._execute_background_tuples(commands)
+                else:
+                    self._execute_background(commands[0][0])
+                self._audit.command(line, commands[0][0].split()[0] if commands[0][0] else "", line, 0, is_background=True, is_pipeline=len(commands) > 1)
+                self.io = old_io
+                self.console._io = old_console_io
+                self._print = old_print
+                return mem.get_output(), 0
+            elif len(commands) > 1:
+                self._execute_pipeline(commands, should_time=should_time)
+                self._audit.command(line, "pipeline", line, self._last_exit_code, is_pipeline=True)
+            else:
+                raw_cmd, op = commands[0]
+                expanded = self._expand_alias(raw_cmd)
+                parts = expanded.split(maxsplit=1)
+                cmd = parts[0].lower()
+                args_str = parts[1] if len(parts) > 1 else ""
+                handler = self.COMMANDS.get(cmd)
+                ext_mod = self._ext_cmds.get(cmd) if handler is None else None
+                if handler or ext_mod:
+                    if not self._check_permission(cmd, args_str, interactive=False):
+                        self._last_exit_code = 126
+                        self._audit.command(line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded)
+                        self.io = old_io
+                        self.console._io = old_console_io
+                        self._print = old_print
+                        return mem.get_output(), self._last_exit_code
+                    try:
+                        if ext_mod:
+                            piped = self._piped_input if self._piped_input else ""
+                            self._env["_piped_input"] = piped
+                            self._env["_exec_fn"] = self._execute_single
+                            c = Console(mem, has_readline=False)
+                            self._last_exit_code = ext_mod.run([cmd] + (args_str.split() if args_str else []), c, self.cmds, self._env)
+                            self._env.pop("_piped_input", None)
+                        else:
+                            handler(self, args_str)
+                            self._last_exit_code = 0
+                    except SystemExit as e:
+                        self._last_exit_code = e.code if isinstance(e.code, int) else 1
+                    except Exception as e:
+                        self._print(self._format_error(e, cmd))
+                        self._last_exit_code = 1
+                        self._audit.error(line, repr(e))
+                    elapsed_ms = (_time.time() - t0) * 1000
+                    self._audit.command(line, cmd, args_str, self._last_exit_code, elapsed_ms=elapsed_ms, expanded=expanded)
+                else:
+                    suggestion = self._suggest_command(cmd)
+                    msg = f"  Unknown command: {cmd}. Type `help`."
+                    if suggestion:
+                        msg += f" Did you mean `{suggestion}`?"
+                    self._print(msg)
+                    self._last_exit_code = 127
+                    self._audit.unknown(cmd)
+        except KeyboardInterrupt:
+            self._aborted = True
+            self._print("  Aborted")
+        except Exception as e:
+            self._print(self._format_error(e))
+            self._last_exit_code = 1
+            self._audit.error(line, repr(e))
+
+        output = mem.get_output()
+        self.io = old_io
+        self.console._io = old_console_io
+        self._print = old_print
+        return output, self._last_exit_code
+
+    def _rc_path(self) -> Path:
+        return Path.home() / ".config" / "sloughgpt" / "rc"
+
+    def _load_rc(self) -> None:
+        """Execute ~/.config/sloughgpt/rc on startup (like bash .bashrc)."""
+        rc = self._rc_path()
+        if rc.is_file():
+            for line_no, line in enumerate(rc.read_text().splitlines(), 1):
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                try:
+                    cmds, is_bg, should_time = self._parse_pipeline(stripped)
+                    if is_bg:
+                        if len(cmds) > 1:
+                            self._execute_background_tuples(cmds)
+                        else:
+                            self._execute_background(cmds[0][0])
+                    elif len(cmds) > 1:
+                        self._execute_pipeline(cmds, should_time=should_time)
+                    else:
+                        self._execute_single(cmds[0][0], "")
+                except Exception as e:
+                    logger.warning("rc line %d: %s", line_no, e, extra={"tag": "INFRA"})
+
+    def _render_prompt(self) -> str:
+        """Expand PS1 escapes: \\h=host, \\w=cwd, \\t=time, \\u=user, \\s=shell, \\#=cmd count,
+        \\m=model, \\S=soul. Appends a log badge for unread warnings/errors."""
+        s = self._env.get("PS1", "\u03bb")
+        s = s.replace("\\h", os.uname().nodename.split(".")[0])
+        s = s.replace("\\w", os.getcwd().replace(str(Path.home()), "~"))
+        s = s.replace("\\t", datetime.now().strftime("%H:%M:%S"))
+        s = s.replace("\\u", os.environ.get("USER", "user"))
+        s = s.replace("\\s", "sloughgpt")
+        s = s.replace("\\#", str(self._cmd_count + 1))
+        s = s.replace("\\n", "\n")
+        s = s.replace("\\m", self._get_current_model())
+        s = s.replace("\\S", self._get_current_soul())
+        if self._last_exit_code != 0:
+            s = f"{_C_RED}[{self._last_exit_code}]{_C_RESET} {s}"
+        # Append log badge (unread warnings/errors)
+        badge = self._log_display.badge()
+        if badge:
+            s = f"{s}{badge}"
+        return s
+
+    def _get_current_model(self) -> str:
+        """Fetch loaded model name (cached 30s)."""
+        now = time.monotonic()
+        entry = self._completion_cache.get("__model__")
+        if entry is not None:
+            ts, val = entry
+            if now - ts < 30.0:
+                return val
+        try:
+            import requests
+            from .config import get_api_base
+            r = requests.get(f"{get_api_base()}/health", timeout=2)
+            if r.status_code == 200:
+                data = r.json()
+                model = data.get("model", data.get("model_name", ""))
+                if model:
+                    val = str(model).split("/")[-1]
+                    self._completion_cache["__model__"] = (now, val)
+                    return val
+        except Exception as e:
+            logger.debug("current model fetch failed: %s", e)
+        return ""
+
+    def _get_current_soul(self) -> str:
+        """Fetch active soul name (cached 30s)."""
+        now = time.monotonic()
+        entry = self._completion_cache.get("__soul__")
+        if entry is not None:
+            ts, val = entry
+            if now - ts < 30.0:
+                return val
+        try:
+            import requests
+            from .config import get_api_base
+            r = requests.get(f"{get_api_base()}/souls/current", timeout=2)
+            if r.status_code == 200:
+                data = r.json()
+                soul = data.get("name", "")
+                if soul:
+                    self._completion_cache["__soul__"] = (now, soul)
+                    return soul
+        except Exception as e:
+            logger.debug("current soul fetch failed: %s", e)
+        return ""
+
+    def _update_color_state(self) -> None:
+        """Sync ANSI color support with environment."""
+        global _COLOR_ENABLED, _C_CYAN, _C_GREEN, _C_YELLOW, _C_RED, _C_DIM, _C_BOLD, _C_RESET
+        no_color = self._env.get("NO_COLOR", "").strip().lower() in ("1", "true", "yes")
+        if no_color == _COLOR_ENABLED:
+            _COLOR_ENABLED = not no_color
+            if _COLOR_ENABLED:
+                _C_CYAN = "\033[36m"
+                _C_GREEN = "\033[32m"
+                _C_YELLOW = "\033[33m"
+                _C_RED = "\033[31m"
+                _C_DIM = "\033[2m"
+                _C_BOLD = "\033[1m"
+                _C_RESET = "\033[0m"
+            else:
+                _C_CYAN = _C_GREEN = _C_YELLOW = _C_RED = _C_DIM = _C_BOLD = _C_RESET = ""
+
+    # ── readline setup ──────────────────────────────────────────────
+
+    def _setup_readline(self) -> None:
+        try:
+            import readline
+            histfile = Path.home() / ".config" / "sloughgpt" / ".shell_history"
+            histfile.parent.mkdir(parents=True, exist_ok=True)
+
+            # Truncate oversized history files (>10MB) to prevent slow startup.
+            # Uses seek to find the last 5000 newlines without loading the
+            # entire file into memory.
+            _MAX_HIST_LINES = 5000
+            _MAX_HIST_BYTES = 10 * 1024 * 1024
+            if histfile.exists():
+                try:
+                    size = histfile.stat().st_size
+                    if size > _MAX_HIST_BYTES:
+                        with open(histfile, "rb") as f:
+                            # Seek to find the position of the N-th line from end
+                            f.seek(0, 2)
+                            end = f.tell()
+                            # Read last 2MB to find line boundaries
+                            chunk_size = min(2 * 1024 * 1024, size)
+                            f.seek(max(0, end - chunk_size))
+                            tail = f.read()
+                            # Count newlines and find the split point
+                            nl_count = tail.count(b"\n")
+                            if nl_count >= _MAX_HIST_LINES:
+                                # Find the position of the (_MAX_HIST_LINES)th newline from end
+                                pos = len(tail)
+                                for _ in range(_MAX_HIST_LINES):
+                                    pos = tail.rfind(b"\n", 0, pos)
+                                    if pos < 0:
+                                        break
+                                # Rewrite file with only the tail
+                                kept = tail[pos + 1:] if pos >= 0 else tail
+                                with open(histfile, "wb") as wf:
+                                    wf.write(kept)
+                            # If fewer newlines than needed but file is huge,
+                            # the file has very long lines — just keep last 2MB
+                            elif nl_count < _MAX_HIST_LINES and chunk_size < size:
+                                with open(histfile, "wb") as wf:
+                                    wf.write(tail)
+                            readline.set_history_length(_MAX_HIST_LINES)
+                except Exception as e:
+                    logger.debug("readline history trim failed: %s", e)
+
+            try:
+                readline.read_history_file(str(histfile))
+            except FileNotFoundError:
+                pass
+            readline.set_history_length(5000)
+            import atexit
+            atexit.register(lambda: readline.write_history_file(str(histfile)))
+            readline.set_completer(self._complete)
+            readline.parse_and_bind("tab: complete")
+            readline.parse_and_bind('"\\C-r": reverse-search-history')
+            readline.parse_and_bind('"\\C-s": forward-search-history')
+        except Exception as e:
+            logger.debug("readline setup failed: %s", e)
+
+    def _complete(self, text: str, state: int) -> str | None:
+        try:
+            import readline
+            line = readline.get_line_buffer()
+        except Exception:
+            line = text
+        parts = line.strip().split()
+        is_first_word = len(parts) <= 1 or line.endswith(" ")
+
+        if is_first_word:
+            candidates = list(self._aliases.keys()) + list(self.COMMANDS.keys()) + list(self._ext_cmds.keys())
+        else:
+            cmd = parts[0].lower()
+            if cmd == "note" and len(parts) >= 2:
+                sub = parts[1].lower() if len(parts) > 1 else ""
+                if sub in ("show", "edit", "delete", "rm") and line.endswith(" "):
+                    from notes import get_note_store
+                    store = get_note_store(backend="mogdb")
+                    candidates = [n.short_id for n in store.list_notes(limit=9999)]
+                elif sub == "sprint" and line.endswith(" "):
+                    from notes import get_note_store
+                    store = get_note_store(backend="mogdb")
+                    candidates = store.sprints()
+                else:
+                    candidates = self._complete_args_for(cmd)
+            elif cmd == "finetuned" and len(parts) >= 2 and parts[1].lower() in ("load", "rm", "del", "delete") and line.endswith(" "):
+                ft = self.cmds.finetuned_models()
+                candidates = [m.get("model_name", "") for m in ft]
+            else:
+                candidates = self._complete_args_for(cmd)
+
+        seen = set()
+        matches = []
+        for c in candidates:
+            if c.startswith(text) and c not in seen:
+                seen.add(c)
+                matches.append(c)
+        try:
+            return matches[state]
+        except IndexError:
+            return None
+
+    def _complete_args_for(self, cmd: str) -> list[str]:
+        """Return dynamic completion candidates for a given command.
+
+        Uses CompletionCache (30s TTL) when available, falls back to local dict cache.
+        """
+        # Use CompletionCache if available (better error handling, stale data)
+        if self._completion_cache_obj is not None:
+            fetcher = _COMMAND_CACHE_FETCHERS.get(cmd)
+            if fetcher:
+                return self._completion_cache_obj.get(cmd, fetcher)
+            # No API fetcher — fall through to path completion
+            return self._complete_path("")
+
+        # Fallback: local dict cache with 30s TTL
+        now = time.monotonic()
+        entry = self._completion_cache.get(cmd)
+        if entry is not None:
+            ts, values = entry
+            if now - ts < 30.0:
+                return values
+        values = self._complete_args_for_uncached(cmd)
+        self._completion_cache[cmd] = (now, values)
+        return values
+
+    def _complete_args_for_uncached(self, cmd: str) -> list[str]:
+        """Fetch fresh completion candidates (no cache)."""
+        try:
+            if cmd in ("load", "unload", "gen", "protect", "unprotect"):
+                models = self.cmds.models()
+                return [m.get("name", m.get("id", "")) for m in models]
+            if cmd in ("switch",):
+                souls = self.cmds.souls()
+                return [s.get("name", "") for s in souls]
+            if cmd in ("datasets",):
+                ds = self.cmds.datasets()
+                return [d.get("name", "") for d in ds]
+            if cmd in ("checkpoints",):
+                cps = self.cmds.checkpoints()
+                return [cp.get("name", "") for cp in cps]
+            if cmd in ("finetuned",):
+                return ["load", "rm", "del", "delete"]
+            if cmd == "train":
+                return ["status", "follow", "stop", "distill", "hf", "auto", "load", "del"]
+            if cmd in ("permit", "deny"):
+                from .permissions import _DANGEROUS, _CRITICAL
+                candidates = sorted(_DANGEROUS | _CRITICAL) + ["--persist"]
+                if cmd == "permit":
+                    candidates.append("--all-dangerous")
+                return candidates
+            if cmd == "note":
+                return ["new", "list", "show", "edit", "delete", "search", "today", "export", "tags", "status", "sprint", "timeline"]
+        except Exception as e:
+            logger.debug("command completion failed: %s", e)
+        return self._complete_path("")
+
+    def _complete_path(self, prefix: str) -> list[str]:
+        """Return matching file/directory paths for tab completion."""
+        # VFS-aware completion for /dev/ and /proc/
+        if prefix.startswith("/dev") or prefix.startswith("/proc"):
+            try:
+                vfs = self.os.vfs
+                if vfs:
+                    parent = prefix.rsplit("/", 1)[0] or prefix
+                    partial = prefix.rsplit("/", 1)[1] if "/" in prefix else ""
+                    if parent == prefix:
+                        parent = prefix.rstrip("/")
+                        partial = ""
+                    entries = vfs.listdir(parent) if parent else vfs.listdir("/dev")
+                    if entries is not None:
+                        matches = [e + "/" if vfs.isdir(parent + "/" + e if parent else "/dev/" + e) else e for e in entries if not e.startswith(".") and e.startswith(partial)]
+                        return sorted(matches)
+            except Exception as e:
+                logger.debug("vfs completion failed: %s", e)
+        if not prefix or prefix == "." or prefix == "..":
+            search_dir = Path(".")
+            partial = prefix
+        else:
+            p = Path(prefix)
+            if prefix.endswith("/"):
+                search_dir = p
+                partial = ""
+            else:
+                search_dir = p.parent
+                partial = p.name
+            if not search_dir.exists():
+                return []
+        try:
+            candidates = []
+            for entry in search_dir.iterdir():
+                name = entry.name
+                if name.startswith("."):
+                    continue
+                if name.startswith(partial):
+                    suffix = "/" if entry.is_dir() else ""
+                    candidates.append(str(entry) + suffix)
+            return sorted(candidates)
+        except PermissionError:
+            return []
+
+    # ── I/O helpers ─────────────────────────────────────────────────
+
+    def _print(self, *args, **kwargs) -> None:
+        end = kwargs.get("end", "\n")
+        text = " ".join(str(a) for a in args)
+        self.console.write(text, end=end)
+
+    def _table(self, rows: list[list[str]], header: list[str] | None = None,
+               separator_after_header: bool = True) -> None:
+        self.console.table(rows, header, separator_after_header)
+
+    def _box(self, text: str, width: int | None = None) -> None:
+        self.console.box(text, width)
+
+    def _status(self, kind: str, message: str, detail: str = "") -> None:
+        self.console.status(kind, message, detail)
+
+    def _kvlist(self, items: list[tuple[str, str]]) -> None:
+        self.console.kvlist(items)
+
+    def _log_ok(self, msg: str, **ctx) -> None:
+        """Log a success message (green checkmark)."""
+        from domains.logging import LogLevel
+        self.log.emit(self.log._make_record(LogLevel.INFO, msg, ctx))
+
+    def _log_warn(self, msg: str, **ctx) -> None:
+        """Log a warning (yellow exclamation)."""
+        self.log.warning(msg, **ctx)
+
+    def _log_error(self, msg: str, **ctx) -> None:
+        """Log an error (red cross)."""
+        self.log.error(msg, **ctx)
+
+    def _log_step(self, msg: str, **ctx) -> None:
+        """Log a step/action (cyan arrow)."""
+        self.log.info(msg, **ctx)
+
+    def _print_header(self) -> None:
+        self._print(f"  Type {_C_YELLOW}`help`{_C_RESET} for commands, {_C_YELLOW}`exit`{_C_RESET} to quit, {_C_YELLOW}`ai <query>`{_C_RESET} for AI mode")
+
+    def _format_table(self, rows: list[list[str]], header: list[str] | None = None) -> str:
+        if not rows:
+            return "(empty)"
+        cols = max(len(r) for r in rows)
+        if header:
+            cols = max(cols, len(header))
+        widths = [0] * cols
+        for row in rows:
+            for i, cell in enumerate(row):
+                if i < cols:
+                    widths[i] = max(widths[i], len(str(cell)))
+        if header:
+            for i, cell in enumerate(header):
+                if i < cols:
+                    widths[i] = max(widths[i], len(str(cell)))
+        lines = []
+        fmt = "  ".join("{{:<{}}}".format(w) for w in widths)
+        if header:
+            lines.append(fmt.format(*header))
+            lines.append("  ".join("─" * w for w in widths))
+        for row in rows:
+            padded = list(row) + [""] * (cols - len(row))
+            lines.append(fmt.format(*padded))
+        return "\n".join(lines)
+
+    def _dump_json(self, obj: Any) -> str:
+        return json.dumps(obj, indent=2, default=str)
+
+    def _spinner_call(self, label: str, fn, ok_msg: str | None = ""):
+        """
+        Standard loading-state wrapper for any operation that makes API calls
+        or has a timeout. Shows a spinner animation while *fn* runs, then
+        replaces it with a success or cleared line.
+
+        Args:
+            label:  Spinner label text (e.g. "Fetching models", "Generating").
+            fn:     Zero-arg callable wrapping the blocking operation.
+            ok_msg: Success message shown after completion.
+                    - ``None``  → spinner line is cleared silently (for list/table commands).
+                    - ``""``    → uses *label* as the success message.
+                    - ``str``   → custom success message.
+
+        Every command that calls the HTTP API MUST use _spinner_call or an
+        equivalent loading indicator — this is a codebase standard.
+        """
+        with self.console.spinner(label) as s:
+            result = fn()
+        if ok_msg is not None:
+            s.ok(ok_msg or label)
+        return result
+
+    def _expand_vars(self, text: str) -> str:
+        """Replace $VAR, ${VAR}, and $? with values."""
+        text = text.replace("$?", str(self._last_exit_code))
+        def _repl(m: re.Match) -> str:
+            name = m.group(1) or m.group(2) or ""
+            return self._env.get(name, m.group(0))
+        result = re.sub(r"\$\{(\w+)\}|\$(\w+)", _repl, text)
+        return result
+
+    def _expand_cmd_subst(self, text: str) -> str:
+        """Replace $(command) with the captured output of that command."""
+        pattern = r"\$\(([^()]+)\)"
+        while re.search(pattern, text):
+            def _repl(m: re.Match) -> str:
+                inner = m.group(1).strip()
+                out = self._execute_single(inner, "")
+                return out.rstrip("\n")
+            text = re.sub(pattern, _repl, text, count=1)
+        return text
+
+    def _expand_history(self, text: str) -> str:
+        """Expand ! history references: !! !$ !n !-n !-n$ etc."""
+        result = text
+
+        # !! → last command
+        result = re.sub(r'(?<!\w)!!(?!\w)', lambda m: self._history[-1] if self._history else "!!", result)
+
+        # !$ → last arg of last command
+        def _last_arg(m: re.Match) -> str:
+            if not self._history:
+                return m.group(0)
+            parts = self._history[-1].split()
+            return parts[-1] if len(parts) > 1 else parts[0]
+        result = re.sub(r'(?<!\w)!\$(?!\w)', _last_arg, result)
+
+        # !:N → Nth arg of last command (0-indexed)
+        def _nth_arg(m: re.Match) -> str:
+            n = int(m.group(1))
+            if not self._history:
+                return m.group(0)
+            parts = self._history[-1].split()
+            return parts[n] if n < len(parts) else m.group(0)
+        result = re.sub(r'!:(0|[1-9]\d*)', _nth_arg, result)
+
+        # !* → all args of last command
+        def _all_args(m: re.Match) -> str:
+            if not self._history:
+                return m.group(0)
+            parts = self._history[-1].split()
+            return " ".join(parts[1:]) if len(parts) > 1 else ""
+        result = re.sub(r'(?<!\w)!\*(?!\w)', _all_args, result)
+
+        # !-n → command n from end
+        def _neg_history(m: re.Match) -> str:
+            n = int(m.group(1))
+            if not self._history or n > len(self._history):
+                return m.group(0)
+            return self._history[-n]
+        result = re.sub(r'!-(\d+)(?!\w)', _neg_history, result)
+
+        # !n → command #n (must be after !-n so it doesn't match first)
+        def _pos_history(m: re.Match) -> str:
+            n = int(m.group(1))
+            if n < 1 or n > len(self._history):
+                return m.group(0)
+            return self._history[n - 1]
+        result = re.sub(r'(?<!\w)!(\d+)(?!\w)', _pos_history, result)
+
+        return result
+
+    def _expand_globs(self, text: str) -> str:
+        """Expand glob patterns (*, ?, []) in command arguments.
+        Only expands patterns with actual file matches."""
+        if not glob.has_magic(text):
+            return text
+
+        # Tokenize respecting quotes
+        tokens = []
+        i = 0
+        while i < len(text):
+            if text[i] in ('"', "'"):
+                quote = text[i]
+                j = i + 1
+                while j < len(text) and text[j] != quote:
+                    if text[j] == '\\':
+                        j += 1
+                    j += 1
+                tokens.append(text[i:j+1])
+                i = j + 1
+            elif text[i] == ' ':
+                tokens.append(' ')
+                i += 1
+            else:
+                j = i
+                while j < len(text) and text[j] not in (' ', '"', "'"):
+                    j += 1
+                tokens.append(text[i:j])
+                i = j
+
+        # Expand glob patterns (but not quoted tokens or commands)
+        expanded = []
+        for t in tokens:
+            if t == ' ':
+                expanded.append(t)
+            elif t.startswith(("'", '"')):
+                expanded.append(t)
+            elif glob.has_magic(t):
+                matches = sorted(glob.glob(t))
+                if matches:
+                    # Quote filenames with spaces
+                    quoted = []
+                    for m in matches:
+                        if ' ' in m:
+                            quoted.append(f"'{m}'")
+                        else:
+                            quoted.append(m)
+                    expanded.append(" ".join(quoted))
+                else:
+                    expanded.append(t)
+            else:
+                expanded.append(t)
+
+        return "".join(expanded)
+
+    def _expand_alias(self, line: str) -> str:
+        parts = line.strip().split(maxsplit=1)
+        if not parts:
+            return line
+        cmd = parts[0].lower()
+        if cmd in self._aliases:
+            rest = parts[1] if len(parts) > 1 else ""
+            return self._expand_vars(f"{self._aliases[cmd]} {rest}").strip()
+        return self._expand_vars(line.strip())
+
+    # ── Pipeline + background execution ─────────────────────────────
+
+    def _parse_pipeline(self, line: str):
+        """Return (commands, is_background, should_time) where commands is a list of (cmd_str, operator) tuples.
+
+        Operators: None (pipe to next), '&&', '||', ';' (chain), '|' (pipe).
+        """
+        bg = False
+        should_time = False
+        stripped = line.rstrip()
+        if stripped.endswith("&"):
+            bg = True
+            stripped = stripped[:-1].rstrip()
+        if stripped.startswith("time "):
+            should_time = True
+            stripped = stripped[5:].lstrip()
+
+        # Split by chaining operators (&&, ||, ;) and pipes
+        chain_re = re.compile(r'(&&|\|\||;|\|)')
+        tokens = []
+        pos = 0
+        depth = 0
+        in_quote = None
+        for i, ch in enumerate(stripped):
+            if ch in ('"', "'") and (i == 0 or stripped[i-1] != '\\'):
+                if in_quote is None:
+                    in_quote = ch
+                elif in_quote == ch:
+                    in_quote = None
+            if in_quote:
+                continue
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+            if depth == 0:
+                m = chain_re.match(stripped, i)
+                if m:
+                    tokens.append((stripped[pos:i].strip(), m.group(1)))
+                    pos = m.end()
+        if pos < len(stripped):
+            tokens.append((stripped[pos:].strip(), None))
+
+        # Group by pipes within each chain segment
+        commands = []
+        for seg, op in tokens:
+            pipe_parts = self._split_pipe(seg)
+            for pp in pipe_parts[:-1]:
+                commands.append((pp, '|'))
+            commands.append((pipe_parts[-1], op))
+
+        return commands, bg, should_time
+
+    @staticmethod
+    def _split_pipe(seg: str) -> list[str]:
+        parts = []
+        cur: list[str] = []
+        in_quote: str | None = None
+        for ch in seg:
+            if ch in ("'", '"'):
+                if in_quote is None:
+                    in_quote = ch
+                elif in_quote == ch:
+                    in_quote = None
+            if ch == "|" and in_quote is None:
+                parts.append("".join(cur).strip())
+                cur = []
+            else:
+                cur.append(ch)
+        parts.append("".join(cur).strip())
+        return parts
+
+    def _strip_redirection(self, raw_args: str):
+        """Strip '> file' or '>> file' from the end of args. Returns (cleaned_args, redirect_path, append_mode)."""
+        stripped = raw_args.rstrip()
+        redirect_path = None
+        append_mode = False
+        m = re.search(r"(>>?)\s+(\S+)\s*$", stripped)
+        if m:
+            redirect_path = m.group(2)
+            append_mode = m.group(1) == ">>"
+            stripped = stripped[:m.start()].rstrip()
+        return stripped, redirect_path, append_mode
+
+    def _parse_inline_env(self, raw: str):
+        """Parse leading NAME=VALUE assignments before a command.
+        Returns (env_updates, remaining_args)."""
+        env_updates = {}
+        rest = raw.strip()
+        while rest:
+            m = re.match(r"(\w+)=(\S+)\s*", rest)
+            if m and not self.COMMANDS.get(m.group(1)):
+                env_updates[m.group(1)] = m.group(2).strip("\"'")
+                rest = rest[m.end():]
+            else:
+                break
+        return env_updates, rest.strip()
+
+    def _execute_single(self, raw: str, piped_input: str = "") -> str:
+        """Execute a single command (or pipeline segment) and return its output."""
+        expanded = self._expand_alias(raw)
+        expanded = self._expand_cmd_subst(expanded)
+        expanded = self._expand_history(expanded)
+        expanded = self._expand_globs(expanded)
+        inline_env, cleaned = self._parse_inline_env(expanded)
+        cleaned, redirect_path, append_mode = self._strip_redirection(cleaned)
+
+        # Apply inline env vars BEFORE variable expansion so $VAR picks them up
+        old_env = {}
+        for k, v in inline_env.items():
+            old_env[k] = self._env.get(k)
+            self._env[k] = v
+
+        # Re-expand $VAR now that inline env is active
+        cleaned = self._expand_vars(cleaned)
+        parts = cleaned.split(maxsplit=1)
+        cmd = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
+
+        self._piped_input = piped_input
+        handler = self.COMMANDS.get(cmd)
+        ext_mod = self._ext_cmds.get(cmd) if handler is None else None
+
+        if handler is None and ext_mod is None:
+            # Fallback: try as a system binary
+            import shutil, subprocess, shlex
+            binary = shutil.which(cmd)
+            if binary:
+                from .io import MemoryIO as _MemIO
+                cap = _MemIO()
+                old_io = self.io
+                old_console_io = self.console._io
+                self.io = cap
+                self.console._io = cap
+                try:
+                    shell_args = shlex.split(args) if args else []
+                    stdin_data = piped_input if isinstance(piped_input, bytes) else (piped_input.encode() if piped_input else None)
+                    sub_env = {**os.environ, **self._env}
+                    result = subprocess.run(
+                        [binary] + shell_args,
+                        input=stdin_data,
+                        capture_output=True,
+                        timeout=120,
+                        env=sub_env,
+                    )
+                    out_text = result.stdout.decode(errors="replace") if result.stdout else ""
+                    err_text = result.stderr.decode(errors="replace") if result.stderr else ""
+                    if out_text:
+                        self._print(out_text.rstrip("\n"))
+                    if err_text:
+                        self._print(err_text.rstrip("\n"))
+                    self._last_exit_code = result.returncode
+                except subprocess.TimeoutExpired:
+                    self._print(f"  Command timed out: {cmd}")
+                    self._last_exit_code = 124
+                except Exception as e:
+                    self._print(self._format_error(e, cmd))
+                    self._last_exit_code = 1
+                finally:
+                    self.io = old_io
+                    self.console._io = old_console_io
+
+                # Handle redirect
+                cap_out = cap.get_output()
+                if redirect_path:
+                    vfs = self.os.vfs
+                    if vfs and (redirect_path.startswith("/dev/") or redirect_path.startswith("/proc/")):
+                        result = vfs.write(redirect_path, cap_out)
+                        if result:
+                            self._print(result)
+                    else:
+                        mode = "a" if append_mode else "w"
+                        try:
+                            with open(os.path.expanduser(redirect_path), mode) as f:
+                                f.write(cap_out)
+                        except OSError:
+                            self._last_exit_code = 1
+                    cap_out = ""
+
+                for k in inline_env:
+                    if old_env[k] is None:
+                        self._env.pop(k, None)
+                    else:
+                        self._env[k] = old_env[k]
+                self._piped_input = ""
+                return cap_out
+
+            self._piped_input = ""
+            for k in inline_env:
+                if old_env[k] is None:
+                    self._env.pop(k, None)
+                else:
+                    self._env[k] = old_env[k]
+            suggestion = self._suggest_command(cmd)
+            msg = f"  Unknown command: {cmd}. Type `help`."
+            if suggestion:
+                msg += f" Did you mean `{suggestion}`?"
+            self._last_exit_code = 127
+            return msg + "\n"
+
+        if not self._check_permission(cmd, args, interactive=False):
+            self._last_exit_code = 126
+            for k in inline_env:
+                if old_env[k] is None:
+                    self._env.pop(k, None)
+                else:
+                    self._env[k] = old_env[k]
+            self._piped_input = ""
+            return f"  Permission denied: {cmd} (use `permit {cmd}` to grant)\n"
+
+        from .io import MemoryIO as _MemIO
+        cap = _MemIO()
+        old_io = self.io
+        old_console_io = self.console._io
+        self.io = cap
+        self.console._io = cap
+        try:
+            try:
+                if ext_mod:
+                    argv = [cmd] + (args.split() if args else [])
+                    c = Console(self.io, has_readline=_HAS_READLINE)
+                    if piped_input:
+                        self._env["_piped_input"] = piped_input
+                    self._env["_exec_fn"] = self._execute_single
+                    self._last_exit_code = ext_mod.run(argv, c, self.cmds, self._env)
+                    self._env.pop("_piped_input", None)
+                else:
+                    self._last_exit_code = 0
+                    handler(self, args)
+            except SystemExit as e:
+                self._last_exit_code = e.code if isinstance(e.code, int) else 1
+            except Exception as e:
+                self._print(self._format_error(e, cmd))
+                self._last_exit_code = 1
+        finally:
+            self.io = old_io
+            self.console._io = old_console_io
+
+        for k in inline_env:
+            if old_env[k] is None:
+                self._env.pop(k, None)
+            else:
+                self._env[k] = old_env[k]
+
+        self._piped_input = ""
+        output = cap.get_output()
+
+        if redirect_path:
+            vfs = self.os.vfs
+            if vfs and (redirect_path.startswith("/dev/") or redirect_path.startswith("/proc/")):
+                result = vfs.write(redirect_path, output)
+                if result:
+                    self._print(result)
+                return ""
+            mode = "a" if append_mode else "w"
+            try:
+                with open(os.path.expanduser(redirect_path), mode) as f:
+                    f.write(output)
+                return ""
+            except OSError as e:
+                self._last_exit_code = 1
+                return f"  Error writing to {redirect_path}: {e}\n"
+
+        return output
+
+    def _suggest_command(self, bad_cmd: str) -> str | None:
+        """Suggest a close command match via difflib (excludes short aliases)."""
+        import difflib
+        all_cmds = list(self.COMMANDS.keys()) + list(self._ext_cmds.keys())
+        matches = difflib.get_close_matches(bad_cmd, all_cmds, n=1, cutoff=0.6)
+        return matches[0] if matches else None
+
+    def _execute_pipeline(self, commands: list, should_time: bool = False) -> None:
+        """Execute a pipeline of chained commands with &&, ||, ;, and | operators.
+
+        Args:
+            commands: list of (cmd_str, operator) tuples
+        """
+        if not commands:
+            return
+        piped = ""
+        t0 = None
+        if should_time:
+            import time as _time
+            t0 = _time.time()
+
+        for i, (raw, op) in enumerate(commands):
+            is_last = i == len(commands) - 1
+
+            # Check if we should skip based on previous exit code
+            if op == '&&' and self._last_exit_code != 0:
+                continue
+            if op == '||' and self._last_exit_code == 0:
+                continue
+
+            out = self._execute_single(raw, piped)
+            if is_last or op != '|':
+                self._print(out, end="")
+            piped = out if op == '|' else ""
+
+        if should_time and t0 is not None:
+            import time as _time
+            elapsed = _time.time() - t0
+            self._print(f"{_C_DIM}  [{elapsed:.2f}s]{_C_RESET}")
+
+    def _execute_background(self, raw: str) -> None:
+        """Execute a command in a background thread."""
+        bg_id = self._next_bg_id
+        self._next_bg_id += 1
+
+        def _run():
+            try:
+                out = self._execute_single(raw, "")
+                with threading.Lock():
+                    self._print(f"\n[bg-{bg_id}] {out}", end="")
+            except Exception as e:
+                self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
+
+        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
+        t.start()
+        self._bg_threads[bg_id] = t
+        self._print(f"  [bg-{bg_id}] {raw}")
+
+    def _execute_background_tuples(self, commands: list) -> None:
+        """Execute chained commands in a background thread."""
+        bg_id = self._next_bg_id
+        self._next_bg_id += 1
+
+        def _run():
+            try:
+                self._execute_pipeline(commands)
+            except Exception as e:
+                self._print(f"\n[bg-{bg_id}] {self._format_error(e)}")
+
+        t = threading.Thread(target=_run, daemon=True, name=f"shell-bg-{bg_id}")
+        t.start()
+        self._bg_threads[bg_id] = t
+        cmds_str = " | ".join(c[0] for c in commands)
+        self._print(f"  [bg-{bg_id}] {cmds_str}")
+
+    # ── Pipe-filter commands ────────────────────────────────────────
+
+    # ── Alias commands ──────────────────────────────────────────────
+
+    def _cmd_alias(self, args: str = "") -> None:
+        if not args:
+            if not self._aliases:
+                self._print("  No aliases defined")
+                self._print("  Usage: alias name=command")
+                return
+            items = [f"{name}={cmd}" for name, cmd in sorted(self._aliases.items())]
+            if self.io._is_tty:
+                selected = self.console.select_with_details(
+                    "Aliases:", items,
+                    lambda x: x.split("=", 1)[1] if "=" in x else ""
+                )
+                if selected:
+                    name, _, cmd = selected.partition("=")
+                    self._print(f"  {name.strip()}={cmd.strip()}")
+            else:
+                for item in items:
+                    self._print(f"  {item}")
+            return
+        if "=" in args:
+            name, _, command = args.partition("=")
+            name = name.strip()
+            command = command.strip()
+            self._aliases[name] = command
+            self.state.set_alias(name, command)
+            self.state.save()
+        else:
+            cmd = self._aliases.get(args.strip())
+            if cmd:
+                self._print(f"  {args.strip()}={cmd}")
+            else:
+                self._print(f"  No alias for '{args.strip()}'")
+
+    def _cmd_unalias(self, args: str = "") -> None:
+        if not args:
+            self._print("  Usage: unalias <name>")
+            return
+        name = args.strip()
+        if name in self._aliases:
+            del self._aliases[name]
+            self.state.unset_alias(name)
+            self.state.save()
+            self._print(f"  Removed alias '{name}'")
+        else:
+            self._print(f"  No alias '{name}'")
+
+    def _cmd_export_state(self, args: str = "") -> None:
+        self._print(self._dump_json(self.state.to_dict()))
+
+    def _cmd_set(self, args: str = "") -> None:
+        """Set or show environment variables."""
+        if not args:
+            if not self._env:
+                self._print("  No environment variables set")
+                self._print("  Usage: set KEY=VALUE")
+                return
+            items = [f"{k}={v}" for k, v in sorted(self._env.items())]
+            if self.io._is_tty:
+                selected = self.console.select_with_details(
+                    "Environment:", items,
+                    lambda x: x.split("=", 1)[1] if "=" in x else ""
+                )
+                if selected:
+                    name, _, value = selected.partition("=")
+                    self._print(f"  {name.strip()}={value.strip()}")
+            else:
+                for item in items:
+                    self._print(f"  {item}")
+            return
+        if "=" in args:
+            name, _, value = args.partition("=")
+            name = name.strip()
+            value = value.strip().strip("\"'")
+            self._env[name] = value
+            if name == "NO_COLOR":
+                self._update_color_state()
+            self.state.set_env(name, value)
+            self.state.save()
+        else:
+            value = self._env.get(args.strip())
+            if value is not None:
+                self._print(f"  {args.strip()}={value}")
+            else:
+                self._print(f"  {args.strip()} not set")
+
+    def _cmd_unset(self, args: str = "") -> None:
+        """Unset environment variables."""
+        if not args:
+            self._print("  Usage: unset VAR [VAR ...]")
+            self._last_exit_code = 1
+            return
+        for name in args.split():
+            name = name.strip()
+            if name in self._env:
+                del self._env[name]
+                self.state.unset_env(name)
+                self.state.save()
+            else:
+                self._print(f"  {name} not set")
+        self._last_exit_code = 0
+
+    def _cmd_setenv(self, args: str = "") -> None:
+        """Set an environment variable (setenv NAME VALUE)."""
+        parts = args.split()
+        if len(parts) < 2:
+            self._print("  Usage: setenv NAME VALUE")
+            self._last_exit_code = 1
+            return
+        name = parts[0]
+        value = parts[1]
+        self._env[name] = value
+        self.state.set_env(name, value)
+        self.state.save()
+        self._last_exit_code = 0
+
+    def _cmd_source(self, args: str = "") -> None:
+        """Execute commands from a file (like bash source/.)."""
+        if not args:
+            self._print("  Usage: source <file>   or  . <file>")
+            return
+        path = os.path.expanduser(args.strip())
+        try:
+            with open(path) as f:
+                for line_no, line in enumerate(f, 1):
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#"):
+                        continue
+                    try:
+                        cmds, is_bg, should_time = self._parse_pipeline(stripped)
+                        if is_bg:
+                            if len(cmds) > 1:
+                                self._execute_background_tuples(cmds)
+                            else:
+                                self._execute_background(cmds[0][0])
+                        elif len(cmds) > 1:
+                            self._execute_pipeline(cmds, should_time=should_time)
+                        else:
+                            expanded = self._expand_alias(cmds[0][0])
+                            out = self._execute_single(expanded, "")
+                            if out:
+                                self._print(out, end="")
+                    except Exception as e:
+                        self._print(f"  Error at line {line_no}: {self._format_error(e, 'script')}")
+        except OSError as e:
+            self._print(self._format_error(e, "source"))
+
+    def _cmd_py(self, args: str = "") -> None:
+        """Evaluate a Python expression and print the result.
+
+        Sandboxed: only safe builtins and whitelisted modules available.
+        Every evaluation is audit-logged.
+        """
+        if not args:
+            self._print("  Usage: py <expression>")
+            self._print("  Example: py 2 + 2")
+            self._print("  Example: py [i*i for i in range(5)]")
+            self._print("  Example: py __import__('json').dumps({'a': 1})")
+            return
+
+        # Restricted __import__ — only safe stdlib modules
+        _SAFE_MODULES = frozenset({
+            "math", "json", "datetime", "time", "re", "collections",
+            "itertools", "functools", "operator", "string", "textwrap",
+            "statistics", "decimal", "fractions", "random", "uuid",
+            "hashlib", "base64", "binascii", "struct", "codecs",
+            "unicodedata", "enum", "dataclasses", "typing", "copy",
+            "pprint", "array", "heapq", "bisect", "graphlib",
+        })
+
+        def _safe_import(name: str, *args: Any, **kwargs: Any) -> Any:
+            root = name.split(".")[0]
+            if root not in _SAFE_MODULES:
+                raise ImportError(
+                    f"module {name!r} is not allowed in py. "
+                    f"Allowed: {', '.join(sorted(_SAFE_MODULES))}"
+                )
+            return __import__(name, *args, **kwargs)
+
+        safe_builtins = {
+            "abs": abs, "all": all, "any": any, "bool": bool,
+            "chr": chr, "dict": dict, "dir": dir, "enumerate": enumerate,
+            "filter": filter, "float": float, "format": format,
+            "frozenset": frozenset, "getattr": getattr,
+            "hasattr": hasattr, "hash": hash, "hex": hex,
+            "int": int, "isinstance": isinstance, "issubclass": issubclass,
+            "iter": iter, "len": len, "list": list, "map": map,
+            "max": max, "min": min, "next": next, "oct": oct, "ord": ord,
+            "pow": pow, "print": print, "property": property,
+            "range": range, "repr": repr, "reversed": reversed,
+            "round": round, "set": set, "slice": slice, "sorted": sorted,
+            "str": str, "sum": sum, "super": super, "tuple": tuple,
+            "type": type, "zip": zip, "__import__": _safe_import,
+        }
+
+        exit_code = 0
+        result_repr = ""
+        try:
+            result = eval(args, {"__builtins__": safe_builtins})
+            result_repr = repr(result)
+            self._print(result_repr)
+        except Exception as e:
+            exit_code = 1
+            result_repr = self._format_error(e)
+            self._print(f"  {result_repr}")
+
+        # Audit-log every evaluation
+        self._audit.eval(args, result_repr, exit_code)
+
+    def _cmd_bg(self, args: str = "") -> None:
+        if not self._bg_threads:
+            self._print("  No background processes")
+            return
+        for bg_id, t in sorted(self._bg_threads.items()):
+            alive = t.is_alive()
+            self._print(f"  [bg-{bg_id}] {'running' if alive else 'done'}")
+
+    def _cmd_fg(self, args: str = "") -> None:
+        """Bring a background process to the foreground."""
+        if not args:
+            self._print("  Usage: fg <id>")
+            self._print("  Use `bg` or `jobs` to list running IDs")
+            return
+        bg_id_s = args.strip()
+        if not bg_id_s.isdigit():
+            self._print(f"  Invalid id: {args}")
+            return
+        bg_id = int(bg_id_s)
+        t = self._bg_threads.get(bg_id)
+        if t is None:
+            self._print(f"  No background process [bg-{bg_id}]")
+            return
+        if not t.is_alive():
+            self._print(f"  [bg-{bg_id}] already done")
+            return
+        self._print(f"  Waiting for [bg-{bg_id}]...")
+        t.join(timeout=600)
+        if t.is_alive():
+            self._print(f"  [bg-{bg_id}] still running (use `bg` to check)")
+
+    def _cmd_export(self, args: str = "") -> None:
+        """POSIX-style export: export NAME=VALUE or export NAME."""
+        if not args:
+            self._cmd_set("")
+            return
+        if "=" in args:
+            self._cmd_set(args)
+        else:
+            name = args.strip()
+            value = self._env.get(name)
+            if value is not None:
+                self._print(f"  {name}={value}")
+            else:
+                self._print(f"  {name} not set")
+
+    # ── Existing command handlers ───────────────────────────────────
+
+    @staticmethod
+    def _group_ext_cmds(ext_cmds: dict[str, CmdModule]) -> dict[str, list[str]]:
+        groups: dict[str, list[str]] = {}
+        for name, m in ext_cmds.items():
+            h = getattr(m, "help", "") or ""
+            groups.setdefault(h, []).append(name)
+        for names in groups.values():
+            names.sort()
+        return dict(sorted(groups.items(), key=lambda x: x[1][0]))
+
+    def _cmd_help(self, args: str = "") -> None:
+        if args:
+            if args == "brief":
+                self._print("""
+  Most-used commands (help <cmd> for details, help for full list):
+
+  chat / gen / ai      Inference and natural language
+  models / load         Model management
+  souls                 Soul personality management
+  train / ops           Training and operations
+  datasets / knowledge  Data management
+  checkpoints           Training checkpoints
+  agents                Multi-agent orchestration
+  status / metrics      System health and info
+  logs / events         System logs and events
+  api                   API server lifecycle
+  ps / kill             Process management
+  py                    Python expressions
+  ls / cat / grep / find  File operations
+  cd / pwd / echo       Navigation
+  history / alias       Shell features
+  help <cmd>            Help for a specific command
+  exit                  Exit shell
+
+  Pipe features: |  &  >  >>  $(...)  $?  $VAR
+""")
+                return
+            cmd_help = {
+                "help": "  help [cmd]  — Show this help or help for a specific command",
+                "exit": "  exit  — Exit the shell",
+                "cd": '  cd [dir]  — Change directory (default: ~, - for previous)',
+                "pwd": "  pwd  — Print working directory",
+                "echo": "  echo [text...]  — Print text to stdout",
+                "ls": "  ls [dir]  — List directory contents",
+                "cat": "  cat <file>  — Print file contents",
+                "head": "  head [-n N] <file>  — Output first N lines",
+                "tail": "  tail [-n N] <file>  — Output last N lines",
+                "grep": "  grep [-i] [-v] <pattern> [file]  — Search for patterns",
+                "find": "  find [dir] [-name pattern] [-type f|d]  — Search for files",
+                "history": "  history [n]  — Show command history",
+                "alias": "  alias [name=cmd]  — List or set aliases",
+                "unalias": "  unalias <name>  — Remove an alias",
+                "chat": "  chat [msg] | chat /reset  — Multi-turn chat session",
+                "gen": "  gen <prompt>  — Generate text via inference",
+                "ai": '  ai <query>  — LLM-powered NL interpretation',
+                "models": "  models  — List available models",
+                "load": "  load <name>  — Load a model",
+                "train": "  train [dataset]  — Start training or list datasets",
+                "ops": "  ops  — List active operations",
+                "operations": "  ops  — List active operations",
+                "datasets": "  datasets  — List datasets",
+                "knowledge": "  knowledge [query]  — List/search knowledge base",
+                "checkpoints": "  checkpoints  — List training checkpoints",
+                "souls": "  souls  — List available souls",
+                "agents": "  agents <goal>  — Multi-agent orchestration",
+                "status": "  status  — Detailed system status",
+                "metrics": "  metrics  — Show CPU/memory/disk metrics",
+                "events": "  events [filter] [n]  — Show recent events",
+                "logs": "  logs [-l LEVEL] [-f]  — View logs",
+                "api": "  api [start|stop|status]  — Manage API server",
+                "kill": "  kill <id>  — Stop a training job",
+                "ps": "  ps  — List kernel processes",
+                "py": "  py <expr>  — Evaluate Python expression",
+                "permit": "  permit <cmd>  — Grant permission for blocked command",
+                "deny": "  deny <cmd>  — Revoke permission",
+                "permissions": "  permissions  — Show permission policy",
+                "confirm": "  confirm [on|off]  — Toggle auto-download confirmation",
+                "protect": "  protect <model>  — Protect model files",
+                "unprotect": "  unprotect <model>  — Remove protection",
+                "tui": "  tui  — Launch three-pane TUI",
+                "clear": "  clear  — Clear the terminal screen",
+            }
+            if args in cmd_help:
+                self._print(cmd_help[args])
+            elif self.COMMANDS.get(args):
+                fn = self.COMMANDS.get(args)
+                doc = (fn.__doc__ or "").strip()
+                if doc:
+                    self._print(f"  {args}  — {doc.split(chr(10))[0]}")
+                else:
+                    self._print(f"  {args}  — (built-in command)")
+            elif args in self._ext_cmds:
+                h = getattr(self._ext_cmds[args], "help", "")
+                if h and args not in h:
+                    self._print(f"  {args}  — {h}")
+                else:
+                    self._print(f"  {args}  — (external command)")
+            elif shutil.which(args):
+                self._print(f"  {args}  — (system command)")
+            elif args == "brief":
+                self._print("""
+Most common commands (help [cmd] for details, help for full list):
+  help [cmd]           Show help
+  exit / q / quit      Exit the shell
+  history [n]          Show command history
+  gen <prompt>         Generate text
+  models               List models
+  load <name>          Load model
+  souls                List souls
+  switch <name>        Switch soul
+  whoami               Current soul
+  health / status      System info
+  datasets             List datasets
+  remember <fact>      Store knowledge
+  recall <query>       Search knowledge
+  boot / shutdown      Shell lifecycle
+  svc list             List services
+  devices              List AI device nodes
+  asm [file.asm]       Run VM program
+  ai <query>           NL command interpretation
+  procs                Show running jobs
+  kill <id>            Stop a job
+  permit / deny        Permission management
+  permissions          Show permission policy
+""")
+            else:
+                self._print(f"  Unknown command: {args}")
+            return
+        self._print(f"""
+{_C_CYAN}Navigation:{_C_RESET}
+  cd [dir]               Change directory (default: ~, - for previous)
+  pwd                    Print working directory
+  echo [text...]         Print text to stdout
+
+{_C_CYAN}File operations:{_C_RESET}
+  ls [dir]               List directory contents
+  cat <file>             Print file contents
+  head [-N] <file>       Output first N lines
+  tail [-N] <file>       Output last N lines
+  grep [-i] [-v] <pattern> [file]
+                         Search for pattern in file or pipe
+  find [dir] -name <p>   Search for files by name pattern
+
+{_C_CYAN}AI/ML:{_C_RESET}
+  chat [msg]             Multi-turn chat session
+  gen <prompt>           Generate text
+  ai <query>             LLM-powered NL interpretation
+  models                 List available models
+  load <name>            Load a model
+  train [dataset]        Start training or list datasets
+  ops / operations       List active operations
+
+{_C_CYAN}Data:{_C_RESET}
+  datasets               List datasets
+  knowledge [query]      List/search knowledge base
+  checkpoints            List training checkpoints
+
+{_C_CYAN}Souls:{_C_RESET}
+  souls                  List available souls
+  agents <goal>          Multi-agent orchestration
+
+{_C_CYAN}System:{_C_RESET}
+  status                 Detailed system status
+  metrics                CPU/memory/disk metrics
+  events                 Show recent events
+  logs [-f]              View logs
+  api [start|stop]       Manage API server
+  ps                     List kernel processes
+  kill <id>              Stop a training job
+
+{_C_CYAN}Permissions:{_C_RESET}
+  permit <cmd>           Grant permission for blocked command
+  deny <cmd>             Revoke permission
+  permissions            Show permission policy
+  confirm [on|off]       Toggle auto-download confirmation
+  protect <model>        Protect model files
+  unprotect <model>      Remove protection
+
+{_C_CYAN}Shell features:{_C_RESET}
+  <cmd> | <cmd>           Pipeline: output of first feeds second
+  <cmd> &                 Background: run without blocking
+  <cmd> && <cmd>          Chain: run next only if previous succeeded
+  <cmd> || <cmd>          Chain: run next only if previous failed
+  <cmd> ; <cmd>           Chain: run next regardless of exit code
+  <cmd> > <file>          Redirect output to file (overwrite)
+  <cmd> >> <file>         Redirect output to file (append)
+  history [n]             Show command history
+  alias [name=cmd]        List or set aliases
+  unalias <name>          Remove an alias
+  py <expr>               Evaluate Python expression
+  tui                     Launch the TUI interface
+  clear                   Clear the terminal screen
+  exit                    Exit the shell
+Examples:
+  models | head
+  gen hello > output.txt
+  ai show me running training jobs
+  py 2 + 2
+""")
+
+    def _cmd_exit(self, args: str = "") -> None:
+        self._running = False
+        self._audit.shutdown()
+        self.state.save()
+        self.os.shutdown()
+        self._print(f"  {_C_DIM}Shutting down...{_C_RESET}")
+
+    def _cmd_history(self, args: str = "") -> None:
+        n = 20
+        if args and args.strip().isdigit():
+            n = int(args.strip())
+        lines = self._history[-n:] if n < len(self._history) else self._history
+        start = max(1, len(self._history) - len(lines) + 1)
+        for i, line in enumerate(lines, start):
+            self._print(f"  {i:4d}  {line}")
+
+    def _cmd_fc(self, args: str = "") -> None:
+        """fc - list or re-run history commands (like bash fc)."""
+        parts = args.strip().split()
+        if not args:
+            # No args: list all history (like `history`)
+            self._cmd_history("")
+            return
+        # fc -l [n]: list last n commands
+        if parts[0] == "-l":
+            n = parts[1] if len(parts) > 1 else ""
+            self._cmd_history(n)
+            return
+        # fc <n>: re-run command by history number
+        try:
+            n = int(parts[0])
+        except ValueError:
+            self._print("  Usage: fc [-l] [n]")
+            self._print("    fc       — list history")
+            self._print("    fc -l 5  — list last 5 commands")
+            self._print("    fc 42    — re-run command #42")
+            return
+        if n < 1 or n > len(self._history):
+            self._print(f"  No history entry #{n} (have {len(self._history)} entries)")
+            return
+        cmd = self._history[n - 1]
+        self._print(f"  Re-running: {cmd}")
+        cmds, is_bg, should_time = self._parse_pipeline(cmd)
+        if is_bg:
+            if len(cmds) > 1:
+                self._execute_background_tuples(cmds)
+            else:
+                self._execute_background(cmd.rstrip("& ").strip())
+        elif len(cmds) > 1:
+            self._execute_pipeline(cmds, should_time=should_time)
+        else:
+            out = self._execute_single(cmd, "")
+            self._print(out, end="")
+
+    # ── Permission commands ────────────────────────────────────────
+
+    def _cmd_permit(self, args: str = "") -> None:
+        """permit <cmd> — grant permission for a command (session or persistent)."""
+        from .permissions import Risk
+        parts = args.strip().split()
+        if not parts:
+            self._print("  Usage: permit <cmd> [--persist]")
+            self._print("         permit --all-<risk> [--persist]")
+            self._print(f"  Risk levels: {Risk.SAFE}, {Risk.ELEVATED}, {Risk.DANGEROUS}, {Risk.CRITICAL}")
+            granted = self._perms.list_granted()
+            if granted:
+                self._print(f"  Currently granted: {', '.join(granted)}")
+            return
+        persist = "--persist" in parts
+        targets = [p for p in parts if p != "--persist"]
+        for t in targets:
+            if t.startswith("--all-"):
+                risk = t[len("--all-"):]
+                if risk not in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
+                    self._print(f"  Unknown risk level: {risk}")
+                    continue
+                self._perms.set_policy(risk, "allow")
+                if persist:
+                    self._perms._save_persistent()
+                self._print(f"  All {risk} commands now allowed")
+            else:
+                self._perms.grant(t, persist=persist)
+                self._print(f"  Granted: {t}" + (" (persistent)" if persist else ""))
+
+    def _cmd_deny(self, args: str = "") -> None:
+        """deny <cmd> — revoke permission for a command."""
+        from .permissions import Risk
+        parts = args.strip().split()
+        if not parts:
+            self._print("  Usage: deny <cmd> [--persist]")
+            self._print("         deny --all-<risk> [--persist]")
+            return
+        persist = "--persist" in parts
+        targets = [p for p in parts if p != "--persist"]
+        for t in targets:
+            if t.startswith("--all-"):
+                risk = t[len("--all-"):]
+                if risk not in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
+                    self._print(f"  Unknown risk level: {risk}")
+                    continue
+                self._perms.set_policy(risk, "deny")
+                self._perms.revoke(t, persist=persist) if persist else None
+                if persist:
+                    self._perms._save_persistent()
+                self._print(f"  All {risk} commands now denied")
+            else:
+                self._perms.revoke(t, persist=persist)
+                self._print(f"  Revoked: {t}" + (" (persistent)" if persist else ""))
+
+    def _cmd_permissions(self, args: str = "") -> None:
+        """permissions — show current permission policy and granted commands."""
+        from .permissions import Risk
+        self._print("  Risk policies:")
+        for risk in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
+            action = self._perms._policy.get(risk, "deny")
+            icon = f"{_C_GREEN}✓ allow{_C_RESET}" if action == "allow" else f"{_C_RED}✗ deny{_C_RESET}"
+            self._print(f"    {risk:10s} {icon}")
+        granted = self._perms.list_granted()
+        if granted:
+            self._print(f"  Granted commands: {', '.join(granted)}")
+        self._print("  Config: MogDB (shell_permissions)")
+
+    def _cmd_confirm(self, args: str = "") -> None:
+        """confirm [on|off] — toggle auto-download (skip download confirmations).
+
+        Usage:
+          confirm        Show current setting
+          confirm on     Enable auto-download (persistent)
+          confirm off    Disable auto-download (persistent)
+        """
+        import yaml
+        arg = args.strip().lower()
+
+        if not arg:
+            # Show current setting
+            try:
+                from domains.infrastructure.config import get_config
+                cfg = get_config()
+                current = cfg.features.auto_download
+            except Exception:
+                current = os.environ.get("SLO_AUTO_DOWNLOAD", "") == "1"
+
+            if current:
+                self._print(f"  Auto-download: {_C_GREEN}ON{_C_RESET}")
+                self._print("  Downloads will be confirmed automatically (no prompts)")
+            else:
+                self._print(f"  Auto-download: {_C_RED}OFF{_C_RESET}")
+                self._print("  Downloads will require confirmation")
+            self._print("  Toggle: confirm on / confirm off")
+            return
+
+        if arg not in ("on", "off", "yes", "no", "true", "false", "1", "0"):
+            self._print("  Usage: confirm [on|off]")
+            self._print("    on/yes/true/1  — enable auto-download")
+            self._print("    off/no/false/0 — disable auto-download")
+            return
+
+        new_value = arg in ("on", "yes", "true", "1")
+
+        # Update config file
+        try:
+            from domains.infrastructure.config import _REPO_ROOT, get_config
+            config_path = _REPO_ROOT / "config" / "defaults.yaml"
+            if config_path.exists():
+                with open(config_path) as f:
+                    config_data = yaml.safe_load(f) or {}
+            else:
+                config_data = {}
+
+            if "features" not in config_data:
+                config_data["features"] = {}
+            config_data["features"]["auto_download"] = new_value
+
+            with open(config_path, "w") as f:
+                yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
+
+            # Reload config
+            get_config().reload()
+
+            if new_value:
+                self._print(f"  Auto-download: {_C_GREEN}ON{_C_RESET}")
+                self._print("  Downloads will be confirmed automatically")
+            else:
+                self._print(f"  Auto-download: {_C_RED}OFF{_C_RESET}")
+                self._print("  Downloads will require confirmation")
+            self._print(f"  Setting saved to {config_path}")
+
+        except Exception as e:
+            self._print(self._format_error(e, "config"))
+            self._print("  Fallback: export SLO_AUTO_DOWNLOAD=1")
+
+    def _cmd_procs(self, args: str = "") -> None:
+        jobs = self._spinner_call("Fetching jobs", lambda: self.cmds.ps(), ok_msg=None)
+        if not jobs:
+            self._print("  No running jobs")
+            return
+        processes = [{"name": j.get("name", "?"), "status": j.get("status", "?")} for j in jobs]
+        selected = self.console.process_manager(processes, "Jobs:")
+        if selected:
+            job_id = None
+            for j in jobs:
+                if j.get("name") == selected["name"]:
+                    job_id = j.get("id")
+                    break
+            if job_id:
+                self._print(f"  Job: {selected['name']} (ID: {job_id})")
+                self._print(f"  Use: kill {job_id}  to stop")
+
+    def _cmd_ps(self, args: str = "") -> None:
+        procs = self.os.kernel.list_processes()
+        if not procs:
+            self._print("  No kernel processes")
+            return
+        state_names = {
+            0: "CREATED", 1: "READY", 2: "RUNNING",
+            3: "WAITING", 4: "STOPPED", 5: "ZOMBIE",
+        }
+        rows = []
+        for p in procs:
+            state = state_names.get(p.state, str(p.state))
+            age = time.time() - p.created_at
+            rows.append([str(p.pid), p.name, state, f"{age:.1f}s"])
+        self._table(rows, ["PID", "Name", "State", "Age"])
+
+    def _cmd_kill(self, args: str = "") -> None:
+        if not args:
+            self._print("  Usage: kill <job_id>")
+            return
+        result = self._spinner_call("Killing job", lambda: self.cmds.kill(args.strip()), ok_msg=None)
+        if isinstance(result, dict) and "error" in result:
+            self._print(self._format_error(Exception(result["error"]), "kill"))
+            return
+        self._print(self._dump_json(result))
+
+    def _cmd_load(self, args: str = "") -> None:
+        if not args:
+            self._print("  Usage: load <model_name>")
+            return
+        if not self._require_api("load"):
+            return
+        model_name = args.strip()
+
+        def _print_result(result):
+            if result is None:
+                self._print("  ✗ Load failed")
+                return
+            status = result.get("status", "?")
+            if status == "loaded":
+                self._print(f"  ✓ {model_name} loaded on {result.get('device', 'cpu')}")
+            elif status == "error":
+                self._print(f"  ✗ {result.get('error', 'Unknown error')}")
+
+        try:
+            from domains.infrastructure.conversion_tracker import get_tracker
+            from apps.cli.src.utils.progress import ProgressBar
+            import threading
+
+            tracker = get_tracker()
+            result_holder = [None]
+
+            def _load():
+                result_holder[0] = self.cmds.load_model(model_name)
+
+            t = threading.Thread(target=_load, daemon=True)
+            t.start()
+
+            bar = ProgressBar(total=100, desc=f"Loading {model_name}", width=30, show_eta=True)
+
+            while t.is_alive():
+                status = tracker.get(model_name)
+                if status:
+                    pct = int(status["progress"] * 100)
+                    stage = status["stage"]
+
+                    if stage in ("downloading", "converting", "protecting", "loading"):
+                        bar.desc = status["message"][:40]
+                        bar.set_progress(pct)
+                    elif stage == "ready":
+                        bar.set_progress(100)
+                        break
+                    elif stage == "error":
+                        bar.finish()
+                        self._print(f"  ✗ {status.get('error', 'Unknown error')}")
+                        return
+
+                time.sleep(0.15)
+
+            t.join()
+            bar.finish()
+            _print_result(result_holder[0])
+
+        except ImportError:
+            self._print(f"  Loading {model_name}...")
+            self._print("  (this may take 30-120s on CPU)")
+            _print_result(self.cmds.load_model(model_name))
+
+    def _cmd_uptime(self, args: str = "") -> None:
+        """Print how long Dait has been running (like Unix uptime)."""
+        uptime_secs = self.os.kernel.uptime if self.os.kernel else 0.0
+        days = int(uptime_secs // 86400)
+        hours = int((uptime_secs % 86400) // 3600)
+        minutes = int((uptime_secs % 3600) // 60)
+        if days > 0:
+            self._print(f"  up {days} day{'s' if days > 1 else ''}, {hours}:{minutes:02d}")
+        else:
+            self._print(f"  up {hours}:{minutes:02d}")
+
+    def _cmd_status(self, args: str = "") -> None:
+        self._box(self.os.status_summary)
+        try:
+            detailed = self._spinner_call("Fetching status", lambda: self.cmds.health_detailed(), ok_msg=None)
+            if isinstance(detailed, dict) and "registry" in detailed:
+                registry = detailed.get("registry", {})
+                models = registry.get("models", []) or registry.get("names", [])
+                if models:
+                    self._print(f"  Registry models: {len(models)}")
+        except Exception as e:
+            logger.debug("registry status fetch failed: %s", e)
+        from .permissions import Risk
+        granted = self._perms.list_granted()
+        policies = []
+        for risk in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
+            action = self._perms._policy.get(risk, "deny")
+            policies.append(f"{risk}={action}")
+        self._print(f"  Permissions: {', '.join(policies)}")
+        if granted:
+            self._print(f"  Granted: {', '.join(granted)}")
+
+    def _cmd_events(self, args: str = "") -> None:
+        """Show recent EventBus events. Optionally filter by event name and set limit.
+
+        Usage:
+          events              — show last 20 events
+          events model         — filter by event names containing "model"
+          events circuit 10    — filter by "circuit", show last 10
+        """
+        try:
+            from domains.infrastructure.event_bus import get_event_bus
+            bus = get_event_bus()
+        except Exception:
+            self._print("  EventBus not available")
+            return
+
+        parts = args.split()
+        filter_event = parts[0] if parts else None
+        limit = 20
+        if len(parts) > 1:
+            try:
+                limit = int(parts[1])
+            except ValueError:
+                limit = 20
+
+        all_events = bus.history()
+        if not all_events:
+            self._print("  No events recorded")
+            return
+
+        if filter_event:
+            filtered = [e for e in all_events if filter_event.lower() in e.name.lower()]
+        else:
+            filtered = list(all_events)
+
+        if not filtered:
+            self._print(f"  No events matching '{filter_event}'")
+            return
+
+        events = filtered[-limit:]
+        self._print(f"  Event history (last {len(events)} of {len(filtered)}, total {len(all_events)}):")
+        for e in events:
+            t = time.strftime("%H:%M:%S", time.localtime(e.timestamp))
+            src = f"[{e.source}]" if e.source else ""
+            data_str = str(e.data)[:80] if e.data else ""
+            self._print(f"  {t}  {e.name:35s} {src:15s} {data_str}")
+
+    def _cmd_metrics(self, args: str = "") -> None:
+        metrics = self._spinner_call("Fetching metrics", lambda: self.cmds.system_metrics(), ok_msg=None)
+        if metrics.get("error"):
+            self._print(f"  Error: {metrics['error']}")
+            return
+        for k, v in metrics.items():
+            if not k.startswith("_"):
+                self._print(f"  {k}: {v}")
+
+    def _cmd_tui(self, args: str = "") -> None:
+        """Launch the split-panel TUI mode — console panel + shell output + input line."""
+        try:
+            from .tui_repl import TuiRepl
+            tui = TuiRepl(self, self._log_buffer)
+            tui.run()
+        except ImportError as ex:
+            self._print(f"  TUI mode not available: {ex}")
+        except Exception as ex:
+            self._print(f"  TUI error: {ex}")
+            self._last_exit_code = 1
+
+    def _cmd_logs(self, args: str = "") -> None:
+        """Show the console log panel — infrastructure and API server logs.
+        
+        Flags:
+          -l, --level LEVEL   filter by level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+          -s, --source SRC    filter by source substring
+          -n, --lines N       show last N entries (default 30)
+          -f, --follow        follow new entries (Ctrl+C to stop)
+          -c, --clear         clear the buffer
+          -e, --export FILE   save entries to a text file
+              --stats         show log level distribution
+              --explain       AI-powered analysis of recent errors/warnings
+              --last          show only the most recent entry
+        """
+        # Clear the prompt badge counts — user has acknowledged the logs
+        self._log_display.clear_counts()
+        argv = args.split()
+        level_filter = None
+        source_filter = None
+        count = 30
+        follow = False
+        export_path = None
+        show_stats = False
+        explain = False
+        show_last = False
+        i = 0
+        while i < len(argv):
+            a = argv[i]
+            if a in ("-l", "--level") and i + 1 < len(argv):
+                level_filter = argv[i + 1].upper()
+                i += 2
+            elif a in ("-s", "--source") and i + 1 < len(argv):
+                source_filter = argv[i + 1]
+                i += 2
+            elif a in ("-n", "--lines") and i + 1 < len(argv):
+                try:
+                    count = int(argv[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif a in ("-f", "--follow"):
+                follow = True
+                i += 1
+            elif a in ("-c", "--clear"):
+                self._log_buffer.clear()
+                self._print("  Log buffer cleared.")
+                return
+            elif a in ("-e", "--export") and i + 1 < len(argv):
+                export_path = argv[i + 1]
+                i += 2
+            elif a == "--stats":
+                show_stats = True
+                i += 1
+            elif a == "--last":
+                show_last = True
+                i += 1
+            elif a == "--explain":
+                explain = True
+                i += 1
+            else:
+                i += 1
+
+        if show_stats:
+            all_entries = self._log_buffer.get()
+            if not all_entries:
+                self._print("  No log entries.")
+                return
+            from collections import Counter as _Counter
+            levels = _Counter(e.level for e in all_entries)
+            sources = _Counter(e.source for e in all_entries)
+            total = len(all_entries)
+            sep = f"  {_C_DIM}{'─' * 40}{_C_RESET}"
+            self._print(f"  {_C_BOLD}Log Statistics{_C_RESET}  {_C_DIM}{total} total entries{_C_RESET}")
+            self._print(sep)
+            self._print(f"  {_C_BOLD}By Level:{_C_RESET}")
+            for lvl in ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"):
+                n = levels.get(lvl, 0)
+                color = _C_RED if lvl in ("ERROR", "CRITICAL") else \
+                        _C_YELLOW if lvl == "WARNING" else \
+                        _C_GREEN if lvl == "INFO" else _C_CYAN
+                bar = "█" * min(n, 40)
+                self._print(f"    {color}{lvl:<9s}{_C_RESET} {n:>5d}  {_C_DIM}{bar}{_C_RESET}")
+            self._print()
+            self._print(f"  {_C_BOLD}Top Sources:{_C_RESET}")
+            for src, n in sources.most_common(10):
+                self._print(f"    {_C_DIM}{src:<35s}{_C_RESET} {n:>5d}")
+            self._print()
+            self._print(f"  {_C_BOLD}Time Range:{_C_RESET}")
+            if total > 0:
+                from datetime import datetime as _dt
+                t0_raw = all_entries[0].timestamp
+                t1_raw = all_entries[-1].timestamp
+                t0 = _dt.fromtimestamp(t0_raw).strftime("%Y-%m-%d %H:%M:%S")
+                t1 = _dt.fromtimestamp(t1_raw).strftime("%Y-%m-%d %H:%M:%S")
+                span = t1_raw - t0_raw
+                self._print(f"    {t0}  →  {t1}  ({_C_DIM}{span:.0f}s span{_C_RESET})")
+            return
+
+        if explain:
+            err_entries = self._log_buffer.get(level=None, source=None, limit=50)
+            err_entries = [e for e in err_entries if e.level in ("ERROR", "CRITICAL", "WARNING")]
+            if not err_entries:
+                self._print("  No errors or warnings to explain.")
+                return
+            status = self.os.api_status
+            if not status.get("available"):
+                self._print("  API server not available — cannot analyze logs.")
+                return
+            from datetime import datetime as _dt
+            log_text = "\n".join(
+                f"[{_dt.fromtimestamp(e.timestamp).strftime('%H:%M:%S')}] [{e.level}] [{e.source}] {e.message}"
+                for e in err_entries[-20:]
+            )
+            prompt = (
+                "You are a shell log analyzer. Given the following log entries, "
+                "identify the most important issues, explain likely causes, "
+                "and suggest fixes. Be concise (3-5 bullet points).\n\n"
+                f"Logs:\n{log_text}\n\n"
+                "Analysis:"
+            )
+            self._print(f"  {_C_BOLD}Log Analysis{_C_RESET} {_C_DIM}({len(err_entries)} errors/warnings){_C_RESET}")
+            self._print(f"  {_C_DIM}{'─' * 40}{_C_RESET}")
+            result = self._spinner_call("Analyzing", lambda: self.cmds.generate(prompt, max_tokens=200))
+            if isinstance(result, dict) and "text" in result:
+                analysis = result["text"].strip()
+                for line in analysis.split("\n"):
+                    self._print(f"  {line}")
+            else:
+                error = result.get("error", "unknown")
+                self._print(f"  Analysis failed: {error}")
+            return
+
+        if show_last:
+            self._print(self._log_display.render_last())
+            return
+
+        if export_path:
+            entries = self._log_buffer.get(level=level_filter, source=source_filter)
+            if not entries:
+                self._print("  No log entries to export.")
+                return
+            try:
+                from datetime import datetime as _dt
+                with open(export_path, "w") as f:
+                    for e in entries:
+                        ts = _dt.fromtimestamp(e.timestamp).strftime("%Y-%m-%d %H:%M:%S")
+                        f.write(f"[{ts}] [{e.level:<7s}] [{e.source}] {e.message}\n")
+                self._print(f"  Exported {len(entries)} entries to {export_path}")
+            except OSError as ex:
+                self._print(f"  Error writing to {export_path}: {ex}")
+            return
+
+        output = self._log_display.render_recent(n=count, level=level_filter, source=source_filter)
+        sep = f"  {_C_DIM}{'─' * 40}{_C_RESET}"
+        self._print(
+            f"  {_C_BOLD}Console Logs{_C_RESET} {_C_DIM}({len(self._log_buffer)} buffered)"
+            f"{'  -l ' + level_filter if level_filter else ''}"
+            f"{'  -s ' + source_filter if source_filter else ''}"
+            f"{_C_RESET}"
+        )
+        self._print(sep)
+        self._print(output)
+        self._print(sep)
+
+        if follow:
+            self._print(f"  {_C_DIM}Following — press Ctrl+C to stop{_C_RESET}")
+            try:
+                offset = len(self._log_buffer)
+                while True:
+                    time.sleep(0.5)
+                    new_entries = self._log_buffer.get(
+                        level=level_filter, source=source_filter, offset=offset
+                    )
+                    for e in new_entries:
+                        self._print(self._log_display._format_entry(e))
+                    offset += len(new_entries)
+            except KeyboardInterrupt:
+                self._print()
+
+    def _cmd_protect(self, args: str = "") -> None:
+        """Protect a model from accidental deletion: protect <model_id>"""
+        model_id = args.strip()
+        if not model_id:
+            self._print("  Usage: protect <model_id>")
+            self._print("  Makes model files read-only + drops .nomodeldelete marker")
+            return
+        try:
+            from domains.infrastructure.model_protector import protect_model
+            result = protect_model(model_id)
+            n = len(result["protected"])
+            errs = result["errors"]
+            if n:
+                self._print(f"  Protected {n} files for '{model_id}' (read-only + manifest)")
+            else:
+                self._print(f"  No files found to protect for '{model_id}'")
+            if errs:
+                for e in errs:
+                    self._print(f"  Warning: {e['error']}")
+        except Exception as e:
+            self._print(self._format_error(e, "protect"))
+
+    def _cmd_unprotect(self, args: str = "") -> None:
+        """Remove protection from a model: unprotect <model_id>"""
+        model_id = args.strip()
+        if not model_id:
+            self._print("  Usage: unprotect <model_id>")
+            return
+        try:
+            from domains.infrastructure.model_protector import unprotect_model
+            result = unprotect_model(model_id)
+            n = result["unprotected"]
+            errs = result["errors"]
+            if n:
+                self._print(f"  Unprotected {n} files for '{model_id}'")
+            else:
+                self._print(f"  No protected files found for '{model_id}'")
+            if errs:
+                for e in errs:
+                    self._print(f"  Warning: {e['error']}")
+        except Exception as e:
+            self._print(self._format_error(e, "unprotect"))
+
+    def _cmd_train(self, args: str = "") -> None:
+        """Train: train [dataset] | train status | train follow <id> | train stop <id> | train distill <dataset> | train load-adapter <path> | train unload-adapter"""
+        parts = args.strip().split()
+        sub = parts[0] if parts else ""
+
+        if not sub or sub in ("status", "follow", "stop", "distill", "hf", "auto", "load-adapter", "unload-adapter"):
+            if not self._require_api("train"):
+                return
+
+        if sub == "status":
+            jobs = self.cmds.train_status()
+            if not jobs:
+                self._print("  No training jobs")
+                return
+            rows = []
+            for j in jobs:
+                jid = j.get("id", "")[:8]
+                status = j.get("status", "?")
+                model = j.get("model", j.get("data_source", ""))
+                prog = j.get("progress", 0)
+                rows.append([jid, status, model, f"{prog}%"])
+            self._table(rows, ["ID", "Status", "Model", "Progress"])
+            return
+
+        if sub == "follow":
+            job_id = parts[1] if len(parts) > 1 else ""
+            if not job_id:
+                self._print("  Usage: train follow <job_id>")
+                return
+            self._stream_train_progress(job_id)
+            return
+
+        if sub == "stop":
+            if len(parts) < 2:
+                self._print("  Usage: train stop <job_id>")
+                return
+            r = self.cmds.train_stop(parts[1])
+            if isinstance(r, dict) and "error" in r:
+                self._print(self._format_error(Exception(r["error"]), "train stop"))
+            else:
+                self._print(f"  Stopped: {r.get('status', r) if isinstance(r, dict) else r}")
+            return
+
+        if sub == "distill":
+            dataset = parts[1] if len(parts) > 1 else ""
+            if not dataset:
+                self._print("  Usage: train distill <dataset> [teacher] [epochs]")
+                return
+            teacher = parts[2] if len(parts) > 2 else "gpt2"
+            try:
+                epochs = int(parts[3]) if len(parts) > 3 else 5
+            except ValueError:
+                self._print(f"  Invalid epochs: {parts[3]!r} — must be a positive integer")
+                return
+            r = self._spinner_call("Starting distillation", lambda: self.cmds.train_distill(dataset, teacher=teacher, epochs=epochs))
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                job_id = r.get("id", "")
+                self._print(f"  Distillation started: {r.get('status', r)}")
+                if job_id:
+                    self._stream_train_progress(job_id)
+            return
+
+        if sub == "hf":
+            model = parts[1] if len(parts) > 1 else ""
+            dataset = parts[2] if len(parts) > 2 else ""
+            if not model or not dataset:
+                self._print("  Usage: train hf <model> <dataset> [epochs]")
+                return
+            try:
+                epochs = int(parts[3]) if len(parts) > 3 else 3
+            except ValueError:
+                self._print(f"  Invalid epochs: {parts[3]!r} — must be a positive integer")
+                return
+            r = self._spinner_call("Starting fine-tune", lambda: self.cmds.train_hf(model, dataset, epochs=epochs))
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                job_id = r.get("id", "")
+                self._print(f"  Fine-tuning started: {r.get('status', r)}")
+                if job_id:
+                    self._stream_train_progress(job_id)
+            return
+
+        if sub == "load-adapter":
+            path = parts[1] if len(parts) > 1 else ""
+            if not path:
+                self._print("  Usage: train load-adapter <adapter.npz> [--merge]")
+                return
+            merge = "--merge" in parts
+            r = self._spinner_call("Loading adapter", lambda: self.cmds.load_adapter(path, merge=merge))
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                rank = r.get("rank", "?")
+                n_params = r.get("n_params", 0)
+                merged = " (merged)" if r.get("merged") else ""
+                self._print(f"  Loaded adapter: rank={rank}, {n_params:,} params{merged}")
+            return
+
+        if sub == "unload-adapter":
+            r = self._spinner_call("Unloading adapter", lambda: self.cmds.unload_adapter())
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  {r.get('message', 'Adapter unloaded')}")
+            return
+
+        if sub == "auto":
+            soul = parts[1] if len(parts) > 1 else ""
+            teacher = parts[2] if len(parts) > 2 else "gpt2"
+            try:
+                epochs = int(parts[3]) if len(parts) > 3 else 10
+            except ValueError:
+                self._print(f"  Invalid epochs: {parts[3]!r} — must be a positive integer")
+                return
+            if not soul:
+                self._print("  Usage: train auto <soul_name> [teacher] [epochs]")
+                return
+            r = self._spinner_call("Starting auto-train", lambda: self.cmds.train_auto(soul_name=soul, teacher=teacher, epochs=epochs))
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Auto-train started: {r.get('status', r)}")
+            return
+
+        if sub == "load":
+            name = parts[1] if len(parts) > 1 else ""
+            if not name:
+                self._print("  Usage: train load <checkpoint_name>")
+                return
+            r = self.cmds.load_checkpoint(name)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Loaded: {name}")
+            return
+
+        if sub == "del":
+            name = parts[1] if len(parts) > 1 else ""
+            if not name:
+                self._print("  Usage: train del <checkpoint_name>")
+                return
+            r = self.cmds.delete_checkpoint(name)
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                self._print(f"  Deleted: {name}")
+            return
+
+        # Default: quick train on dataset (or list datasets if none specified)
+        dataset = sub
+        if not dataset:
+            datasets = self.cmds.datasets()
+            if not datasets:
+                self._print("  No datasets available. Import data first.")
+                return
+            self._print("  Available datasets:")
+            for d in datasets:
+                self._print(f"    {d.get('name', d.get('id', '?'))}")
+            self._print("\n  Usage: train <dataset>")
+            return
+
+        name = parts[1] if len(parts) > 1 else ""
+        r = self._spinner_call("Starting training", lambda: self.cmds.train_quick(dataset, name=name))
+        if "error" in r:
+            self._print(f"  Error: {r['error']}")
+        else:
+            job_id = r.get("id", "")
+            self._print(f"  Training started: {r.get('status', r)}")
+            if job_id:
+                self._stream_train_progress(job_id)
+
+    def _cmd_ops(self, args: str = "") -> None:
+        """Operations: ops [type] | ops cancel <op_id> | ops cancel-all [type]"""
+        parts = args.strip().split()
+        sub = parts[0] if parts else ""
+
+        if sub == "cancel":
+            if len(parts) < 2:
+                self._print("  Usage: ops cancel <op_id>")
+                return
+            r = self._spinner_call("Cancelling operation", lambda: self.cmds.cancel_operation(parts[1]))
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                op = r.get("data", r)
+                self._print(f"  Cancelled: {op.get('label', parts[1])}")
+            return
+
+        if sub == "cancel-all":
+            op_type = parts[1] if len(parts) > 1 else ""
+            r = self._spinner_call("Cancelling all", lambda: self.cmds.cancel_all_operations(op_type))
+            if "error" in r:
+                self._print(f"  Error: {r['error']}")
+            else:
+                data = r.get("data", r)
+                self._print(f"  Cancelled {data.get('count', 0)} operation(s)")
+            return
+
+        if not self._require_api("ops"):
+            return
+
+        op_type = sub if sub else ""
+        ops = self.cmds.operations(op_type)
+        if not ops:
+            self._print("  No active operations")
+            return
+        rows = []
+        for o in ops:
+            oid = o.get("id", "")[:8]
+            otype = o.get("type", "?")
+            status = o.get("status", "?")
+            label = o.get("label", "")
+            rows.append([oid, otype, status, label[:40]])
+        self._table(rows, ["ID", "Type", "Status", "Label"])
+
+    def _stream_train_progress(self, job_id: str) -> None:
+        """Stream training progress for a job with live progress bar."""
+        import time
+        from .commands import _api_get
+
+        FILLED = "█"
+        HALF = "▓"
+        EMPTY = "░"
+        bar_width = 32
+        last_rendered = ""
+
+        self._print(f"  Following job {job_id} (Ctrl+C to detach)")
+
+        max_polls = 200
+        for poll in range(max_polls):
+            try:
+                result = _api_get(f"/training/jobs/{job_id}")
+                if not result:
+                    self._print(f"  Job {job_id} not found")
+                    return
+
+                status = result.get("status", "unknown")
+                if status == "unknown":
+                    self._print(f"  Job {job_id} has no known status — detached")
+                    return
+                progress = result.get("progress", 0)
+                epoch = result.get("current_epoch", result.get("epoch", 0))
+                epochs = result.get("epochs", 0)
+                loss = result.get("train_loss", result.get("loss", 0))
+
+                # Build bar
+                pct = progress / 100 if progress > 0 else 0
+                filled = int(bar_width * pct)
+                has_half = (bar_width * pct) - filled >= 0.5
+                bar = FILLED * filled
+                if has_half and filled < bar_width:
+                    bar += HALF
+                    bar += EMPTY * (bar_width - filled - 1)
+                else:
+                    bar += EMPTY * (bar_width - filled)
+
+                line = f"  [{bar}] {progress:3d}%  epoch {epoch}/{epochs}  loss={loss or 0:.4f}  [{status}]"
+
+                # In-place update using stdio
+                if hasattr(self, '_stdio') and self._stdio:
+                    self._stdio.progress(line, done=(status in ("completed", "failed", "error")))
+                else:
+                    # Fallback: manual in-place update with space-padding
+                    pad = max(0, len(last_rendered) - len(line))
+                    sys.stdout.write(f"\r{line}{' ' * pad}\r")
+                    sys.stdout.flush()
+                    last_rendered = line
+
+                if status in ("completed", "failed", "error"):
+                    if status == "completed":
+                        ckpt = result.get("checkpoint", "")
+                        self._print("\n  Training complete" + (f" — {ckpt}" if ckpt else ""))
+                    else:
+                        err = result.get("error", "unknown error")
+                        self._print(f"\n  Training {status}: {err}")
+                    return
+
+            except KeyboardInterrupt:
+                self._print("\n  Detached (job continues on server)")
+                return
+            except Exception as e:
+                self._print(f"\n  {self._format_error(e, 'train follow')}")
+                return
+
+            time.sleep(3)
+
+        self._print(f"  Job {job_id} still running after {max_polls} polls — detached")
+
+    def _cmd_models(self, args: str = "") -> None:
+        """Manage models. Subcommands:
+  models             — list available models
+  models list        — list available models
+  models load <name> — load a model
+  models unload      — unload current model
+  models status      — show current model status"""
+        if not self._require_api("models"):
+            return
+        parts = args.strip().split(maxsplit=1)
+        subcmd = parts[0] if parts else ""
+        model_name = parts[1].strip() if len(parts) > 1 else ""
+        if subcmd == "list" or not subcmd:
+            try:
+                models = self._spinner_call("Fetching models", lambda: self.cmds.models(), ok_msg=None)
+                if not models:
+                    self._print("  No models available")
+                    return
+                rows = []
+                for m in models:
+                    name = m.get("name", m.get("id", "?"))
+                    mtype = m.get("type", m.get("backend", ""))
+                    status = "loaded" if m.get("loaded") else ""
+                    rows.append([name, mtype, status])
+                self._table(rows, ["Model", "Type", "Status"])
+            except Exception as e:
+                self._print(self._format_error(e, "models"))
+        elif subcmd == "load":
+            if not model_name:
+                self._print("  Usage: models load <model_name>")
+                return
+            try:
+                result = self._spinner_call(f"Loading {model_name}", lambda: self.cmds.load_model(model_name), "Done")
+                if isinstance(result, dict) and "error" in result:
+                    self._print(f"  Error: {result['error']}")
+                else:
+                    self._print(f"  Loaded {model_name}")
+            except Exception as e:
+                self._print(self._format_error(e, "models load"))
+        elif subcmd == "unload":
+            try:
+                result = self._spinner_call("Unloading model", lambda: self.cmds.unload_model(), "Done")
+                if isinstance(result, dict) and "error" in result:
+                    self._print(f"  Error: {result['error']}")
+                else:
+                    self._print("  Model unloaded")
+            except Exception as e:
+                self._print(self._format_error(e, "models unload"))
+        elif subcmd == "status":
+            try:
+                status = self._spinner_call("Checking status", lambda: self.cmds.model_status(), ok_msg=None)
+                if isinstance(status, dict):
+                    loaded = status.get("loaded", False)
+                    model_type = status.get("type", "unknown")
+                    self._print(f"  Loaded: {loaded}")
+                    self._print(f"  Type: {model_type}")
+                else:
+                    self._print("  Status unavailable")
+            except Exception as e:
+                self._print(self._format_error(e, "models status"))
+        else:
+            self._print("  Usage: models [list|load <name>|unload|status]")
+
+    def _cmd_souls(self, args: str = "") -> None:
+        """List available souls."""
+        if not self._require_api("souls"):
+            return
+        try:
+            souls = self._spinner_call("Fetching souls", lambda: self.cmds.souls(), ok_msg=None)
+            if not souls:
+                self._print("  No souls available")
+                return
+            for s in souls:
+                name = s.get("name", "?")
+                desc = s.get("description", "")
+                current = " (active)" if s.get("current") else ""
+                line = f"  {name}{current}"
+                if desc:
+                    line += f"  — {desc}"
+                self._print(line)
+        except Exception as e:
+            self._print(self._format_error(e, "souls"))
+
+    def _cmd_datasets(self, args: str = "") -> None:
+        """List datasets."""
+        if not self._require_api("datasets"):
+            return
+        try:
+            datasets = self._spinner_call("Fetching datasets", lambda: self.cmds.datasets(), ok_msg=None)
+            if not datasets:
+                self._print("  No datasets available")
+                return
+            for d in datasets:
+                name = d.get("name", "?")
+                count = d.get("count", d.get("rows", ""))
+                size = d.get("size", "")
+                info = f"  {name}"
+                if count:
+                    info += f"  ({count} rows)"
+                if size:
+                    info += f"  {size}"
+                self._print(info)
+        except Exception as e:
+            self._print(self._format_error(e, "datasets"))
+
+    def _cmd_knowledge(self, args: str = "") -> None:
+        """List or search knowledge base entries."""
+        if not self._require_api("knowledge"):
+            return
+        try:
+            if args.strip():
+                results = self._spinner_call("Searching", lambda: self.cmds.list_knowledge(args.strip()), ok_msg=None)
+                if not results:
+                    self._print("  No results found")
+                    return
+                for r in results[:10]:
+                    score = r.get("score", 0)
+                    path = r.get("path", "?")
+                    line = r.get("line", "")
+                    text = r.get("text", r.get("content", ""))[:80]
+                    self._print(f"  [{score:.3f}] {path}:{line}  {text}")
+            else:
+                results = self._spinner_call("Fetching knowledge", lambda: self.cmds.list_knowledge(), ok_msg=None)
+                if not results:
+                    self._print("  No knowledge entries")
+                    return
+                for r in results[:20]:
+                    self._print(f"  {r.get('content', r.get('text', '?'))[:80]}")
+        except Exception as e:
+            self._print(self._format_error(e, "knowledge"))
+
+    def _cmd_checkpoints(self, args: str = "") -> None:
+        """List training checkpoints."""
+        if not self._require_api("checkpoints"):
+            return
+        try:
+            cps = self._spinner_call("Fetching checkpoints", lambda: self.cmds.checkpoints(), ok_msg=None)
+            if not cps:
+                self._print("  No checkpoints available")
+                return
+            for cp in cps:
+                name = cp.get("name", "?")
+                step = cp.get("step", cp.get("global_step", ""))
+                loss = cp.get("loss", "")
+                info = f"  {name}"
+                if step:
+                    info += f"  step {step}"
+                if loss:
+                    info += f"  loss={loss}"
+                self._print(info)
+        except Exception as e:
+            self._print(self._format_error(e, "checkpoints"))
+
+    def _cmd_gen(self, args: str = "") -> None:
+        if not args:
+            self._print("  Usage: gen <prompt>")
+            return
+        if not self._require_api("gen"):
+            return
+        with self.console.spinner("Generating"):
+            result = self.cmds.generate(args, max_tokens=150)
+        if isinstance(result, dict) and "text" in result:
+            self._print(f"\n  {result['text']}\n")
+        elif isinstance(result, dict) and "error" in result:
+            self._print(f"  Error: {result['error']}")
+        else:
+            self._print(self._dump_json(result))
+
+    def _cmd_chat(self, args: str = "") -> None:
+        """Multi-turn chat with streaming. Subcommands:
+  chat <message>       — send a message (streams token by token)
+  chat                 — enter interactive mode
+  chat /reset          — clear history and session
+  chat /status         — show session info"""
+        if not self._require_api("chat"):
+            return
+        parts = args.strip().split(maxsplit=1)
+        subcmd = parts[0] if parts else ""
+        rest = parts[1] if len(parts) > 1 else ""
+        if subcmd == "/reset":
+            self._chat_session_id = None
+            self._chat_history = []
+            self._print("  [session cleared]")
+            return
+        if subcmd == "/status":
+            if self._chat_session_id:
+                self._print(f"  Session: {self._chat_session_id[:8]}...")
+                self._print(f"  Messages: {len(self._chat_history)}")
+            else:
+                self._print("  No active session")
+            return
+        if not subcmd:
+            self._cmd_chat_interactive()
+            return
+        self._chat_send(subcmd + (" " + rest if rest else ""))
+
+    def _cmd_chat_interactive(self) -> None:
+        """Interactive chat mode — type messages, /quit to exit."""
+        if not self._chat_session_id:
+            import uuid
+            self._chat_session_id = str(uuid.uuid4())
+            self._chat_history = []
+            self._print("  [new session]")
+        self._print("  Interactive chat mode. Type /quit to exit.\n")
+        try:
+            while True:
+                try:
+                    user_input = input("  you> ")
+                except (EOFError, KeyboardInterrupt):
+                    self._print("\n  [exiting chat]")
+                    return
+                if not user_input.strip():
+                    continue
+                if user_input.strip() in ("/quit", "/exit"):
+                    self._print("  [exiting chat]")
+                    return
+                if user_input.strip() == "/reset":
+                    self._chat_session_id = None
+                    self._chat_history = []
+                    self._print("  [session cleared]")
+                    continue
+                self._chat_send(user_input.strip())
+        except KeyboardInterrupt:
+            self._print("\n  [exiting chat]")
+
+    def _chat_send(self, message: str) -> None:
+        """Send a single chat message with streaming."""
+        if not self._chat_session_id:
+            import uuid
+            self._chat_session_id = str(uuid.uuid4())
+            self._chat_history = []
+            self._print("  [new session]")
+        self._chat_history.append({"role": "user", "content": message})
+        collected = []
+        try:
+            for token in self.cmds.chat_stream(self._chat_history, self._chat_session_id):
+                if isinstance(token, dict) and "error" in token:
+                    self._print(f"\n  Error: {token['error']}")
+                    return
+                if token:
+                    collected.append(token)
+                    sys.stdout.write(token)
+                    sys.stdout.flush()
+        except Exception as e:
+            self._print(f"\n  Error: {e}")
+            return
+        full = "".join(collected).strip()
+        self._print("")
+        self._chat_history.append({"role": "assistant", "content": full})
+
+    # ── LLM-powered NL interpreter ──────────────────────────────────
+
+    def _cmd_render(self, args: str = "") -> None:
+        """Path tracer + neural scene analysis. Subcommands:
+  render                       — show scene info
+  render sphere r x y z [mat]  — add sphere
+  render cube  s x y z [mat]   — add cube
+  render plane s y [mat]       — add plane
+  render light x y z [r g b s] — add light
+  render mat idx r g b m rough — set material
+  render cam ox oy oz lx ly lz — set camera
+  render go [w h spp]          — render image (prints stats)
+  render neural                — render + neural analysis
+  render clear                 — clear scene
+  render preset <name>         — load preset scene (demo, Cornell, spheres)"""
+        import numpy as _np
+        from .cycles_device import CyclesDevice
+        from .render_neural import RenderNeuralDevice
+
+        if not hasattr(self, '_render_device'):
+            self._render_device = CyclesDevice(width=80, height=60, samples=4)
+            self._render_neural = RenderNeuralDevice(cycles_device=self._render_device)
+
+        dev = self._render_device
+        parts = args.strip().split()
+        verb = parts[0].lower() if parts else ""
+
+        def _f(s, default=0.0):
+            try: return float(s)
+            except (ValueError, TypeError): return default
+
+        def _i(s, default=0):
+            try: return int(s)
+            except (ValueError, TypeError): return default
+
+        if not verb or verb == "info":
+            info = dev.call("info")
+            self._print(f"  Scene: {info['meshes']} meshes, {info['materials']} materials, {info['lights']} lights")
+            self._print(f"  Resolution: {info['resolution'][0]}x{info['resolution'][1]}, Samples: {info['samples']}")
+
+        elif verb == "sphere":
+            if len(parts) < 5:
+                self._print("  Usage: render sphere radius cx cy cz [mat_idx]")
+                return
+            r, cx, cy, cz = _f(parts[1]), _f(parts[2]), _f(parts[3]), _f(parts[4])
+            mat = _i(parts[5], 0) if len(parts) > 5 else 0
+            idx = dev.call("add_sphere", r, cx, cy, cz, mat, 12)
+            self._print(f"  Added sphere #{idx[0]}: r={r} center=({cx},{cy},{cz}) mat={mat}")
+
+        elif verb == "cube":
+            if len(parts) < 5:
+                self._print("  Usage: render cube size cx cy cz [mat_idx]")
+                return
+            s, cx, cy, cz = _f(parts[1]), _f(parts[2]), _f(parts[3]), _f(parts[4])
+            mat = _i(parts[5], 0) if len(parts) > 5 else 0
+            idx = dev.call("add_cube", s, cx, cy, cz, mat)
+            self._print(f"  Added cube #{idx[0]}: size={s} center=({cx},{cy},{cz}) mat={mat}")
+
+        elif verb == "plane":
+            if len(parts) < 3:
+                self._print("  Usage: render plane size y [mat_idx]")
+                return
+            s, y = _f(parts[1]), _f(parts[2])
+            mat = _i(parts[3], 0) if len(parts) > 3 else 0
+            idx = dev.call("add_plane", s, y, mat)
+            self._print(f"  Added plane #{idx[0]}: size={s} y={y} mat={mat}")
+
+        elif verb == "light":
+            if len(parts) < 4:
+                self._print("  Usage: render light x y z [r g b strength]")
+                return
+            x, y, z = _f(parts[1]), _f(parts[2]), _f(parts[3])
+            r = _f(parts[4], 1.0) if len(parts) > 4 else 1.0
+            g = _f(parts[5], 1.0) if len(parts) > 5 else 1.0
+            b = _f(parts[6], 1.0) if len(parts) > 6 else 1.0
+            s = _f(parts[7], 5.0) if len(parts) > 7 else 5.0
+            idx = dev.call("add_light", x, y, z, r, g, b, s)
+            self._print(f"  Added light #{idx[0]}: ({x},{y},{z}) color=({r:.1f},{g:.1f},{b:.1f}) strength={s}")
+
+        elif verb == "mat":
+            if len(parts) < 7:
+                self._print("  Usage: render mat idx r g b metallic roughness")
+                return
+            idx = _i(parts[1], 0)
+            r, g, b = _f(parts[2]), _f(parts[3]), _f(parts[4])
+            m, rough = _f(parts[5]), _f(parts[6])
+            dev.call("set_material", idx, r, g, b, m, rough)
+            self._print(f"  Material {idx}: color=({r:.2f},{g:.2f},{b:.2f}) metallic={m:.2f} roughness={rough:.2f}")
+
+        elif verb == "cam":
+            if len(parts) < 7:
+                self._print("  Usage: render cam origin_x origin_y origin_z look_x look_y look_z [fov]")
+                return
+            ox, oy, oz = _f(parts[1]), _f(parts[2]), _f(parts[3])
+            lx, ly, lz = _f(parts[4]), _f(parts[5]), _f(parts[6])
+            fov = _f(parts[7], 50.0) if len(parts) > 7 else 50.0
+            dev.call("set_camera", ox, oy, oz, lx, ly, lz, fov)
+            self._print(f"  Camera: origin=({ox},{oy},{oz}) look_at=({lx},{ly},{lz}) fov={fov}")
+
+        elif verb == "go":
+            import time as _time
+            w = _i(parts[1], 80) if len(parts) > 1 else 80
+            h = _i(parts[2], 60) if len(parts) > 2 else 60
+            spp = _i(parts[3], 4) if len(parts) > 3 else 4
+            dev.call("set_resolution", w, h)
+            dev.call("set_samples", spp)
+            self._print(f"  Rendering {w}x{h} @ {spp} spp...")
+            t0 = _time.time()
+            img = dev.call("render")
+            dt = _time.time() - t0
+            nz = int((img.sum(axis=-1) > 0.01).sum())
+            self._print(f"  Done in {dt:.1f}s — {nz}/{w*h} lit pixels ({100*nz/(w*h):.0f}%)")
+            self._print(f"  Pixel range: [{img.min():.4f}, {img.max():.4f}]")
+
+        elif verb == "neural":
+            import time as _time
+            w, h, spp = 80, 60, 4
+            dev.call("set_resolution", w, h)
+            dev.call("set_samples", spp)
+            self._print(f"  Rendering {w}x{h} @ {spp} spp...")
+            t0 = _time.time()
+            out = self._render_neural.call("process")
+            dt = _time.time() - t0
+            desc = self._render_neural.call("descriptor")
+            emb = out["embedding"]
+            probs = out["probabilities"]
+            cls_names = ["mat_unknown", "mat_diffuse", "mat_metallic", "mat_glass",
+                         "mat_emissive", "mat_dielectric", "mat_rough", "mat_smooth"]
+            dom = desc["dominant_class"]
+            self._print(f"  Done in {dt:.1f}s")
+            self._print(f"  Embedding: {emb.shape} (norm={_np.linalg.norm(emb):.4f})")
+            self._print(f"  Dominant class: {cls_names[dom] if dom < len(cls_names) else dom}")
+            self._print(f"  Class probs: {', '.join(f'{cls_names[i] if i < len(cls_names) else i}={p:.3f}' for i, p in enumerate(probs))}")
+            self._print(f"  Entropy: {desc['neural_entropy']:.4f}")
+            for k in ("image", "depth", "normal"):
+                if k in desc:
+                    self._print(f"  {k}: mean={desc[k]['mean']:.4f} std={desc[k]['std']:.4f}")
+
+        elif verb == "clear":
+            dev.call("clear")
+            self._render_neural.call("set_source", dev)
+            self._print("  Scene cleared.")
+
+        elif verb == "preset":
+            name = parts[1].lower() if len(parts) > 1 else ""
+            self._apply_render_preset(name)
+        else:
+            self._print(f"  Unknown render subcommand: {verb}")
+            self._print("  Try: render info | sphere | cube | plane | light | mat | cam | go | neural | clear | preset")
+
+    def _apply_render_preset(self, name: str) -> None:
+        """Load a preset scene configuration."""
+        dev = self._render_device
+
+        if name == "demo":
+            dev.call("clear")
+            dev.call("set_material", 0, 0.3, 0.3, 0.35, 0.0, 0.8)
+            dev.call("set_material", 1, 0.8, 0.1, 0.1, 0.1, 0.3)
+            dev.call("set_material", 2, 0.9, 0.9, 0.9, 0.0, 0.0)
+            dev.call("set_material", 3, 1.0, 1.0, 1.0, 0.0, 0.0)
+            dev.call("add_plane", 6.0, -1.0, 0)
+            dev.call("add_sphere", 0.6, -1.2, -0.4, 0.0, 1, 12)
+            dev.call("add_sphere", 0.6, 0.0, -0.4, 0.0, 2, 12)
+            dev.call("add_sphere", 0.6, 1.2, -0.4, 0.0, 1, 12)
+            dev.call("add_cube", 0.4, 0.0, 1.5, 0.0, 3)
+            dev.call("add_light", 2.0, 3.0, 2.0, 1.0, 0.95, 0.9, 8.0)
+            dev.call("add_light", -2.0, 2.0, -1.0, 0.7, 0.8, 1.0, 4.0)
+            dev.call("set_camera", 0, 1.5, 4, 0, 0, 0, 50)
+            self._print("  Loaded preset: demo (3 spheres + cube + floor + 2 lights)")
+
+        elif name == "cornell":
+            dev.call("clear")
+            dev.call("set_material", 0, 0.7, 0.1, 0.1, 0.0, 0.5)
+            dev.call("set_material", 1, 0.1, 0.7, 0.1, 0.0, 0.5)
+            dev.call("set_material", 2, 0.7, 0.7, 0.7, 0.0, 0.5)
+            dev.call("set_material", 3, 1.0, 1.0, 1.0, 0.0, 0.0)
+            dev.call("add_plane", 4.0, -1.0, 0)
+            dev.call("add_cube", 1.0, -0.7, -0.5, 0.0, 0)
+            dev.call("add_cube", 0.7, 0.7, -0.65, 0.0, 1)
+            dev.call("add_cube", 0.3, 0.0, 1.5, 0.0, 3)
+            dev.call("add_light", 0.0, 2.8, 0.0, 1.0, 0.95, 0.9, 10.0)
+            dev.call("set_camera", 0, 1.0, 4.5, 0, 0.5, 0, 60)
+            self._print("  Loaded preset: cornell (classic Cornell box)")
+
+        elif name == "spheres":
+            dev.call("clear")
+            dev.call("set_material", 0, 0.3, 0.3, 0.35, 0.0, 0.8)
+            for i in range(5):
+                dev.call("set_material", i + 1, 0.5 + i * 0.1, 0.1, 0.1, float(i) / 5.0, 1.0 - float(i) / 5.0)
+            dev.call("add_plane", 8.0, -1.0, 0)
+            for i in range(5):
+                dev.call("add_sphere", 0.5, -2.0 + i, -0.5, 0.0, i + 1, 12)
+            dev.call("add_light", 0.0, 4.0, 2.0, 1.0, 0.95, 0.9, 8.0)
+            dev.call("set_camera", 0, 1.5, 5, 0, 0, 0, 50)
+            self._print("  Loaded preset: spheres (5 spheres, metallic→dielectric gradient)")
+
+        else:
+            self._print(f"  Unknown preset: {name}")
+            self._print("  Available presets: demo, cornell, spheres")
+
+    def _cmd_agents(self, args: str = "") -> None:
+        """Multi-agent orchestration: agents <goal> or agents list."""
+        from domains.agents.multi import get_orchestrator, SpecializedAgent
+        orch = get_orchestrator()
+        parts = args.strip().split(maxsplit=1)
+        verb = parts[0].lower() if parts else ""
+
+        if verb == "list":
+            for a in orch.list_agents():
+                self._print(f"  {a['name']:12s} — {a['role']}")
+        elif verb in ("-h", "--help", "help"):
+            self._print("  Usage:")
+            self._print("    agents <goal>     — Run multi-agent on a goal")
+            self._print("    agents list       — List available agents")
+            self._print("    agents add <name> <role> <prompt> — Add agent")
+        elif verb in ("add",):
+            rest = args.strip().split(maxsplit=1)[1] if len(args.strip().split()) > 1 else ""
+            add_parts = rest.split(maxsplit=2)
+            if len(add_parts) < 3:
+                self._print("  Usage: agents add <name> <role> <system_prompt>")
+                self._print("  Example: agents add summarizer summarize text into concise bullet points")
+                return
+            a_name, a_role, a_prompt = add_parts
+            agent_key = a_name.lower().replace(" ", "_")
+            agent = SpecializedAgent(
+                name=a_name,
+                role=a_role,
+                system_prompt=a_prompt,
+                tools=["memory"],
+            )
+            orch.agents[agent_key] = agent
+            self._print(f"  \u2713 Agent '{a_name}' added (role: {a_role})")
+            # Persist custom agents
+            try:
+                import json
+                from pathlib import Path
+                agents_file = Path.home() / ".config" / "sloughgpt" / "custom_agents.json"
+                agents_file.parent.mkdir(parents=True, exist_ok=True)
+                custom = {}
+                if agents_file.exists():
+                    custom = json.loads(agents_file.read_text())
+                custom[agent_key] = {"name": a_name, "role": a_role, "system_prompt": a_prompt}
+                agents_file.write_text(json.dumps(custom, indent=2))
+            except Exception as e:
+                self._print(f"  {_C_DIM}(not persisted: {e}){_C_RESET}")
+        elif not args:
+            self._cmd_help("agents")
+        else:
+            if not self._require_api("agents"):
+                return
+            goal = args.strip()
+            self._print(f"  \U0001f916 Orchestrating agents for: {goal}")
+            try:
+                result = self._spinner_call("Planning & executing", lambda: orch.execute(goal))
+                self._print("")
+                self._print(result.get("response", "No response"))
+                tasks = result.get("tasks", [])
+                if tasks:
+                    self._print(f"\n  {_C_DIM}Tasks: {len(tasks)}, "
+                                f"completed: {sum(1 for t in tasks if t['status'] == 'completed')}"
+                                f"{_C_RESET}")
+            except Exception as e:
+                self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+
+    def _cmd_ai(self, args: str = "") -> None:
+        if not args:
+            self._print("  Usage: ai <natural language query>")
+            self._print("  Example: ai show me running training jobs")
+            return
+
+        status = self.os.api_status
+        if not status.get("available"):
+            self._print("  \u2717 API server is not connected. Use \u2018api start\u2019 to launch it.")
+            return
+
+        available_commands = "\n".join(
+            f"  {name} - {cmd.__doc__ or ''}"
+            for name, cmd in sorted(self.COMMANDS.items())
+        )
+        for name, mod in sorted(self._ext_cmds.items()):
+            h = getattr(mod, "help", "")
+            available_commands += f"\n  {name} - {h}"
+
+        # Build shell context
+        ctx_parts = [f"  Current directory: {os.getcwd()}"]
+        model = self._get_current_model()
+        soul = self._get_current_soul()
+        if model:
+            ctx_parts.append(f"  Active model: {model}")
+        if soul:
+            ctx_parts.append(f"  Active soul: {soul}")
+        recent = list(self._history)[-5:] if hasattr(self, "_history") else []
+        if recent:
+            ctx_parts.append(f"  Recent commands: {', '.join(recent)}")
+        if self._log_buffer and len(self._log_buffer) > 0:
+            err_entries = self._log_buffer.get(level="ERROR", limit=5)
+            if err_entries:
+                from datetime import datetime as _dt
+                err_lines = []
+                for e in err_entries:
+                    ts = _dt.fromtimestamp(e.timestamp).strftime("%H:%M:%S")
+                    err_lines.append(f"{ts} [{e.source}] {e.message}")
+                ctx_parts.append("  Recent errors:\n" + "\n".join(f"    {l}" for l in err_lines))
+        shell_context = "\n".join(ctx_parts)
+
+        prompt = (
+            "You are an AI shell assistant. Given the available commands and shell context below, "
+            "interpret the user's natural language request and respond with ONLY "
+            "the exact shell command to run. Do NOT include any explanation, "
+            "backticks, or extra text. Just the command.\n\n"
+            f"Shell context:\n{shell_context}\n\n"
+            f"Available commands:\n{available_commands}\n\n"
+            f"User request: {args}\n\n"
+            "Command:"
+        )
+
+        self._print("  \u2601\ufe0f Interpreting as LLM query...")
+        result = self._spinner_call("Thinking", lambda: self.cmds.generate(prompt, max_tokens=60))
+
+        if isinstance(result, dict) and "text" in result:
+            generated = result["text"].strip().split("\n")[0].strip()
+            generated = generated.strip('`"\'')
+            self._print(f"  \u2192 {generated}")
+            self._print("")
+            # Execute the generated command
+            bg = generated.rstrip().endswith("&")
+            cmds, _, _ = self._parse_pipeline(generated)
+            if bg:
+                if len(cmds) > 1:
+                    self._execute_background_tuples(cmds)
+                else:
+                    self._execute_background(cmds[0][0])
+            elif len(cmds) > 1:
+                self._execute_pipeline(cmds)
+            else:
+                out = self._execute_single(cmds[0][0], "")
+                self._print(out, end="")
+        else:
+            error = result.get("error", "unknown") if isinstance(result, dict) else "unexpected response"
+            if "timeout" in str(error).lower() or "timed out" in str(error).lower():
+                self._print("  \u26a0\ufe0f AI server is busy (timeout). Try again in a moment.")
+            elif "connect" in str(error).lower() or "refused" in str(error).lower():
+                self._print("  \u274c AI server is not running. Start it with: api start")
+            else:
+                self._print(f"  \u274c AI interpretation failed: {error}")
+
+    def _show_welcome(self) -> None:
+        """Show first-run welcome message."""
+        terminal = shutil.get_terminal_size().columns
+        w = self._print
+        w("")
+        w(f"  {_C_BOLD}{_C_CYAN}\u2728 Welcome to Dait{_C_RESET}")
+        w(f"  {_C_DIM}{'─' * min(terminal, 50)}{_C_RESET}")
+        w(f"  {_C_GREEN}Dait{_C_RESET} connects you to your local AI backend.")
+        w("")
+        w(f"  {_C_YELLOW}Quick start:{_C_RESET}")
+        w("    health           Check server status")
+        w("    models           List available models")
+        w("    load gpt2        Load a model")
+        w("    gen hello world  Generate text")
+        w("    ai show models   Natural language commands")
+        w("")
+        w(f"  {_C_YELLOW}Pipes & more:{_C_RESET}")
+        w("    health &         Run in background")
+        w("    gen hello > out.txt  Redirect to file")
+        w("    time load gpt2       Time a command")
+        w("")
+        w(f"  Type {_C_YELLOW}`tutorial`{_C_RESET} for an interactive walkthrough.")
+        w(f"  Type {_C_YELLOW}`help`{_C_RESET} for all commands, {_C_YELLOW}`exit`{_C_RESET} to quit.")
+        w(f"  {_C_DIM}{'─' * min(terminal, 50)}{_C_RESET}")
+        w("")
+        self.state.first_run = False
+        self.state.save()
+
+    def _cmd_tutorial(self, args: str = "") -> None:
+        """Interactive walkthrough of shell features."""
+        w = self._print
+
+        def _proceed():
+            while True:
+                resp = self.io.read(f"{_C_DIM}[Enter] continue  [q] quit{_C_RESET} ")
+                if resp.strip() == "" or resp.strip().lower() in ("q", "quit", "exit"):
+                    return resp
+                w(f"  {_C_DIM}(press Enter to continue, or q to quit){_C_RESET}")
+
+        steps = [
+            ("\u2728 Welcome to the tutorial!", [
+                "This will walk you through the shell features step by step.",
+                "Press Enter to advance to each step, or 'q' to quit anytime.",
+            ]),
+            ("\u2460 Health check", [
+                "  health  \u2014 Check if your AI server is running.",
+                "  Try it: `health` shows API status, loaded model, and soul.",
+            ]),
+            ("\u2461 Models", [
+                "  models  \u2014 List all available models.",
+                "  load <name>  \u2014 Load a model (tab-complete names).",
+                "  unload       \u2014 Unload the current model.",
+                "  gen <prompt> \u2014 Generate text with the loaded model.",
+            ]),
+            ("\u2462 Souls & personality", [
+                "  souls   \u2014 List available personality profiles.",
+                "  switch <name>  \u2014 Switch to a soul.",
+                "  whoami  \u2014 Show your current soul.",
+            ]),
+            ("\u2463 Pipelines", [
+                "  Chain commands with |  (like bash):",
+                "    models | head",
+                "    gen hello > output.txt",
+                "  Pipe to filters: head, tail, wc, sort, uniq",
+                "  Sort flags: -r (reverse), -u (unique), -n (numeric)",
+            ]),
+            ("\u2464 Background & timing", [
+                "  Append & to run in background:  health &",
+                "  bg / jobs  \u2014 List background processes",
+                "  fg <id>    \u2014 Wait for a background process",
+                "  Prefix with `time` to measure:  time health",
+            ]),
+            ("\u2465 Redirection & env vars", [
+                "  >  Redirect output to file:     gen hi > output.txt",
+                "  >> Append to file:             gen hi >> output.txt",
+                "  $VAR / ${VAR}  \u2014 Environment variables",
+                "  NAME=VALUE cmd \u2014 Inline env for one command",
+                "  set NAME=VALUE \u2014 Persistent env variables",
+                "  $(cmd)        \u2014 Command substitution",
+            ]),
+            ("\u2466 Aliases & history", [
+                "  alias ll=procs            \u2014 Create an alias",
+                "  unalias <name>            \u2014 Remove an alias",
+                "  history [n]               \u2014 Show command history",
+                "  fc <n>                    \u2014 Re-run command #n",
+                "  Ctrl+R / Ctrl+S           \u2014 Search history",
+            ]),
+            ("\u2467 PS1 & customization", [
+                "  set PS1='\\\\u@\\\\h \\\\w $ '  \u2014 Custom prompt",
+                "  \\\\h=host, \\\\w=cwd, \\\\t=time, \\\\u=user, \\\\s=shell, \\\\#=count",
+                "  set NO_COLOR=1            \u2014 Disable colors",
+                "  Source commands from file:  source setup.sh",
+            ]),
+            ("\u2468 AI mode & scripting", [
+                "  ai <query>   \u2014 Natural language to commands",
+                "    Example: ai show me running training jobs",
+                "  py <expr>    \u2014 Evaluate Python inline",
+                "    Example: py 2 + 2",
+                "  Advanced: pipelines, watch, background jobs",
+            ]),
+            ("\u2469 All done!", [
+                "  You're ready to use Dait!",
+                "  Type `help` anytime for a full command reference.",
+                "  Happy hacking! \U0001f680",
+            ]),
+        ]
+
+        total = len(steps)
+        for i, (title, lines) in enumerate(steps):
+            w(f"\n  {_C_BOLD}{_C_CYAN}{title}{_C_RESET}")
+            for line in lines:
+                w(f"  {line}")
+            if i < total - 1:
+                try:
+                    resp = _proceed()
+                    if resp.strip().lower() in ("q", "quit", "exit"):
+                        w(f"  {_C_DIM}Tutorial stopped.{_C_RESET}")
+                        return
+                except (EOFError, KeyboardInterrupt):
+                    w(f"  {_C_DIM}Tutorial stopped.{_C_RESET}")
+                    return
+
+    def _cmd_lsdev(self, args: str = "") -> None:
+        """List AI device nodes (/dev/*)."""
+        if not self.os.devices:
+            self._print("  Devices not available (not booted?)")
+            return
+        self._print("  AI Device nodes:")
+        self._print(self.os.devices.list_devices())
+
+    # ── Scripting commands ────────────────────────────────────────
+
+    def _cmd_which(self, args: str = "") -> None:
+        """Locate commands. Supports -a (show all matches)."""
+        if not args:
+            self._print("  Usage: which <command>...")
+            self._last_exit_code = 1
+            return
+        parts = args.strip().split()
+        commands = [p for p in parts if not p.startswith("-")]
+        if not commands:
+            self._print("  Usage: which <command>...")
+            self._last_exit_code = 1
+            return
+        all_found = True
+        for cmd in commands:
+            if cmd in self.COMMANDS:
+                self._print(f"  {cmd}: shell built-in command")
+            elif cmd in self._ext_cmds:
+                h = getattr(self._ext_cmds[cmd], "help", "")
+                self._print(f"  {cmd}: external command — {h}")
+            elif cmd in self._aliases:
+                self._print(f"  {cmd}: aliased to {self._aliases[cmd]}")
+            else:
+                found = shutil.which(cmd)
+                if found:
+                    self._print(f"  {found}")
+                else:
+                    self._print(f"  which: no {cmd} in ({os.environ.get('PATH', '')})")
+                    all_found = False
+        self._last_exit_code = 0 if all_found else 1
+
+    def _cmd_type(self, args: str = "") -> None:
+        """Describe a command (like Unix type)."""
+        if not args:
+            self._print("  Usage: type <command>")
+            self._last_exit_code = 1
+            return
+        cmd = args.strip().lower()
+        if cmd in self._aliases:
+            self._print(f"  {cmd} is aliased to `{self._aliases[cmd]}`")
+        elif cmd in self._ext_cmds:
+            h = getattr(self._ext_cmds[cmd], "help", "")
+            self._print(f"  {cmd} is an external command — {h}")
+        elif cmd in self.COMMANDS:
+            self._print(f"  {cmd} is a shell built-in")
+        elif shutil.which(cmd):
+            self._print(f"  {cmd} is {shutil.which(cmd)}")
+        else:
+            self._print(f"  {cmd}: not found")
+            self._last_exit_code = 1
+
+    def _cmd_read(self, args: str = "") -> None:
+        """Read a line from stdin into a variable (like bash read).
+        Usage: read [-p prompt] VARNAME"""
+        prompt = ""
+        parts = args.strip().split()
+        if not parts:
+            self._print("  Usage: read [-p prompt] VARNAME")
+            self._last_exit_code = 1
+            return
+        if parts[0] == "-p" and len(parts) >= 2:
+            prompt = parts[1] + " "
+            parts = parts[2:]
+        if not parts:
+            self._print("  Usage: read [-p prompt] VARNAME")
+            self._last_exit_code = 1
+            return
+        try:
+            value = self.io.read(f"  {prompt}")
+            self._env[parts[0]] = value
+            self._last_exit_code = 0
+        except (EOFError, KeyboardInterrupt):
+            self._last_exit_code = 1
+
+    # ── Init / Boot commands ────────────────────────────────────────
+
+
+    def _cmd_api(self, args: str = "") -> None:
+        """Manage the API server. Usage: api [start|stop|status|restart]"""
+        parts = args.strip().split()
+        cmd = parts[0] if parts else "status"
+        api = self.os.api
+
+        if cmd == "start":
+            if api.is_running:
+                self._status("info", "API server is already running.")
+                return
+            self._print("  Starting API server...")
+            result = api.start()
+            if result.get("ok"):
+                self._status("ok", result.get('message', 'started'))
+            else:
+                self._status("error", result.get('error', 'failed to start'))
+                self._last_exit_code = 1
+
+        elif cmd == "stop":
+            if not api.is_running:
+                self._status("info", "API server is not running.")
+                return
+            self._print("  Stopping API server...")
+            result = api.stop()
+            self._status("ok", result.get('message', 'stopped'))
+
+        elif cmd == "restart":
+            if api.is_running:
+                self._print("  Stopping API server...")
+                api.stop()
+            self._print("  Starting API server...")
+            result = api.start()
+            if result.get("ok"):
+                self._status("ok", result.get('message', 'restarted'))
+            else:
+                self._status("error", result.get('error', 'failed to restart'))
+                self._last_exit_code = 1
+
+        else:  # status (default)
+            status = api.status()
+            if status.get("available"):
+                model = status.get("model_id", "unknown") or "unknown"
+                self._status("ok", f"API connected — {model} ({status.get('engine_type', '').strip() or 'cpu'})")
+            else:
+                self._status("error", "API not connected")
+                self._print("  Use \u2018api start\u2019 to launch the API server.")
+            if status.get("running"):
+                uptime = status.get("uptime", 0)
+                self._print(f"  Uptime: {uptime:.0f}s")
+
+    def _require_api(self, cmd_name: str = "") -> bool:
+        """Check API availability. Print warning and return False if down."""
+        status = self.os.api_status
+        if status.get("available"):
+            return True
+        self._print("  \u2717 API server is not connected. Use \u2018api start\u2019 to launch it.")
+        self._last_exit_code = 1
+        return False
+
+    def _format_error(self, e: Exception, cmd: str = "") -> str:
+        """Format an exception into a user-friendly error message."""
+        from domains.shell.error import format_error
+        return format_error(e, cmd)
+
+    def _cmd_boot(self, args: str = "") -> None:
+        """Boot the shell — start kernel + init system + services.
+
+        Automatically starts the API server if not already running.
+        """
+        if self._running and self._piped_input is None:
+            self._print("  Already booted. Use 'shutdown' to halt, then 'sloughgpt shell' to restart.")
+            return
+        self._running = True
+        # Auto-start API if not available
+        api = self.os.api
+        if not api.is_running:
+            self._print("  \u26a1 Auto-starting API server...")
+            result = api.start()
+            if not result.get("ok"):
+                self._print(f"  \u2717 API auto-start failed: {result.get('error', 'unknown')}")
+        result = self.os.boot(shell_run=self._shell_cmd if hasattr(self, "_shell_cmd") else None)
+        if isinstance(result, tuple):
+            log, api_status = result
+        else:
+            _log, api_status = result, self.os.api_status
+        if api_status.get("available"):
+            model = api_status.get("model_id", "unknown") or "unknown"
+            self._status("ok", f"API — {model}")
+        else:
+            self._status("error", "API not connected")
+
+    def _cmd_shutdown(self, args: str = "") -> None:
+        """Shut down the shell — halt all services + kernel."""
+        log = self.os.shutdown()
+        self._print(log)
+        self._running = False
+
+    def _cmd_svc(self, args: str = "") -> None:
+        """Manage init services. Usage: svc [list|start|stop|restart|status] [name]"""
+        if not self.os.init_system:
+            self._print("  Init system not booted yet. Run 'boot' first.")
+            self._last_exit_code = 1
+            return
+
+        parts = args.strip().split()
+        cmd = parts[0] if parts else "list"
+        name = parts[1] if len(parts) > 1 else ""
+
+        init = self.os.init_system
+
+        if cmd == "list" or cmd == "ls":
+            self._print("  Services:")
+            self._print(init.service_table())
+
+        elif cmd == "status" or cmd == "st":
+            if name:
+                mgr = init.get_manager(name)
+                if mgr:
+                    self._print(mgr.status_line(len(name)))
+                    for log_entry in mgr.instance.log[-5:]:
+                        self._print(f"    {log_entry}")
+                else:
+                    self._print(f"  Unknown service: {name}")
+                    self._last_exit_code = 1
+            else:
+                self._print("  Init status:")
+                self._print(init.status_summary)
+
+        elif cmd == "start":
+            if not name:
+                self._print("  Usage: svc start <name>")
+                self._last_exit_code = 1
+                return
+            mgr = init.get_manager(name)
+            if mgr:
+                ok = mgr.start()
+                self._print(f"  {name}: {'✓ started' if ok else '✗ failed'}")
+            else:
+                self._print(f"  Unknown service: {name}")
+                self._last_exit_code = 1
+
+        elif cmd == "stop":
+            if not name:
+                self._print("  Usage: svc stop <name>")
+                self._last_exit_code = 1
+                return
+            mgr = init.get_manager(name)
+            if mgr:
+                mgr.stop()
+                self._print(f"  {name}: stopped")
+            else:
+                self._print(f"  Unknown service: {name}")
+                self._last_exit_code = 1
+
+        elif cmd == "restart":
+            if not name:
+                self._print("  Usage: svc restart <name>")
+                self._last_exit_code = 1
+                return
+            mgr = init.get_manager(name)
+            if mgr:
+                ok = mgr.restart()
+                self._print(f"  {name}: {'✓ restarted' if ok else '✗ failed'}")
+            else:
+                self._print(f"  Unknown service: {name}")
+                self._last_exit_code = 1
+
+        elif cmd == "runlevel":
+            self._print(f"  Current runlevel: {init.runlevel}")
+
+        else:
+            self._print("  Usage: svc [list|start|stop|restart|status] [name]")
+            self._last_exit_code = 1
+
+    def _cmd_asm(self, args: str = "") -> None:
+        """Assemble and run a VM program. Usage: asm <file.asm>   or   piped | asm"""
+        source = self._piped_input if self._piped_input else ""
+        file_path = args.strip() if args else ""
+
+        if file_path == "--test" or file_path == "--self-test":
+            from domains.shell.vm import self_test as _vm_self_test
+            results = _vm_self_test()
+            self._print("  VM Self-Test:")
+            for line in results:
+                self._print(line)
+            return
+
+        if file_path == "--list" or file_path == "-l":
+            self._print("  Built-in programs (use asm --test to run):")
+            self._print("    hello      Hello World")
+            self._print("    counter    Count 0..9")
+            self._print("    fib        Fibonacci 0..12")
+            self._print("    collatz    Collatz from 27")
+            return
+
+        if file_path:
+            try:
+                source = Path(os.path.expanduser(file_path)).read_text()
+            except Exception as e:
+                self._print(f"  asm: {e}")
+                self._last_exit_code = 1
+                return
+
+        if not source:
+            self._print("  Usage: asm <file.asm>   or   echo '<code>' | asm")
+            self._print("         asm --test          Run self-tests")
+            self._print("         asm --list          List built-in example programs")
+            self._last_exit_code = 1
+            return
+
+        try:
+            from domains.shell.vm import VMRunner, VMFault
+            runner = VMRunner(devices=self.os.devices)
+            output = runner.assemble_and_run(source)
+            for line in output:
+                self._print(line)
+        except VMFault as e:
+            self._print(f"  Assembly error: {e}")
+            self._last_exit_code = 1
+        except Exception as e:
+            self._print(f"  VM error: {e}")
+            self._last_exit_code = 1
+
+    # ── x86 VM (X86VirtualSystem with RBAC) ────────────────────────
+
+    def _cmd_vmperms(self, args: str = "") -> None:
+        """Show x86 VM RBAC permission matrix."""
+        from domains.shell.vm_permissions import Permission, Role, _ROLE_PERMISSIONS
+        perms = list(Permission)
+        roles = [Role.USER, Role.ADMIN, Role.KERNEL]
+        col_w = max(len(p.name) for p in perms) + 2
+        header = f"{'Permission':>{col_w}}  {'USER':>6} {'ADMIN':>6} {'KERNEL':>7}"
+        self._print(header)
+        self._print("─" * len(header))
+        for p in perms:
+            cells = " ".join("  ✓  " if p in _ROLE_PERMISSIONS[r] else "     " for r in roles)
+            self._print(f"{p.name:>{col_w}}  {cells}")
+        self._print("")
+
+    # ── Built-in x86 assembly programs for vmrun ─────────────────────────
+
+    HELLO_X86 = """\
+[BITS 32]
+mov eax, 3
+mov ebx, 1
+mov ecx, hello
+mov edx, 18
+int 0x80
+mov eax, 1
+xor ebx, ebx
+int 0x80
+jmp $
+hello: db 'Hello from x86 VM!', 10
+"""
+
+    ECHO_X86 = """\
+[BITS 32]
+mov eax, 3
+mov ebx, 1
+mov ecx, msg
+mov edx, 42
+int 0x80
+mov eax, 1
+xor ebx, ebx
+int 0x80
+jmp $
+msg: db 'echo: built-in x86 program (piped input not yet supported)', 10
+"""
+
+    FIB_X86 = """\
+[BITS 32]
+mov esi, 10
+mov byte [num], '0'
+.loop:
+push esi
+mov eax, 3
+mov ebx, 1
+mov ecx, num
+mov edx, 1
+int 0x80
+mov eax, 3
+mov ebx, 1
+mov ecx, space
+mov edx, 1
+int 0x80
+pop esi
+inc byte [num]
+dec esi
+jnz .loop
+mov eax, 3
+mov ebx, 1
+mov ecx, nl
+mov edx, 1
+int 0x80
+mov eax, 1
+xor ebx, ebx
+int 0x80
+num: db '0'
+space: db ' '
+nl: db 10
+"""
+
+    COLLATZ_X86 = """\
+[BITS 32]
+mov ecx, 5
+mov byte [num], '0'
+.loop:
+push ecx
+mov eax, 3
+mov ebx, 1
+mov ecx, num
+mov edx, 1
+int 0x80
+mov eax, 3
+mov ebx, 1
+mov ecx, nl
+mov edx, 1
+int 0x80
+pop ecx
+inc byte [num]
+dec ecx
+jnz .loop
+mov eax, 1
+xor ebx, ebx
+int 0x80
+num: db '0'
+nl: db 10
+"""
+
+    def _cmd_vmrun(self, args: str = "") -> None:
+        """Run x86 assembly in X86VirtualSystem with RBAC.
+        Usage: vmrun [--admin|--kernel] [--steps=N] [--debug] <file.asm>
+               vmrun [--admin|--kernel] [--steps=N] [--debug] <name>   (built-in)
+               echo '<code>' | vmrun [--admin|--kernel] [--steps=N] [--debug]
+        Built-in names: hello, echo, fib, collatz
+        """
+        source = self._piped_input if self._piped_input else ""
+        role = "user"
+        max_steps = 5000
+        debug = False
+        rest = args.strip()
+
+        # Parse flags
+        while rest:
+            if rest.startswith("--admin"):
+                role = "admin"
+                rest = rest[len("--admin"):].lstrip()
+            elif rest.startswith("--kernel"):
+                role = "kernel"
+                rest = rest[len("--kernel"):].lstrip()
+            elif rest.startswith("--steps="):
+                try:
+                    max_steps = int(rest[len("--steps="):].split()[0])
+                    rest = rest[len("--steps=") + len(str(max_steps)):].lstrip()
+                except ValueError:
+                    self._print("  vmrun: --steps=N requires an integer")
+                    self._last_exit_code = 1
+                    return
+            elif rest.startswith("--debug"):
+                debug = True
+                rest = rest[len("--debug"):].lstrip()
+            elif rest.startswith("--list"):
+                self._print("  Built-in x86 programs:")
+                self._print(f"    {'hello':15s} Print 'Hello from x86 VM!'")
+                self._print(f"    {'count':15s} Count 0 to 9")
+                self._print(f"    {'counter':15s} Count 0 to 4")
+                self._last_exit_code = 0
+                return
+            else:
+                break
+
+        max_role = os.environ.get("MAN_VM_ROLE", "kernel")
+        max_idx = {"user": 0, "admin": 1, "kernel": 2}
+        role_idx = {"user": 0, "admin": 1, "kernel": 2}
+        if role_idx.get(role, 0) > max_idx.get(max_role, 2):
+            self._print(f"  vmrun: --{role} requires MAN_VM_ROLE={role} or higher (current: {max_role})")
+            self._last_exit_code = 1
+            return
+
+        file_or_name = rest if rest else ""
+
+        # Check built-in programs by name
+        builtins = {
+            "hello": ShellREPL.HELLO_X86,
+            "count": ShellREPL.FIB_X86,
+            "counter": ShellREPL.COLLATZ_X86,
+        }
+        if file_or_name and file_or_name in builtins:
+            source = builtins[file_or_name]
+        elif file_or_name:
+            try:
+                source = Path(os.path.expanduser(file_or_name)).read_text()
+            except Exception as e:
+                self._print(f"  vmrun: {e}")
+                self._last_exit_code = 1
+                return
+
+        if not source:
+            self._print("  Usage: vmrun [--admin|--kernel] [--steps=N] [--debug] <file.asm>")
+            self._print("         vmrun --list")
+            self._print("         echo '<code>' | vmrun [--admin|--kernel]")
+            self._last_exit_code = 1
+            return
+
+        try:
+            from domains.shell.vm import X86VirtualSystem
+            from domains.shell.vm_permissions import Role
+            vs = X86VirtualSystem()
+
+            pid = vs.spawn("user_prog", source)
+            if pid is None:
+                self._print("  vmrun: failed to spawn process")
+                self._last_exit_code = 1
+                return
+
+            role_map = {"user": Role.USER, "admin": Role.ADMIN, "kernel": Role.KERNEL}
+            vs._syscall._rbac.assign(pid, role_map[role])
+
+            vs.scheduler.start(vs.cpu)
+            current = vs.scheduler.current
+            if current is None:
+                self._print("  vmrun: no process to run")
+                self._last_exit_code = 1
+                return
+
+            current.restore_to_cpu(vs.cpu)
+
+            # Capture SYS_WRITE output instead of printing directly
+            output_buffer: list[str] = []
+            original_write = vs._syscall._sys_write
+
+            def _captured_write(fd, buf_addr, count):
+                if fd in (1, 2):
+                    data = bytes(vs.cpu._read8(buf_addr + i) for i in range(count))
+                    output_buffer.append(data.decode('ascii', errors='replace'))
+                    return count
+                return original_write(fd, buf_addr, count)
+
+            vs._syscall._sys_write = _captured_write
+            try:
+                vs.cpu.run(max_steps=max_steps)
+            finally:
+                vs._syscall._sys_write = original_write
+
+            exit_code = vs.cpu._regs[0] & 0xFFFFFFFF
+            for line in output_buffer:
+                self._print(line.rstrip())
+            self._print(f"  [exit: {exit_code}, role: {role}, pid: {pid}, steps: {max_steps}]")
+
+            if debug:
+                reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
+                self._print(f"  Registers: {', '.join(f'{n}=0x{vs.cpu._regs[i]:08x}' for i, n in enumerate(reg_names))}")
+                self._print(f"  EIP: 0x{vs.cpu._eip:08x}")
+
+        except Exception as e:
+            self._print(f"  vmrun error: {e}")
+            self._last_exit_code = 1
+
+    # ── Notes (development journal) ────────────────────────────────
+
+    def _cmd_note(self, args: str = "") -> None:
+        """Development journal: note new/list/show/edit/delete/search/today/export."""
+        from notes import get_note_store
+        store = get_note_store(backend="mogdb")
+        parts = args.split(None, 1)
+        sub = parts[0].lower() if parts else "list"
+        rest = parts[1] if len(parts) > 1 else ""
+
+        if sub == "new":
+            self._note_new(store, rest)
+        elif sub == "list":
+            self._note_list(store, rest)
+        elif sub == "show":
+            self._note_show(store, rest)
+        elif sub == "edit":
+            self._note_edit(store, rest)
+        elif sub == "delete" or sub == "rm":
+            self._note_delete(store, rest)
+        elif sub == "search":
+            self._note_search(store, rest)
+        elif sub == "today":
+            self._note_today(store)
+        elif sub == "export":
+            self._note_export(store, rest)
+        elif sub == "tags":
+            self._note_tags(store)
+        elif sub == "status":
+            self._note_status_summary(store)
+        elif sub == "sprint":
+            self._note_sprint(store, rest)
+        elif sub == "timeline":
+            self._note_timeline(store, rest)
+        else:
+            self._print(f"  note: unknown subcommand '{sub}'")
+            self._print("  Usage: note <new|list|show|edit|delete|search|today|export|tags|status|sprint|timeline> [args]")
+            self._last_exit_code = 1
+
+    def _note_new(self, store, rest: str) -> None:
+        if not rest:
+            self._print("  Usage: note new <title> [--tags tag1,tag2] [--status s] [--sprint S1] [--gh owner/repo#123]")
+            self._last_exit_code = 1
+            return
+
+        title = rest
+        tags: list[str] = []
+        status = "open"
+        sprint = ""
+        gh = ""
+
+        for flag, handler in [
+            ("--tags", lambda v: [t.strip() for t in v.split(",") if t.strip()]),
+            ("--status", lambda v: v),
+            ("--sprint", lambda v: v),
+            ("--gh", lambda v: v),
+        ]:
+            if flag in title:
+                idx = title.index(flag)
+                before = title[:idx].strip()
+                after = title[idx + len(flag) + 1:].strip()
+                rest_val = after.split()[0] if after else ""
+                if rest_val:
+                    remainder = after[len(rest_val):].strip()
+                    title = before + " " + remainder
+                    if flag == "--tags":
+                        tags = handler(rest_val)
+                    elif flag == "--status":
+                        status = handler(rest_val)
+                    elif flag == "--sprint":
+                        sprint = handler(rest_val)
+                    elif flag == "--gh":
+                        gh = handler(rest_val)
+                title = title.strip()
+
+        title = title.strip()
+        if not title:
+            self._print("  Title cannot be empty")
+            self._last_exit_code = 1
+            return
+
+        note = store.create(title, tags=tags, status=status, sprint=sprint, gh=gh)
+        sprint_tag = f" [{sprint}]" if sprint else ""
+        self._print(f"  Created: {note.short_id}  {note.title}{sprint_tag}")
+        self._last_exit_code = 0
+
+    def _note_list(self, store, rest: str) -> None:
+        tag = None
+        status = None
+        sprint = None
+        limit = 20
+
+        if "--tag" in rest:
+            idx = rest.index("--tag") + 5
+            tag = rest[idx:].split()[0] if rest[idx:].strip() else None
+        if "--status" in rest:
+            idx = rest.index("--status") + 8
+            status = rest[idx:].split()[0] if rest[idx:].strip() else None
+        if "--sprint" in rest:
+            idx = rest.index("--sprint") + 8
+            sprint = rest[idx:].split()[0] if rest[idx:].strip() else None
+        if "--limit" in rest:
+            idx = rest.index("--limit") + 7
+            try:
+                limit = int(rest[idx:].split()[0])
+            except (ValueError, IndexError):
+                pass
+
+        notes = store.list_notes(tag=tag, status=status, sprint=sprint, limit=limit)
+        if not notes:
+            self._print("  No notes found.")
+            return
+
+        # Group by date
+        by_date: dict[str, list] = {}
+        for n in notes:
+            by_date.setdefault(n.date_str, []).append(n)
+
+        for date_str, day_notes in by_date.items():
+            self._print(f"\n  {date_str}")
+            for n in day_notes:
+                tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
+                status_icon = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}.get(n.status, "?")
+                self._print(f"    {status_icon} {n.short_id}  {n.title}{tags_str}")
+        self._print(f"\n  {len(notes)} note(s)")
+        self._last_exit_code = 0
+
+    def _note_show(self, store, rest: str) -> None:
+        if not rest.strip():
+            self._print("  Usage: note show <note-id>")
+            self._last_exit_code = 1
+            return
+
+        note = store.get(rest.strip())
+        if note is None:
+            self._print(f"  Note not found: {rest.strip()}")
+            self._last_exit_code = 1
+            return
+
+        tags_str = ", ".join(note.tags) if note.tags else "none"
+        self._print(f"  {note.title}")
+        self._print(f"  id: {note.id}")
+        self._print(f"  created: {note.created_at}")
+        self._print(f"  updated: {note.updated_at}")
+        self._print(f"  status: {note.status}")
+        self._print(f"  tags: {tags_str}")
+        if note.sprint:
+            self._print(f"  sprint: {note.sprint}")
+        if note.gh:
+            self._print(f"  gh: {note.gh}")
+            if note.gh_url:
+                self._print(f"  gh_url: {note.gh_url}")
+        self._print("")
+        for line in note.body.split("\n"):
+            self._print(f"  {line}")
+        self._last_exit_code = 0
+
+    def _note_edit(self, store, rest: str) -> None:
+        parts = rest.split(None, 1)
+        if not parts:
+            self._print("  Usage: note edit <note-id> [--title T] [--tags t1,t2] [--status s] [--sprint S1] [--gh owner/repo#123] [--body B]")
+            self._last_exit_code = 1
+            return
+
+        note_id = parts[0]
+        flags = parts[1] if len(parts) > 1 else ""
+
+        kwargs: dict[str, Any] = {}
+        if "--title" in flags:
+            idx = flags.index("--title") + 7
+            kwargs["title"] = flags[idx:].strip()
+        if "--tags" in flags:
+            idx = flags.index("--tags") + 6
+            tag_str = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+            kwargs["tags"] = [t.strip() for t in tag_str.split(",") if t.strip()]
+        if "--status" in flags:
+            idx = flags.index("--status") + 8
+            kwargs["status"] = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+        if "--sprint" in flags:
+            idx = flags.index("--sprint") + 8
+            kwargs["sprint"] = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+        if "--gh" in flags:
+            idx = flags.index("--gh") + 4
+            kwargs["gh"] = flags[idx:].split("--")[0].strip() if "--" in flags[idx:] else flags[idx:].strip()
+        if "--body" in flags:
+            idx = flags.index("--body") + 6
+            kwargs["body"] = flags[idx:].strip()
+
+        if not kwargs:
+            self._print("  No changes specified. Use --title, --tags, --status, or --body.")
+            self._last_exit_code = 1
+            return
+
+        updated = store.update(note_id, **kwargs)
+        if updated is None:
+            self._print(f"  Note not found: {note_id}")
+            self._last_exit_code = 1
+            return
+
+        self._print(f"  Updated: {updated.short_id}  {updated.title}")
+        self._last_exit_code = 0
+
+    def _note_delete(self, store, rest: str) -> None:
+        """Delete a note. Usage: note delete <id>"""
+        if not rest.strip():
+            self._print("  Usage: note delete <note-id>")
+            self._last_exit_code = 1
+            return
+
+        if store.delete(rest.strip()):
+            self._print(f"  Deleted: {rest.strip()}")
+            self._last_exit_code = 0
+        else:
+            self._print(f"  Note not found: {rest.strip()}")
+            self._last_exit_code = 1
+
+    def _note_search(self, store, rest: str) -> None:
+        """Search notes. Usage: note search <query>"""
+        if not rest.strip():
+            self._print("  Usage: note search <query>")
+            self._last_exit_code = 1
+            return
+
+        results = store.search(rest.strip())
+        if not results:
+            self._print(f"  No notes matching '{rest.strip()}'")
+            return
+
+        for n in results:
+            tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
+            self._print(f"    {n.short_id}  {n.title}{tags_str}")
+        self._print(f"\n  {len(results)} result(s)")
+        self._last_exit_code = 0
+
+    def _note_today(self, store) -> None:
+        """Show today's notes."""
+        notes = store.today()
+        if not notes:
+            self._print("  No notes today.")
+            return
+
+        for n in notes:
+            tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
+            status_icon = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}.get(n.status, "?")
+            self._print(f"    {status_icon} {n.short_id}  {n.title}{tags_str}")
+        self._print(f"\n  {len(notes)} note(s) today")
+        self._last_exit_code = 0
+
+    def _note_export(self, store, rest: str) -> None:
+        """Export all notes. Usage: note export [file.md]"""
+        output_path = rest.strip() if rest.strip() else None
+        content = store.export_all(output_path=output_path)
+        if output_path:
+            self._print(f"  Exported {store.count()} notes to {output_path}")
+        else:
+            self._print(content)
+        self._last_exit_code = 0
+
+    def _note_tags(self, store) -> None:
+        """List all tags with counts."""
+        tag_counts: dict[str, int] = {}
+        for note in store.list_notes(limit=9999):
+            for tag in note.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        if not tag_counts:
+            self._print("  No tags found.")
+            return
+
+        for tag, count in sorted(tag_counts.items()):
+            self._print(f"    {tag:20s}  {count} note(s)")
+        self._last_exit_code = 0
+
+    def _note_status_summary(self, store) -> None:
+        """Show notes grouped by status."""
+        status_counts: dict[str, int] = {}
+        for note in store.list_notes(limit=9999):
+            status_counts[note.status] = status_counts.get(note.status, 0) + 1
+
+        if not status_counts:
+            self._print("  No notes.")
+            return
+
+        icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+        for status in ["open", "wip", "done", "blocked"]:
+            count = status_counts.get(status, 0)
+            if count:
+                icon = icons.get(status, "?")
+                self._print(f"    {icon} {status:10s}  {count}")
+        self._last_exit_code = 0
+
+    def _note_sprint(self, store, rest: str) -> None:
+        """Sprint operations. Usage: note sprint <name> [list|report]"""
+        parts = rest.split(None, 1)
+        sprint_name = parts[0].strip() if parts else ""
+        action = parts[1].strip().lower() if len(parts) > 1 else "list"
+
+        if not sprint_name:
+            sprints = store.sprints()
+            if not sprints:
+                self._print("  No sprints found.")
+                return
+            self._print(f"  Sprints: {', '.join(sprints)}")
+            return
+
+        notes = store.list_notes(sprint=sprint_name, limit=9999)
+        if not notes:
+            self._print(f"  No notes for sprint '{sprint_name}'.")
+            return
+
+        if action == "report":
+            report = store.sprint_report(sprint_name)
+            for line in report.split("\n"):
+                self._print(f"  {line}")
+        else:
+            by_status: dict[str, list] = {}
+            for n in notes:
+                by_status.setdefault(n.status, []).append(n)
+            for status in ["open", "wip", "done", "blocked"]:
+                items = by_status.get(status, [])
+                if not items:
+                    continue
+                icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+                icon = icons.get(status, "?")
+                self._print(f"\n  {icon} {status.upper()} ({len(items)})")
+                for n in items:
+                    gh_tag = f"  #{n.gh}" if n.gh else ""
+                    self._print(f"    {n.short_id}  {n.title}{gh_tag}")
+            self._print(f"\n  {len(notes)} note(s) in sprint '{sprint_name}'")
+        self._last_exit_code = 0
+
+    def _note_timeline(self, store, rest: str) -> None:
+        """Timeline view. Usage: note timeline [--days N] [--tag T] [--status S]"""
+        days = 7
+        tag: str | None = None
+        status: str | None = None
+        args = rest.split()
+        i = 0
+        while i < len(args):
+            if args[i] == "--days" and i + 1 < len(args):
+                try:
+                    days = int(args[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif args[i] == "--tag" and i + 1 < len(args):
+                tag = args[i + 1]
+                i += 2
+            elif args[i] == "--status" and i + 1 < len(args):
+                status = args[i + 1]
+                i += 2
+            else:
+                i += 1
+        groups = store.timeline(days=days, tag=tag, status=status)
+        if not groups:
+            self._print("  No notes in the specified range.")
+            return
+        total = 0
+        icons = {"open": "○", "wip": "◐", "done": "●", "blocked": "✕"}
+        for date_str, day_notes in groups:
+            self._print(f"\n  ▬ {date_str} ▬")
+            for n in day_notes:
+                icon = icons.get(n.status, "?")
+                tags_s = f"  [{', '.join(n.tags)}]" if n.tags else ""
+                sprint_s = f"  [{n.sprint}]" if n.sprint else ""
+                self._print(f"    {icon} {n.short_id}  {n.title}{tags_s}{sprint_s}")
+            total += len(day_notes)
+        self._print(f"\n  {total} note(s) across {len(groups)} day(s)")
+        self._last_exit_code = 0
+
+    # ── Command registry ────────────────────────────────────────────
+    # AI-domain commands + shell essentials only.
+    # cd and pwd are built-in because they must reflect the shell's CWD
+    # (subprocess can't change the parent's directory).
+    # Other Unix standard commands delegate to system binaries.
+
+    # ── Main loop ───────────────────────────────────────────────────
+
+    def _dispatch(self, line: str) -> None:
+        """Execute one input line with full pipeline/background/redirect semantics.
+
+        Shared by the line-mode run loop and the curses TUI so both dispatch
+        identically (history, state, audit, pipelines, background jobs).
+
+        Args:
+            line: the raw input line to execute.
+
+        Side effects:
+            - appends to history, updates state + audit
+            - runs the command, writes output via self.console / self._print
+            - sets self._last_exit_code / self._aborted
+        """
+        import time as _time
+
+        self._cmd_count += 1
+        self._history.append(line)
+        self.state.add_history(line)
+        self.state.save()
+
+        self._aborted = False
+
+        commands, is_bg, should_time = self._parse_pipeline(line)
+
+        try:
+            if is_bg:
+                if len(commands) > 1:
+                    self._execute_background_tuples(commands)
+                else:
+                    self._execute_background(commands[0][0])
+                self._audit.command(line, commands[0][0].split()[0] if commands[0][0] else "", line, 0, is_background=True, is_pipeline=len(commands) > 1)
+                return
+            if len(commands) > 1:
+                self._execute_pipeline(commands, should_time=should_time)
+                self._audit.command(line, "pipeline", line, self._last_exit_code, is_pipeline=True)
+                return
+
+            raw_cmd, op = commands[0]
+            expanded = self._expand_alias(raw_cmd)
+            parts = expanded.split(maxsplit=1)
+            cmd = parts[0].lower()
+            args_str = parts[1] if len(parts) > 1 else ""
+            handler = self.COMMANDS.get(cmd)
+            ext_mod = self._ext_cmds.get(cmd) if handler is None else None
+
+            if handler or ext_mod:
+                if not self._check_permission(cmd, args_str, interactive=True):
+                    self._last_exit_code = 126
+                    self._audit.command(line, cmd, args_str, 126, elapsed_ms=0, expanded=expanded)
+                    return
+                t0 = _time.time() if should_time else None
+                try:
+                    if ext_mod:
+                        from .console import Console as _Console
+                        c = _Console(self.io, has_readline=_HAS_READLINE)
+                        self._last_exit_code = ext_mod.run(
+                            [cmd] + (args_str.split() if args_str else []),
+                            c, self.cmds, self._env,
+                        )
+                    else:
+                        handler(self, args_str)
+                        self._last_exit_code = 0
+                except SystemExit as e:
+                    self._last_exit_code = e.code if isinstance(e.code, int) else 1
+                except Exception as e:
+                    self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+                    self._last_exit_code = 1
+                    self._audit.error(line, repr(e))
+                elapsed_ms = (_time.time() - t0) * 1000 if t0 else None
+                self._audit.command(line, cmd, args_str, self._last_exit_code, elapsed_ms=elapsed_ms, expanded=expanded)
+                if should_time and elapsed_ms is not None:
+                    self._print(f"{_C_DIM}  [{elapsed_ms/1000:.2f}s]{_C_RESET}")
+            else:
+                suggestion = self._suggest_command(cmd)
+                msg = f"  {_C_RED}Unknown command:{_C_RESET} {cmd}. Type `help`."
+                if suggestion:
+                    msg += f" Did you mean `{_C_YELLOW}{suggestion}{_C_RESET}`?"
+                self._print(msg)
+                self._last_exit_code = 127
+                self._audit.unknown(cmd)
+        except KeyboardInterrupt:
+            self._print(f"  {_C_DIM}Aborted{_C_RESET}")
+            self._aborted = True
+            self._last_exit_code = 0
+        except Exception as e:
+            self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+            self._audit.error(line, repr(e))
+
+    def run(self) -> None:
+        import signal as _signal
+        import logging as _logging
+
+        # Suppress kernel logs from stderr during boot (captured by LogBufferHandler)
+        _kernel_logger = _logging.getLogger("slo.kernel")
+        _prev_propagate = _kernel_logger.propagate
+        _kernel_logger.propagate = False
+
+        # Auto-start API before boot
+        api = self.os.api
+        if not api.is_running:
+            with self.console.spinner("Connecting to API server") as s:
+                result = api.start()
+                if result.get("ok"):
+                    s.ok(result.get("message", "ready"))
+                else:
+                    s.fail(f"API start failed: {result.get('error', 'unknown')}")
+
+        boot_log, api_status = self.os.boot()
+        _kernel_logger.propagate = _prev_propagate
+
+        self._running = True
+        self._status("ok", f"System ready  ({api_status.get('model_id') or 'no model'})" if api_status.get("available") else "API not connected")
+
+        # Split-panel TUI is opt-in: MAN_TUI=1, `sloughgpt shell --tui`, or
+        # the `tui` command. Line mode is the default.
+        if self._use_tui:
+            try:
+                from .tui_repl import TuiRepl
+                TuiRepl(self, self._log_buffer).run()
+            except Exception as e:
+                self._print(f"  {_C_RED}TUI unavailable, falling back to line mode:{_C_RESET} {e}")
+            self._running = False
+            self._audit.shutdown()
+            self.state.save()
+            self.os.shutdown()
+            return
+
+        self._print_header()
+        self._audit.startup()
+
+        def _graceful_shutdown(signum, frame):
+            self._print(f"\n  {_C_DIM}Signal {signum} received — shutting down gracefully{_C_RESET}")
+            self._running = False
+
+        for _sig in (_signal.SIGTERM, _signal.SIGHUP):
+            try:
+                _signal.signal(_sig, _graceful_shutdown)
+            except (OSError, ValueError):
+                pass  # signal not available on this platform
+        if self.state.first_run:
+            self._show_welcome()
+        while self._running:
+            try:
+                # Poll for new log entries before rendering the prompt
+                self._log_display.poll()
+                prompt = self._render_prompt()
+                line = self.io.read(f" {prompt} ")
+            except EOFError:
+                self._print()
+                break
+            except KeyboardInterrupt:
+                self._print("^C")
+                self._last_exit_code = 0
+                continue
+
+            # Multiline continuation with trailing backslash
+            while line.endswith("\\") and not line.endswith("\\\\"):
+                line = line.rstrip("\\").rstrip()
+                try:
+                    continuation = self.io.read("  > ")
+                    line = f"{line} {continuation}"
+                except (EOFError, KeyboardInterrupt):
+                    break
+
+            if not line:
+                continue
+
+            self._dispatch(line)
+
+        self._audit.shutdown()
+        self.state.save()
+        self.os.shutdown()
+
+
+# ── Build COMMANDS class attribute ────────────────────────────────
+# Cannot be done in the class body because LinuxCommandsMixin methods
+# are not yet available as bare names. Built here after class creation.
+_shell_commands = {
+    "help": ShellREPL._cmd_help,
+    "exit": ShellREPL._cmd_exit,
+    "cd": ShellREPL._cmd_cd,
+    "pwd": ShellREPL._cmd_pwd,
+    "echo": ShellREPL._cmd_echo,
+    "ls": ShellREPL._cmd_ls,
+    "cat": ShellREPL._cmd_cat,
+    "head": ShellREPL._cmd_head,
+    "tail": ShellREPL._cmd_tail,
+    "grep": ShellREPL._cmd_grep,
+    "find": ShellREPL._cmd_find,
+    "clear": ShellREPL._cmd_clear,
+    "history": ShellREPL._cmd_history,
+    "alias": ShellREPL._cmd_alias,
+    "unalias": ShellREPL._cmd_unalias,
+    "py": ShellREPL._cmd_py,
+    "chat": ShellREPL._cmd_chat,
+    "gen": ShellREPL._cmd_gen,
+    "ai": ShellREPL._cmd_ai,
+    "models": ShellREPL._cmd_models,
+    "load": ShellREPL._cmd_load,
+    "train": ShellREPL._cmd_train,
+    "ops": ShellREPL._cmd_ops,
+    "operations": ShellREPL._cmd_ops,
+    "datasets": ShellREPL._cmd_datasets,
+    "knowledge": ShellREPL._cmd_knowledge,
+    "checkpoints": ShellREPL._cmd_checkpoints,
+    "souls": ShellREPL._cmd_souls,
+    "agents": ShellREPL._cmd_agents,
+    "status": ShellREPL._cmd_status,
+    "metrics": ShellREPL._cmd_metrics,
+    "events": ShellREPL._cmd_events,
+    "logs": ShellREPL._cmd_logs,
+    "api": ShellREPL._cmd_api,
+    "kill": ShellREPL._cmd_kill,
+    "ps": ShellREPL._cmd_ps,
+    "permit": ShellREPL._cmd_permit,
+    "deny": ShellREPL._cmd_deny,
+    "permissions": ShellREPL._cmd_permissions,
+    "confirm": ShellREPL._cmd_confirm,
+    "protect": ShellREPL._cmd_protect,
+    "unprotect": ShellREPL._cmd_unprotect,
+    "tui": ShellREPL._cmd_tui,
+}
+ShellREPL.COMMANDS = _shell_commands
+del _shell_commands

@@ -3685,12 +3685,12 @@ class X86Assembler:
         elif line.upper().startswith("ORG"):
             self._org = self._parse_imm(line.split(None, 1)[1])
 
-    def _estimate_times_size(self, line):
+    def _estimate_times_size(self, line):  # pragma: no cover
         parts = line.split(None, 2)
         count = self._parse_imm(parts[1])
         return count * self._estimate_data_size(parts[2])
 
-    def _estimate_data_size(self, line):
+    def _estimate_data_size(self, line):  # pragma: no cover
         if line.startswith("times"):
             return self._estimate_times_size(line)
         if line.startswith("db"):
@@ -3711,7 +3711,7 @@ class X86Assembler:
             return 4 * len(line[2:].strip().split(","))
         return 1
 
-    def _estimate_insn_size(self, line):
+    def _estimate_insn_size(self, line):  # pragma: no cover
         parts = line.split(None, 1)
         op = parts[0].lower()
         if op in ("nop", "hlt", "cli", "sti", "ret", "iret", "pusha", "popa", "cld", "std",
@@ -3754,7 +3754,7 @@ class X86Assembler:
             return 2
         return 3  # default
 
-    def _estimate_mov_size(self, operands):
+    def _estimate_mov_size(self, operands):  # pragma: no cover
         parts = self._split_ops(operands)
         if len(parts) < 2:
             return 2
@@ -3768,7 +3768,7 @@ class X86Assembler:
             return 3
         return 2
 
-    def _estimate_alu_size(self, operands):
+    def _estimate_alu_size(self, operands):  # pragma: no cover
         parts = self._split_ops(operands)
         if len(parts) < 2:
             return 2

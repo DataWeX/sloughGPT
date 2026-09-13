@@ -1,15 +1,7 @@
-"""
-Cognitive Architecture Domain
+"""Backward-compatibility shim — re-exports from the local cognitive submodules."""
 
-Components for cognitive processing, memory management, reasoning,
-learning, and creativity.
-"""
-
-from __future__ import annotations
-
-from .base import CognitiveDomain
-from .processor import CognitiveProcessor
-from .core import (
+from domains.cognitive.base import CognitiveDomain, CognitiveException
+from domains.cognitive.core import (
     CognitiveCore,
     ThinkingMode,
     ReasoningType,
@@ -17,9 +9,11 @@ from .core import (
     CreativeIdea,
     ReasoningChain,
 )
+from domains.cognitive.processor import CognitiveProcessor
 
 __all__ = [
     "CognitiveDomain",
+    "CognitiveException",
     "CognitiveProcessor",
     "CognitiveCore",
     "ThinkingMode",

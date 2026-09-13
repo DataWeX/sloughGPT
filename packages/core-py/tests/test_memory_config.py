@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from domain.memory._internal.memory_config import MemoryConfig
+from domain.memory._internal.config import MemoryConfig
 
 
 class TestMemoryConfigDefaults:

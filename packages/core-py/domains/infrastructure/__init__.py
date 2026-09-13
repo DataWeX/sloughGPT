@@ -1,43 +1,51 @@
-"""
-Infrastructure package exports.
+"""Backward-compatibility shim — imports from the new ``domain.infrastructure`` package."""
 
-Provides:
-  - MeaningTags — fixed semantic reference vectors for embedding space
-  - EmbeddingService — foundational base layer for vector operations
-  - TruthLabeler — rule-based first-glance text classification
-  - TruthMaintainer — self-retrain on misclassified texts
-  - SpacedRepetitionScheduler — memory scheduling
-  - ConfigManager, AppConfig, get_config — typed config with env override
-  - EventBus — typed async pub/sub
-  - TaskQueue, InProcessTaskQueue — async priority queue
-  - LifecycleManager — ordered startup/shutdown with health gates
-"""
-
-from __future__ import annotations
-
-from .anchor_store import MeaningTags, get_default_meaning_tags
-from .embedding_service import EmbeddingService, get_embedding_service, reset_embedding_service
-from .truth_labeler import TruthLabeler, get_truth_labeler
-from .truth_maintainer import TruthMaintainer, get_truth_maintainer
-from .spaced_repetition_engine import SpacedRepetitionScheduler
-from .lifecycle import (
-    LifecycleManager,
-    LifecyclePhase,
-    StartupHook,
-    ShutdownHook,
-    get_lifecycle_manager,
-    reset_lifecycle_manager,
-)
-from .cpu_topology import CpuTopology, detect_topology
-from .resource_manager import ResourceManager, ResourceAllocation, get_resource_manager, compute_allocation
+try:
+    from domain.infrastructure._internal.config import (
+        AppConfig,
+        get_config,
+        reload_config,
+        ConfigManager,
+        get_config_manager,
+        set_config_manager,
+    )
+    from domain.infrastructure._internal.event_bus import (
+        EventBus,
+        get_event_bus,
+    )
+    from domain.infrastructure._internal.lifecycle import (
+        LifecycleManager,
+        LifecyclePhase,
+    )
+    from domain.infrastructure._internal.errors import (
+        AppError,
+        ErrorCode,
+    )
+except (ImportError, AttributeError):
+    AppConfig = None
+    get_config = None
+    reload_config = None
+    ConfigManager = None
+    get_config_manager = None
+    set_config_manager = None
+    EventBus = None
+    get_event_bus = None
+    LifecycleManager = None
+    LifecyclePhase = None
+    AppError = Exception
+    ErrorCode = None
 
 __all__ = [
-    "MeaningTags", "get_default_meaning_tags",
-    "EmbeddingService", "get_embedding_service", "reset_embedding_service",
-    "TruthLabeler", "get_truth_labeler",
-    "TruthMaintainer", "get_truth_maintainer",
-    "SpacedRepetitionScheduler",
-    "LifecycleManager", "LifecyclePhase", "StartupHook", "ShutdownHook", "get_lifecycle_manager", "reset_lifecycle_manager",
-    "CpuTopology", "detect_topology",
-    "ResourceManager", "ResourceAllocation", "get_resource_manager", "compute_allocation",
+    "AppConfig",
+    "get_config",
+    "reload_config",
+    "ConfigManager",
+    "get_config_manager",
+    "set_config_manager",
+    "EventBus",
+    "get_event_bus",
+    "LifecycleManager",
+    "LifecyclePhase",
+    "AppError",
+    "ErrorCode",
 ]

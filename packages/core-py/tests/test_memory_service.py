@@ -6,9 +6,9 @@ import pytest
 
 from pathlib import Path
 
-from domain.memory._internal.memory_config import MemoryConfig
-from domain.memory._internal.memory_provider import KnowledgeMemoryProvider
-from domain.memory._internal.memory_service import MemoryService, get_memory_service
+from domain.memory._internal.config import MemoryConfig
+from domain.memory._internal.provider import KnowledgeMemoryProvider
+from domain.memory._internal.service import MemoryService, get_memory_service
 from domains.learner.knowledge import KnowledgeMemory
 
 
@@ -511,7 +511,7 @@ class TestChatWiring:
 
     def test_router_imports_memory_service(self):
         src = self._ROUTER.read_text()
-        assert "from domain.memory._internal.memory_service import get_memory_service" in src
+        assert "from domain.memory._internal.service import get_memory_service" in src
 
     def test_router_invokes_remember_facts_in_post_gen(self):
         src = self._ROUTER.read_text()

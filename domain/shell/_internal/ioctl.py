@@ -1,0 +1,92 @@
+"""
+Ioctl interface — uses existing SyscallResult, follows project conventions.
+
+No new library. Just clean ioctl dispatch using what we already have.
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+
+
+
+class IoctlCommand(Enum):
+    """Ioctl commands — type-safe command identifiers."""
+
+    # Common
+    INFO = "INFO"
+    LIST_COMMANDS = "LIST_COMMANDS"
+
+    # TensorDevice
+    MATMUL = "MATMUL"
+    DOT = "DOT"
+    INV = "INV"
+    SVD = "SVD"
+    EIG = "EIG"
+    RELU = "RELU"
+    LEAKY_RELU = "LEAKY_RELU"
+    SIGMOID = "SIGMOID"
+    TANH = "TANH"
+    SOFTMAX = "SOFTMAX"
+    LOG_SOFTMAX = "LOG_SOFTMAX"
+    GELU = "GELU"
+    SILU = "SILU"
+    ELU = "ELU"
+    SELU = "SELU"
+    ADD = "ADD"
+    SUB = "SUB"
+    MUL = "MUL"
+    DIV = "DIV"
+    NEG = "NEG"
+    ABS = "ABS"
+    POW = "POW"
+    SQRT = "SQRT"
+    EXP = "EXP"
+    LOG = "LOG"
+    SUM = "SUM"
+    MEAN = "MEAN"
+    STD = "STD"
+    VAR = "VAR"
+    MAX = "MAX"
+    MIN = "MIN"
+    ARGMAX = "ARGMAX"
+    ARGMIN = "ARGMIN"
+    RESHAPE = "RESHAPE"
+    TRANSPOSE = "TRANSPOSE"
+    FLATTEN = "FLATTEN"
+    SQUEEZE = "SQUEEZE"
+    UNSQUEEZE = "UNSQUEEZE"
+    CAT = "CAT"
+    STACK = "STACK"
+    CONV1D = "CONV1D"
+    CONV2D = "CONV2D"
+    MAX_POOL1D = "MAX_POOL1D"
+    MAX_POOL2D = "MAX_POOL2D"
+    AVG_POOL1D = "AVG_POOL1D"
+    AVG_POOL2D = "AVG_POOL2D"
+    BATCH_NORM = "BATCH_NORM"
+    LAYER_NORM = "LAYER_NORM"
+    RMS_NORM = "RMS_NORM"
+    ATTENTION = "ATTENTION"
+    CROSS_ENTROPY = "CROSS_ENTROPY"
+    MSE = "MSE"
+    MAE = "MAE"
+    SGD_STEP = "SGD_STEP"
+    ADAM_STEP = "ADAM_STEP"
+    CLIP_GRAD_NORM = "CLIP_GRAD_NORM"
+    DROPOUT = "DROPOUT"
+    EMBEDDING = "EMBEDDING"
+    LINEAR = "LINEAR"
+
+    # NPUDevice
+    LOAD = "LOAD"
+    UNLOAD = "UNLOAD"
+    CALL = "CALL"
+    BATCH = "BATCH"
+    PIPELINE = "PIPELINE"
+    PROFILE = "PROFILE"
+    QUANTIZE = "QUANTIZE"
+    CHECKPOINT_SAVE = "CHECKPOINT_SAVE"
+    CHECKPOINT_LOAD = "CHECKPOINT_LOAD"
+    MEMORY = "MEMORY"
+    COMPUTE = "COMPUTE"

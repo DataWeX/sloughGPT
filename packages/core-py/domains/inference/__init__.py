@@ -1,14 +1,13 @@
-"""
-SloughGPT Inference Module
+"""Backward-compatibility shim — imports from the new ``domain.inference`` package."""
 
-.soul Soul Unit format — the living identity format for trained AI models.
-
-All exports are lightweight.
-"""
-
-from __future__ import annotations
-
-from .slo_format import (
+from domain.inference import (
+    VectorStoreType,
+    VectorEntry,
+    QueryResult,
+    VectorStore,
+    InMemoryVectorStore,
+    MogDBVectorStore,
+    simple_embed,
     SloProfile,
     PersonalityCore,
     BehavioralTraits,
@@ -22,13 +21,16 @@ from .slo_format import (
     load_soul,
     write_v3_sou,
     generate_sample_dialogue,
-    SOU_MAGIC,
-    SOU_VERSION,
-    SOU_VERSION_V3,
-    SOU_TRADEMARK,
 )
 
 __all__ = [
+    "VectorStoreType",
+    "VectorEntry",
+    "QueryResult",
+    "VectorStore",
+    "InMemoryVectorStore",
+    "MogDBVectorStore",
+    "simple_embed",
     "SloProfile",
     "PersonalityCore",
     "BehavioralTraits",
@@ -42,8 +44,4 @@ __all__ = [
     "load_soul",
     "write_v3_sou",
     "generate_sample_dialogue",
-    "SOU_MAGIC",
-    "SOU_VERSION",
-    "SOU_VERSION_V3",
-    "SOU_TRADEMARK",
 ]
