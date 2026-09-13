@@ -56,6 +56,8 @@ class HealthRouter:
         self.router.add_api_route("/ready", self.readiness, methods=["GET"])
         self.router.add_api_route("/detailed", self.detailed_health, methods=["GET"])
         self.router.add_api_route("/startup-progress", self.startup_progress, methods=["GET"])
+        self.router.add_api_route("/startup-status", self.startup_status, methods=["GET"])
+        self.router.add_api_route("/startup-history", self.startup_history, methods=["GET"])
         self.router.add_api_route("/debug", self.debug_info, methods=["GET"])
         self.router.add_api_route("/model", self.model_health, methods=["GET"])
         self.router.add_api_route("/summary", self.health_summary, methods=["GET"])
@@ -192,6 +194,27 @@ class HealthRouter:
             "hooks": status["hooks"],
             "stages": status["stages"],
             "errors": status["errors"],
+        })
+
+    @endpoint("health.startup_history")
+    async def startup_history(self) -> dict:
+        """Startup performance history.
+
+        Returns recent startup records, performance statistics, and
+        per-stage timing breakdowns for monitoring startup performance
+        over time.
+
+        Returns:
+            Envelope with startup history, stats, and stage breakdown.
+        """
+        from infrastructure.startup_history import get_startup_history
+
+        history = get_startup_history()
+        return success_response(data={
+            "records": history.get_records(limit=10),
+            "stats": history.get_stats(),
+            "stage_stats": history.get_stage_stats(),
+            "slow_startups": history.get_slow_startups(threshold_seconds=60.0),
         })
 
     @endpoint("health.debug_info")

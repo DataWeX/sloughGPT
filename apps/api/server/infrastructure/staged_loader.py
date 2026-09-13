@@ -121,6 +121,7 @@ class StagedLoader:
         self._errors: dict[str, str] = {}
         self._model_progress: float = 0.0
         self._model_progress_message: str = ""
+        self._startup_history: Any = None
 
     @property
     def stage(self) -> Stage:
@@ -148,6 +149,39 @@ class StagedLoader:
             collector.record_startup_model_progress(progress)
         except Exception:
             pass
+
+    def start_history(self) -> None:
+        """Start tracking startup history."""
+        try:
+            from infrastructure.startup_history import get_startup_history
+            self._startup_history = get_startup_history()
+            self._startup_history.start_startup()
+        except Exception:
+            pass
+
+    def record_stage_history(self, stage: str, duration: float) -> None:
+        """Record stage duration in history."""
+        if self._startup_history:
+            try:
+                self._startup_history.record_stage(stage, duration)
+            except Exception:
+                pass
+
+    def record_hook_history(self, hook: str, duration: float) -> None:
+        """Record hook duration in history."""
+        if self._startup_history:
+            try:
+                self._startup_history.record_hook(hook, duration)
+            except Exception:
+                pass
+
+    def finish_history(self, success: bool = True, error: str | None = None) -> None:
+        """Finish startup history tracking."""
+        if self._startup_history:
+            try:
+                self._startup_history.finish_startup(success=success, error=error)
+            except Exception:
+                pass
 
     def on(self, stage: Stage, name: str, hook: Callable[[], Coroutine[Any, Any, None]], timeout: float = 30.0) -> None:
         """Register a hook for a given stage."""
@@ -189,6 +223,9 @@ class StagedLoader:
         except Exception:
             pass
 
+        # Record history
+        self.record_stage_history(stage.name.lower(), stage_duration)
+
         ok_count = sum(1 for name, _, _ in hooks if name not in self._errors)
         logger.info(
             "Stage %s: complete (%d/%d hooks OK, %.1fs elapsed)",
@@ -218,6 +255,8 @@ class StagedLoader:
                     collector.record_startup_hook(name, info.duration)
                 except Exception:
                     pass
+                # Record hook history
+                self.record_hook_history(name, info.duration)
         except TimeoutError:
             logger.warning(
                 "Stage %s hook '%s' timed out after %.1fs",
