@@ -13,6 +13,7 @@ import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { authFetch } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
+import { StartupTimeline } from '@/components/startup/StartupTimeline'
 
 
 const QUICK_ACTIONS = [
@@ -877,6 +878,9 @@ function StartupTab() {
           </div>
         </div>
       )}
+
+      {/* Timeline */}
+      <StartupTimeline />
 
       {/* Hooks */}
       {hooks && Object.keys(hooks).length > 0 && (
