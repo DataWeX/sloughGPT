@@ -978,3 +978,16 @@ async def training_monitor_reset():
     monitor = get_training_monitor()
     monitor.reset()
     return success_response(data={"message": "Monitor reset"})
+
+
+@router.get("/monitor/resources")
+async def training_monitor_resources():
+    """Check system resources.
+
+    Returns CPU, memory, and GPU usage with alerts if thresholds exceeded.
+    """
+    from domains.training.monitor import get_training_monitor
+
+    monitor = get_training_monitor()
+    resources = monitor.check_resources()
+    return success_response(data=resources)

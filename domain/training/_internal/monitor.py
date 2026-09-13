@@ -335,6 +335,59 @@ class TrainingMonitor:
 
             return True
 
+    def check_resources(self) -> dict:
+        """Check system resources and generate alerts if needed."""
+        import os
+
+        resources = {
+            "cpu_percent": 0.0,
+            "memory_percent": 0.0,
+            "memory_used_gb": 0.0,
+            "memory_total_gb": 0.0,
+        }
+
+        try:
+            import psutil
+            cpu = psutil.cpu_percent(interval=0.1)
+            mem = psutil.virtual_memory()
+
+            resources["cpu_percent"] = cpu
+            resources["memory_percent"] = mem.percent
+            resources["memory_used_gb"] = mem.used / (1024 ** 3)
+            resources["memory_total_gb"] = mem.total / (1024 ** 3)
+
+            if mem.percent > 90:
+                self._add_alert(
+                    AlertType.MEMORY_WARNING,
+                    AlertSeverity.CRITICAL,
+                    f"Memory usage critical: {mem.percent:.0f}% ({resources['memory_used_gb']:.1f}/{resources['memory_total_gb']:.1f} GB)",
+                    value=mem.percent,
+                    threshold=90,
+                )
+            elif mem.percent > 80:
+                self._add_alert(
+                    AlertType.MEMORY_WARNING,
+                    AlertSeverity.WARNING,
+                    f"Memory usage high: {mem.percent:.0f}% ({resources['memory_used_gb']:.1f}/{resources['memory_total_gb']:.1f} GB)",
+                    value=mem.percent,
+                    threshold=80,
+                )
+
+            if cpu > 95:
+                self._add_alert(
+                    AlertType.TRAINING_SLOW,
+                    AlertSeverity.WARNING,
+                    f"CPU usage high: {cpu:.0f}% - training may be slow",
+                    value=cpu,
+                    threshold=95,
+                )
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug("Resource check failed: %s", e)
+
+        return resources
+
     def get_alerts(
         self,
         severity: AlertSeverity | None = None,
