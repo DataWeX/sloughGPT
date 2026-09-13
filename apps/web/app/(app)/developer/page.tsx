@@ -62,6 +62,7 @@ export default function DeveloperPage() {
           <TabsTrigger value="voice" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">Voice</TabsTrigger>
           <TabsTrigger value="api" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">API</TabsTrigger>
           <TabsTrigger value="quick" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">Quick Actions</TabsTrigger>
+          <TabsTrigger value="startup" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">Startup</TabsTrigger>
         </TabsList>
 
         <TabsContent value="shell"><ShellTab /></TabsContent>
@@ -69,6 +70,7 @@ export default function DeveloperPage() {
         <TabsContent value="voice"><VoiceTab /></TabsContent>
         <TabsContent value="api"><ApiTab /></TabsContent>
         <TabsContent value="quick"><QuickActionsTab /></TabsContent>
+        <TabsContent value="startup"><StartupTab /></TabsContent>
       </Tabs>
     </PageContainer>
   )
@@ -643,7 +645,7 @@ function QuickActionsTab() {
 
       {Object.entries(results).map(([label, result]) => result && (
         <div key={label} className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-[#1c1c1e] border-b border-white/[0.06]">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-[#1c1c1e] border-b border-[#0.06]">
             <span className="text-[11px] font-medium text-[#c7c7cc]">{label}</span>
             <div className="flex items-center gap-2">
               <span className={cn(
@@ -661,6 +663,159 @@ function QuickActionsTab() {
           </pre>
         </div>
       ))}
+    </div>
+  )
+}
+
+function StartupTab() {
+  const { health, startupStage, startupElapsed, startupModelProgress, startupModelProgressMessage } = useLiveStatus()
+  const [startupData, setStartupData] = useState<Record<string, unknown> | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchStartup = async () => {
+      try {
+        const res = await fetch('/health/startup-progress')
+        const json = await res.json()
+        setStartupData(json.data)
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchStartup()
+    const interval = setInterval(fetchStartup, 2000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const STAGE_COLORS: Record<string, string> = {
+    init: 'text-[#636366]',
+    critical: 'text-[#febc2e]',
+    ready: 'text-[#0a7aff]',
+    background: 'text-[#28c840]',
+  }
+
+  const HOOK_STATUS_COLORS: Record<string, string> = {
+    pending: 'text-[#636366]',
+    running: 'text-[#febc2e]',
+    ok: 'text-[#28c840]',
+    timeout: 'text-[#ff5f57]',
+    error: 'text-[#ff5f57]',
+  }
+
+  const hooks = startupData?.hooks as Record<string, { name: string; stage: string; status: string; duration_seconds: number; error: string | null }> | undefined
+  const stages = startupData?.stages as Record<string, { hooks: string[]; time: number | null }> | undefined
+
+  return (
+    <div className="space-y-4">
+      {/* Overview */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
+          <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Stage</div>
+          <div className={cn('text-[14px] font-medium font-mono', STAGE_COLORS[startupStage] ?? 'text-[#c7c7cc]')}>
+            {startupStage}
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
+          <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Elapsed</div>
+          <div className="text-[14px] font-medium font-mono text-[#c7c7cc]">
+            {startupElapsed.toFixed(1)}s
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
+          <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Model</div>
+          <div className="text-[14px] font-medium font-mono text-[#c7c7cc]">
+            {Math.round(startupModelProgress * 100)}%
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
+          <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Status</div>
+          <div className={cn('text-[14px] font-medium', startupStage === 'background' ? 'text-[#28c840]' : 'text-[#febc2e]'}>
+            {startupStage === 'background' ? 'Ready' : 'Starting'}
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] text-[#8e8e93]">Startup Progress</span>
+          <span className="text-[11px] text-[#636366] font-mono">{startupModelProgressMessage}</span>
+        </div>
+        <div className="h-2 rounded-full bg-[#1c1c1e] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-[#0a7aff] to-[#28c840] transition-all duration-300"
+            style={{ width: `${Math.min(100, (startupModelProgress || (startupStage === 'background' ? 1 : startupStage === 'ready' ? 0.6 : startupStage === 'critical' ? 0.3 : 0.1)) * 100)}%` }}
+          />
+        </div>
+        <div className="flex justify-between mt-1">
+          {['init', 'critical', 'ready', 'background'].map((stage, i) => (
+            <span key={stage} className={cn(
+              'text-[9px] font-mono',
+              i <= ['init', 'critical', 'ready', 'background'].indexOf(startupStage)
+                ? 'text-[#28c840]'
+                : 'text-[#2c2c2e]',
+            )}>
+              {stage}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Stages */}
+      {stages && (
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
+            <span className="text-[11px] font-medium text-[#8e8e93]">Stages</span>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {Object.entries(stages).map(([stage, data]) => (
+              <div key={stage} className="px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className={cn('w-2 h-2 rounded-full', stage === startupStage ? 'bg-[#0a7aff] animate-pulse' : data.time !== null ? 'bg-[#28c840]' : 'bg-[#2c2c2e]')} />
+                  <span className="text-[12px] font-medium text-[#c7c7cc] capitalize">{stage}</span>
+                  <span className="text-[10px] text-[#636366] font-mono">{data.hooks.length} hooks</span>
+                </div>
+                <span className="text-[11px] font-mono text-[#636366]">
+                  {data.time !== null ? `${data.time}s` : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Hooks */}
+      {hooks && Object.keys(hooks).length > 0 && (
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
+            <span className="text-[11px] font-medium text-[#8e8e93]">Hooks</span>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {Object.values(hooks).map((hook) => (
+              <div key={hook.name} className="px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className={cn('w-1.5 h-1.5 rounded-full', HOOK_STATUS_COLORS[hook.status] ?? 'text-[#636366]')} />
+                  <span className="text-[11px] font-mono text-[#c7c7cc]">{hook.name}</span>
+                  <span className="text-[9px] text-[#636366] uppercase">{hook.stage}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {hook.error && (
+                    <span className="text-[9px] text-[#ff5f57] max-w-32 truncate">{hook.error}</span>
+                  )}
+                  <span className="text-[10px] font-mono text-[#636366]">
+                    {hook.duration_seconds > 0 ? `${hook.duration_seconds}s` : '—'}
+                  </span>
+                  <span className={cn('text-[9px] font-mono uppercase', HOOK_STATUS_COLORS[hook.status])}>
+                    {hook.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
