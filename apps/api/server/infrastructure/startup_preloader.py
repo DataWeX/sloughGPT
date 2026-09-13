@@ -74,7 +74,8 @@ def _preload_module(module_name: str) -> PreloadResult:
     """Import a single module and return timing info."""
     start = time.perf_counter()
     try:
-        importlib.import_module(module_name)
+        from infrastructure.startup_cache import cached_import
+        cached_import(module_name)
         duration_ms = (time.perf_counter() - start) * 1000
         return PreloadResult(
             module=module_name,

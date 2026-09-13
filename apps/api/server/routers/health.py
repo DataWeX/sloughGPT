@@ -185,6 +185,7 @@ class HealthRouter:
         - Per-hook timing and status
         - Per-stage timing
         - Preloader status
+        - Module cache stats
         - Any errors encountered
 
         Returns:
@@ -192,10 +193,14 @@ class HealthRouter:
         """
         from infrastructure.staged_loader import get_staged_loader
         from infrastructure.startup_preloader import get_preload_status
+        from infrastructure.startup_cache import get_startup_cache
 
         loader = get_staged_loader()
         status = loader.get_status()
         preload = get_preload_status()
+        cache = get_startup_cache()
+        cache_stats = cache.get_stats()
+
         status["preloader"] = {
             "running": preload.running,
             "finished": preload.finished,
@@ -205,6 +210,7 @@ class HealthRouter:
             "failed": preload.failed,
             "total_duration_ms": preload.total_duration_ms,
         }
+        status["module_cache"] = cache_stats.to_dict()
         return success_response(data=status)
 
     @endpoint("health.startup_history")
