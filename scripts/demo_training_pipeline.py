@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "packages/core-py"))
 sys.path.insert(0, str(REPO_ROOT / "packages/mogdb/src"))
 
-from domains.infrastructure.training_pipeline import TrainingDataPipeline
+from domain.infrastructure.training_pipeline import TrainingDataPipeline
 
 # Start from a clean store so re-runs are deterministic
 DATA_DIR = Path("/tmp/demo_training")
@@ -89,7 +89,7 @@ OPTION 1: Via API
 OPTION 2: Use exported JSONL directly:
   1. File is at: data/exports/latest.jsonl
   2. Use with your training pipeline:
-     from domains.training import train_from_dataset
+     from domain.training import train_from_dataset
      train_from_dataset("data/exports/latest.jsonl")
 
 OPTION 3: Fine-tune with LoRA:

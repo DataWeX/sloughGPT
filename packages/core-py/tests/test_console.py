@@ -1,5 +1,5 @@
 """
-Comprehensive tests for domain.shell._internal.console.
+Comprehensive tests for domains.shell.console.
 
 Pure-logic tests for Console formatting, rendering, block recording,
 helper classes (_Capture, _Indent, _Live, _Spinner), and utility functions.

@@ -4,8 +4,7 @@ import json
 
 import pytest
 
-from domains import learner
-from domains.learner import data_filter as df
+from domain.learner._internal import data_filter as df
 from domain.learner._internal.data_filter import (
     DataFilter,
     DEFAULT_CONFIG,

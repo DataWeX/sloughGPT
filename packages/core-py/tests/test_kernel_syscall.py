@@ -1,4 +1,4 @@
-"""Coverage tests for domain.shell._internal.kernel_syscall.py."""
+"""Coverage tests for domains.shell.kernel_syscall.py."""
 
 import pytest
 

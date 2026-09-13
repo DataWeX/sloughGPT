@@ -26,7 +26,7 @@ def run_benchmarks() -> Dict[str, Tuple[float, float, str]]:
     import numpy as np
     import sys
     sys.path.insert(0, "packages/core-py")
-    from domains.infrastructure import ml_types as ml
+    from domain.infrastructure import ml_types as ml
     import torch
 
     results = {}

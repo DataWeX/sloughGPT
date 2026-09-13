@@ -12,7 +12,7 @@ def main():
     print("=" * 60)
 
     try:
-        from domains.inference.engine import InferenceEngine
+        from domain.inference._internal.engine import InferenceEngine
 
         print("\nInitializing engine...")
         engine = InferenceEngine()

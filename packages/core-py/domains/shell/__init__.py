@@ -24,6 +24,8 @@ def get_dait_runtime():
         _dait_instance = DaitRuntime()
     return _dait_instance
 
+from domain.shell._internal import commands, init, kernel, kernel_scheduler, vm_training_bridge  # noqa: F401
+
 __all__ = [
     "Kernel",
     "NeuralKernel",

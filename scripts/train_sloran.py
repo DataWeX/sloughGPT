@@ -5,8 +5,8 @@ Usage:
 """
 import sys, os, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'core-py'))
-from domains.training.sloran import SloRAN
-from domains.training.slonet import Tensor, cross_entropy
+from domain.training.sloran import SloRAN
+from domain.training._internal.slonet import Tensor, cross_entropy
 import numpy as np
 
 # ── Config ─────────────────────────────────────────────────────────

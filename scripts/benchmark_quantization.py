@@ -71,7 +71,7 @@ _PPL_PASSAGE = (
     "clipped too aggressively by the per-row scaling scheme."
 )
 
-from domains.training.slonet import SloTransformer
+from domain.training._internal.slonet import SloTransformer
 
 
 def _list_cached_models() -> List[str]:
@@ -180,8 +180,8 @@ class QuantizationBenchmark:
 
     def _load_slnc(self):
         """Load a real model via the SloNetChatProvider .slnc path."""
-        from domains.inference.slonet_provider import SloNetChatProvider
-        from domains.infrastructure.safetensors_loader import _get_model_dir
+        from domain.inference.slonet_provider import SloNetChatProvider
+        from domain.infrastructure.safetensors_loader import _get_model_dir
         print(f"  Loading {self.model_name}...")
         t0 = time.perf_counter()
         cache_dir = _get_model_dir(self.model_name)
@@ -217,7 +217,7 @@ class QuantizationBenchmark:
         Returns:
             Quantized model (same architecture, weights quantized in place).
         """
-        from domains.infrastructure.quantization import Quantine, walk_slo_linears
+        from domain.infrastructure.quantization import Quantine, walk_slo_linears
 
         if self.tiny:
             quant_model = _create_tiny_model(seq_len=512)
@@ -590,7 +590,7 @@ class QuantizationBenchmark:
         mem_q_mb = self._isolated_rss_mb(quantize=True)
 
         # Calculate model weight sizes
-        from domains.infrastructure.quantization import walk_slo_linears
+        from domain.infrastructure.quantization import walk_slo_linears
         nq_bytes = sum(
             m.weight.data.nbytes for m in walk_slo_linears(self.model).values()
         )
@@ -1836,7 +1836,7 @@ def main():
     # Per-layer stats
     per_layer_data = {}
     if args.per_layer and run_data:
-        from domains.infrastructure.quantization import walk_slo_linears as _wsl
+        from domain.infrastructure.quantization import walk_slo_linears as _wsl
         for bench_obj, run in zip(bench_objs, run_data):
             bits_val = run["bits"]
             model_id = run.get("model", "tiny")

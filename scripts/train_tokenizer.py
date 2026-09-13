@@ -15,7 +15,7 @@ import sys, os, json, argparse, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "core-py"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "apps", "api", "server"))
 
-from domains.training.tokenizer_manager import get_tokenizer_manager
+from domain.training.tokenizer_manager import get_tokenizer_manager
 
 
 def cmd_train(args):

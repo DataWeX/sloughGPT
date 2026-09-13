@@ -98,7 +98,7 @@ class ComparisonReport:
 def benchmark_sou(checkpoint_path: str, prompts: List[str],
                   max_new_tokens: int = 50, runs: int = 1) -> ModelResult:
     """Benchmark a SOU checkpoint via SloNet numpy engine."""
-    from domains.training.slonet import SloTransformer, SloNet, import_from_sou
+    from domain.training._internal.slonet import SloTransformer, SloNet, import_from_sou
 
     model = import_from_sou(checkpoint_path)
     model.eval()
@@ -112,13 +112,13 @@ def benchmark_sou(checkpoint_path: str, prompts: List[str],
         ckpt_dir = Path(checkpoint_path).parent
         tok_path = ckpt_dir / "tokenizer.json"
         if tok_path.exists():
-            from domains.multimodal.char_tokenizer import CharTokenizer
+            from domain.multimodal.char_tokenizer import CharTokenizer
             tokenizer = CharTokenizer()
             tokenizer.load(str(tok_path))
 
     if tokenizer is None:
         # Fallback: char tokenizer from checkpoint metadata
-        from domains.multimodal.char_tokenizer import CharTokenizer
+        from domain.multimodal.char_tokenizer import CharTokenizer
         tokenizer = CharTokenizer()
         tokenizer.build_vocab("".join(prompts))
 

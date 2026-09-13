@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from domains.shell import console as console_mod
+import domain.shell._internal.console as console_mod
 from domain.shell._internal.console import Console, _human_size, _render_inline
 from domain.shell._internal.io import MemoryIO
 

@@ -1,4 +1,4 @@
-"""Tests for domain.shell._internal.log_buffer.py — LogBuffer + LogBufferHandler."""
+"""Tests for domains.shell.log_buffer.py — LogBuffer + LogBufferHandler."""
 
 import logging
 import threading

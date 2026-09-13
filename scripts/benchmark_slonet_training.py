@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-
 import numpy as np
 
 def main():
-    from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+    from domain.training.train_pipeline import SloughGPTTrainer, TrainerConfig
     data_path = str(Path(__file__).resolve().parents[1] / "data" / "tinyshakespeare" / "input.txt")
     print(f"Dataset: {data_path}")
     print(f"Data size: {os.path.getsize(data_path) / 1024:.1f} KB")

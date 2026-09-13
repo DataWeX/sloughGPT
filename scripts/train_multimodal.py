@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
-from domains.multimodal.engine import (
+from domain.multimodal.engine import (
     MultimodalEngine, get_multimodal_engine, ReplayBuffer,
     replay_train_step, contrastive_step,
 )

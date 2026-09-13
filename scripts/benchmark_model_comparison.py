@@ -153,7 +153,7 @@ TRAIN_TEXT = (
 
 def train_native_model(epochs: int = 30):
     """Train a small SloNet model on-the-fly for benchmarking."""
-    from domains.training.slonet import (
+    from domain.training._internal.slonet import (
         SloNet, SloEmbedding, SloLSTM, SloAdam,
         cross_entropy, tensor, _sample_from_logits,
     )
@@ -220,7 +220,7 @@ def load_native_model():
     trained_path = _find_best_trained_model()
     if trained_path:
         print(f"Loading trained model from {trained_path}")
-        from domains.training.slonet import import_from_sou
+        from domain.training._internal.slonet import import_from_sou
         net = import_from_sou(str(trained_path))
         if hasattr(net, 'generate'):
             meta_raw = _read_soul_metadata(trained_path)
@@ -249,7 +249,7 @@ def load_native_model():
     soul_path = BENCH_MODEL_PATH
     if soul_path.exists():
         print(f"Loading benchmark LSTM from {soul_path}")
-        from domains.training.slonet import SloNet, SloLSTM, import_from_sou
+        from domain.training._internal.slonet import SloNet, SloLSTM, import_from_sou
         net = import_from_sou(str(soul_path))
         lstm = net.layers[1] if len(net.layers) > 1 else net.layers[0]
         meta = getattr(net, 'metadata', {})
@@ -306,7 +306,7 @@ def run_native_inference(net, lstm, encode, decode, prompt: str, max_new_tokens:
     if lstm is not None:
         # LSTM path
         gen_ids = list(input_ids.flatten())
-        from domains.training.slonet import tensor, no_grad
+        from domain.training._internal.slonet import tensor, no_grad
         h = lstm.init_hidden()
         prompt_len = len(gen_ids)
         with no_grad():
@@ -339,7 +339,7 @@ def run_native_inference(net, lstm, encode, decode, prompt: str, max_new_tokens:
 def run_sou_inference(model, prompt: str, max_new_tokens: int = 50):
     tokenizer = getattr(model, '_tokenizer', None)
     if tokenizer is None:
-        from domains.multimodal.char_tokenizer import CharTokenizer
+        from domain.multimodal.char_tokenizer import CharTokenizer
         tokenizer = CharTokenizer()
         tokenizer.build_vocab(prompt)
 
@@ -526,7 +526,7 @@ def main():
         if trained_path:
             print(f"\n=== Comparing: trained transformer vs small LSTM ===\n")
             try:
-                from domains.training.slonet import import_from_sou
+                from domain.training._internal.slonet import import_from_sou
                 net = import_from_sou(str(trained_path))
                 meta_raw = _read_soul_metadata(str(trained_path))
                 md = meta_raw.get("metadata", {}) if meta_raw else {}
@@ -616,7 +616,7 @@ def main():
     for ckpt in args.sou:
         print(f"Benchmarking SOU: {ckpt}")
         try:
-            from domains.training.slonet import import_from_sou
+            from domain.training._internal.slonet import import_from_sou
             model = import_from_sou(ckpt)
             model.eval()
             responses, latencies, token_counts = [], [], []

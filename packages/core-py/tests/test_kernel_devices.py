@@ -1,4 +1,4 @@
-"""Coverage tests for domain.shell._internal.kernel_devices.py."""
+"""Coverage tests for domains.shell.kernel_devices.py."""
 
 import pytest
 

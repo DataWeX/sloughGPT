@@ -34,7 +34,7 @@ def bench(fn, n=1000):
 
 
 def run():
-    from domains.infrastructure import ml_types as ml
+    from domain.infrastructure import ml_types as ml
 
     print("=" * 78)
     print("ML Types Comprehensive Benchmark")

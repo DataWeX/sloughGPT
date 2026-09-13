@@ -1,5 +1,5 @@
 """
-Tests for the live realm view (``domain.shell._internal.realm_view.py``).
+Tests for the live realm view (``domains.shell.realm_view.py``).
 
 Covers scene construction, frame rendering (materials, babies, skyline sun),
 the live stepping loop, and determinism of the seeded viewer.

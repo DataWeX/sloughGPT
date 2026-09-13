@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
-from domains.multimodal.engine import MultimodalEngine
+from domain.multimodal.engine import MultimodalEngine
 
 def draw_shape(img: np.ndarray, shape: str, color: tuple, cx: int, cy: int, size: int):
     h, w, _ = img.shape

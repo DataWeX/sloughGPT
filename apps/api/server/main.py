@@ -162,7 +162,10 @@ async def lifespan(app_inst: FastAPI):
             except Exception as e:
                 logger.warning("Idle manager startup failed (non-fatal): %s", e)
 
+        # Yield to uvicorn — server is running
+        Path("/tmp/slo-yield-marker").write_text(f"pre-yield {time.time()}\n")
         yield
+        Path("/tmp/slo-yield-marker").write_text(f"post-yield {time.time()}\n")
 
         # Stop idle manager
         try:

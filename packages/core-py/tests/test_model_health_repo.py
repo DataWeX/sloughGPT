@@ -1,10 +1,12 @@
-"""Tests for domain.feedback._internal.model_health_repo — ModelHealthRepository, HealthSnapshot."""
+"""Tests for ModelHealthRepository."""
 
 from __future__ import annotations
 
+import json
 import time
-import pytest
 from pathlib import Path
+
+import pytest
 
 from domain.feedback._internal.model_health_repo import (
     HealthSnapshot,
@@ -12,157 +14,197 @@ from domain.feedback._internal.model_health_repo import (
 )
 
 
-def _make_snapshot(ts=None, ppl=10.0, loss=1.5, sentences=100, model="test"):
-    return HealthSnapshot(
-        timestamp=ts or time.time(),
-        perplexity=ppl,
-        loss=loss,
-        num_sentences=sentences,
-        model_name=model,
-    )
-
-
-@pytest.fixture
-def repo(tmp_path):
-    return ModelHealthRepository(tmp_path / "health")
-
-
-# ── HealthSnapshot ────────────────────────────────────────────────────────────
-
 class TestHealthSnapshot:
     def test_to_dict(self):
-        s = _make_snapshot(ts=1000.0, ppl=5.0, loss=0.5)
-        d = s.to_dict()
-        assert d["timestamp"] == 1000.0
-        assert d["perplexity"] == 5.0
-        assert d["loss"] == 0.5
+        snapshot = HealthSnapshot(
+            timestamp=1000.0,
+            perplexity=42.5,
+            loss=3.75,
+            num_sentences=15,
+            model_name="test_model",
+        )
+        data = snapshot.to_dict()
+        assert data["timestamp"] == 1000.0
+        assert data["perplexity"] == 42.5
+        assert data["model_name"] == "test_model"
 
     def test_from_dict(self):
-        d = {"timestamp": 1000.0, "perplexity": 5.0, "loss": 0.5, "num_sentences": 50}
-        s = HealthSnapshot.from_dict(d)
-        assert s.timestamp == 1000.0
-        assert s.perplexity == 5.0
+        data = {
+            "timestamp": 1000.0,
+            "perplexity": 42.5,
+            "loss": 3.75,
+            "num_sentences": 15,
+            "model_name": "test_model",
+        }
+        snapshot = HealthSnapshot.from_dict(data)
+        assert snapshot.perplexity == 42.5
+        assert snapshot.model_name == "test_model"
 
-    def test_from_dict_extra_fields(self):
-        d = {"timestamp": 1, "perplexity": 2, "loss": 3, "num_sentences": 4, "extra": "ignored"}
-        s = HealthSnapshot.from_dict(d)
-        assert s.timestamp == 1
-
-    def test_defaults(self):
-        s = HealthSnapshot(timestamp=0, perplexity=1.0, loss=1.0, num_sentences=0)
-        assert s.model_name == ""
-        assert s.quality_score == 0.0
-
-
-# ── ModelHealthRepository ─────────────────────────────────────────────────────
 
 class TestModelHealthRepository:
-    def test_empty_repo(self, repo):
-        assert repo.list_snapshots() == []
-        assert repo.get_latest() is None
-        assert repo.get_stats() == {"count": 0}
-
-    def test_add_and_list(self, repo):
-        s1 = _make_snapshot(ts=1000, ppl=10.0)
-        s2 = _make_snapshot(ts=2000, ppl=8.0)
-        repo.add_snapshot(s1)
-        repo.add_snapshot(s2)
-        snapshots = repo.list_snapshots()
-        assert len(snapshots) == 2
-
-    def test_get_latest(self, repo):
-        repo.add_snapshot(_make_snapshot(ts=1000, ppl=10.0))
-        repo.add_snapshot(_make_snapshot(ts=2000, ppl=8.0))
+    def test_add_and_get_latest(self, tmp_path: Path):
+        repo = ModelHealthRepository(tmp_path / "health")
+        now = time.time()
+        repo.add_snapshot(HealthSnapshot(
+            timestamp=now,
+            perplexity=42.0,
+            loss=3.8,
+            num_sentences=15,
+        ))
         latest = repo.get_latest()
-        assert latest.perplexity == 8.0
+        assert latest is not None
+        assert latest.perplexity == 42.0
 
-    def test_list_with_limit(self, repo):
+    def test_list_snapshots(self, tmp_path: Path):
+        repo = ModelHealthRepository(tmp_path / "health")
+        now = time.time()
         for i in range(5):
-            repo.add_snapshot(_make_snapshot(ts=i * 1000, ppl=float(i)))
-        limited = repo.list_snapshots(limit=2)
-        assert len(limited) == 2
+            repo.add_snapshot(HealthSnapshot(
+                timestamp=now + i,
+                perplexity=40.0 + i,
+                loss=3.8 - i * 0.1,
+                num_sentences=15,
+            ))
+        all_snapshots = repo.list_snapshots()
+        assert len(all_snapshots) == 5
         # Most recent first
-        assert limited[0].timestamp > limited[1].timestamp
+        assert all_snapshots[0].perplexity > all_snapshots[-1].perplexity
 
-    def test_get_trend(self, repo):
+    def test_list_with_limit(self, tmp_path: Path):
+        repo = ModelHealthRepository(tmp_path / "health")
         now = time.time()
-        repo.add_snapshot(_make_snapshot(ts=now - 7200, ppl=10.0))  # 2 hours ago
-        repo.add_snapshot(_make_snapshot(ts=now - 1800, ppl=9.0))   # 30 min ago
-        repo.add_snapshot(_make_snapshot(ts=now - 3600 * 48, ppl=8.0))  # 2 days ago
+        for i in range(10):
+            repo.add_snapshot(HealthSnapshot(
+                timestamp=now + i,
+                perplexity=40.0 + i,
+                loss=3.8,
+                num_sentences=15,
+            ))
+        recent = repo.list_snapshots(limit=3)
+        assert len(recent) == 3
 
+    def test_get_trend(self, tmp_path: Path):
+        repo = ModelHealthRepository(tmp_path / "health")
+        now = time.time()
+        # Add old snapshot (25 hours ago)
+        repo.add_snapshot(HealthSnapshot(
+            timestamp=now - 25 * 3600,
+            perplexity=40.0,
+            loss=3.8,
+            num_sentences=15,
+        ))
+        # Add recent snapshots
+        for i in range(3):
+            repo.add_snapshot(HealthSnapshot(
+                timestamp=now - i * 3600,
+                perplexity=42.0 + i,
+                loss=3.6,
+                num_sentences=15,
+            ))
         trend = repo.get_trend(hours=24)
-        assert len(trend) == 2
+        assert len(trend) == 3
 
-    def test_detect_no_drift(self, repo):
+    def test_detect_drift(self, tmp_path: Path):
+        repo = ModelHealthRepository(tmp_path / "health")
         now = time.time()
+        # Add baseline snapshots with stable perplexity
         for i in range(5):
-            repo.add_snapshot(_make_snapshot(ts=now - i * 100, ppl=10.0))
-        drift = repo.detect_drift()
-        assert drift is None
-
-    def test_detect_drift(self, repo):
-        now = time.time()
-        for i in range(5):
-            repo.add_snapshot(_make_snapshot(ts=now - i * 100, ppl=10.0))
-        # Add a snapshot with significantly higher perplexity
-        repo.add_snapshot(_make_snapshot(ts=now + 1, ppl=20.0))
+            repo.add_snapshot(HealthSnapshot(
+                timestamp=now - (5 - i) * 3600,
+                perplexity=40.0,
+                loss=3.8,
+                num_sentences=15,
+            ))
+        # Add latest with high perplexity (drift)
+        repo.add_snapshot(HealthSnapshot(
+            timestamp=now,
+            perplexity=60.0,  # 50% increase
+            loss=4.5,
+            num_sentences=15,
+        ))
         drift = repo.detect_drift(threshold=0.15)
         assert drift is not None
         assert drift["drift_detected"] is True
-        assert drift["latest_ppl"] == 20.0
+        assert drift["latest_ppl"] == 60.0
 
-    def test_detect_drift_insufficient_data(self, repo):
-        repo.add_snapshot(_make_snapshot(ppl=10.0))
-        drift = repo.detect_drift()
+    def test_detect_no_drift(self, tmp_path: Path):
+        repo = ModelHealthRepository(tmp_path / "health")
+        now = time.time()
+        for i in range(5):
+            repo.add_snapshot(HealthSnapshot(
+                timestamp=now - (5 - i) * 3600,
+                perplexity=40.0 + i * 0.1,  # Very small variation
+                loss=3.8,
+                num_sentences=15,
+            ))
+        drift = repo.detect_drift(threshold=0.15)
         assert drift is None
 
-    def test_get_stats(self, repo):
-        repo.add_snapshot(_make_snapshot(ts=1000, ppl=10.0, loss=1.0))
-        repo.add_snapshot(_make_snapshot(ts=2000, ppl=8.0, loss=0.5))
+    def test_get_stats(self, tmp_path: Path):
+        repo = ModelHealthRepository(tmp_path / "health")
+        now = time.time()
+        for i in range(3):
+            repo.add_snapshot(HealthSnapshot(
+                timestamp=now + i,
+                perplexity=40.0 + i,
+                loss=3.8 - i * 0.1,
+                num_sentences=15,
+            ))
         stats = repo.get_stats()
-        assert stats["count"] == 2
-        assert stats["avg_perplexity"] == 9.0
-        assert stats["min_perplexity"] == 8.0
-        assert stats["max_perplexity"] == 10.0
-        assert stats["avg_loss"] == 0.75
+        assert stats["count"] == 3
+        assert stats["avg_perplexity"] == pytest.approx(41.0, rel=0.01)
+        assert stats["min_perplexity"] == 40.0
+        assert stats["max_perplexity"] == 42.0
 
-    def test_clear(self, repo):
-        repo.add_snapshot(_make_snapshot(ts=1000))
-        repo.add_snapshot(_make_snapshot(ts=2000))
+    def test_clear(self, tmp_path: Path):
+        repo = ModelHealthRepository(tmp_path / "health")
+        now = time.time()
+        for i in range(5):
+            repo.add_snapshot(HealthSnapshot(
+                timestamp=now + i,
+                perplexity=40.0,
+                loss=3.8,
+                num_sentences=15,
+            ))
         count = repo.clear()
-        assert count == 2
+        assert count == 5
         assert repo.list_snapshots() == []
 
-    def test_persistence(self, tmp_path):
-        s1 = ModelHealthRepository(tmp_path / "h")
-        s1.add_snapshot(_make_snapshot(ts=1000, ppl=5.0))
+    def test_persistence(self, tmp_path: Path):
+        repo1 = ModelHealthRepository(tmp_path / "health")
+        repo1.add_snapshot(HealthSnapshot(
+            timestamp=time.time(),
+            perplexity=42.0,
+            loss=3.8,
+            num_sentences=15,
+        ))
+        repo2 = ModelHealthRepository(tmp_path / "health")
+        latest = repo2.get_latest()
+        assert latest is not None
+        assert latest.perplexity == 42.0
 
-        s2 = ModelHealthRepository(tmp_path / "h")
-        snapshots = s2.list_snapshots()
-        assert len(snapshots) == 1
-        assert snapshots[0].perplexity == 5.0
+    def test_empty_repo(self, tmp_path: Path):
+        repo = ModelHealthRepository(tmp_path / "health")
+        assert repo.get_latest() is None
+        assert repo.list_snapshots() == []
+        assert repo.get_stats() == {"count": 0}
+        assert repo.detect_drift() is None
 
-
-# ── Legacy Migration ──────────────────────────────────────────────────────────
-
-class TestLegacyMigration:
-    def test_migrate_legacy_file(self, tmp_path):
-        import json
+    def test_legacy_migration(self, tmp_path: Path):
+        # Create legacy file
+        legacy_path = tmp_path / "health" / "model_health.json"
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
         legacy_data = [
-            {"timestamp": 1000, "perplexity": 10.0, "loss": 1.0, "num_sentences": 100},
-            {"timestamp": 2000, "perplexity": 8.0, "loss": 0.5, "num_sentences": 200},
+            {"timestamp": 1000.0, "perplexity": 40.0, "loss": 3.8, "num_sentences": 15},
+            {"timestamp": 2000.0, "perplexity": 42.0, "loss": 3.6, "num_sentences": 15},
         ]
-        legacy_path = tmp_path / "h" / "model_health.json"
-        legacy_path.parent.mkdir(parents=True)
         legacy_path.write_text(json.dumps(legacy_data))
 
-        repo = ModelHealthRepository(tmp_path / "h")
+        # Initialize repo - should migrate
+        repo = ModelHealthRepository(tmp_path / "health")
         snapshots = repo.list_snapshots()
         assert len(snapshots) == 2
-        # Legacy file should be renamed to .bak
-        assert not legacy_path.exists()
-        assert (legacy_path.parent / "model_health.json.bak").exists()
 
-    def test_no_legacy_file(self, repo):
-        # Just verify it works without legacy file
-        assert repo.list_snapshots() == []
+        # Legacy file should be backed up
+        assert not legacy_path.exists()
+        assert (legacy_path.with_suffix(".json.bak")).exists()

@@ -25,7 +25,7 @@ def migrate():
     # Add mogdb src to path
     sys.path.insert(0, str(REPO_ROOT / "packages" / "mogdb" / "src"))
 
-    from domains.training.mobile_training_store import MobileTrainingStore
+    from domain.training.mobile_training_store import MobileTrainingStore
 
     store_path = str(REPO_ROOT / "packages" / "data" / "mobile_training")
     store = MobileTrainingStore(store_path)

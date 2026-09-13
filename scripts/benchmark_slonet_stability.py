@@ -137,7 +137,7 @@ def compute_score(records: List[RequestRecord]) -> StabilityScore:
 def load_slonet(checkpoint_path: str):
     """Load a SloNet checkpoint and return a generate function."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
-    from domains.training.slonet import import_from_sou, Tensor
+    from domain.training._internal.slonet import import_from_sou, Tensor
     import numpy as np
 
     net = import_from_sou(checkpoint_path)

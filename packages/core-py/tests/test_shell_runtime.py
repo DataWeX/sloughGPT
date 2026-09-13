@@ -168,20 +168,20 @@ class TestDaitRuntime:
         mod._shared_started_at = 0.0
 
     def test_init(self):
-        with patch("domains.shell.kernel.Kernel"):
+        with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert rt._model_loaded is False
             assert rt._boot_complete is False
 
     def test_api_property(self):
-        with patch("domains.shell.kernel.Kernel"):
+        with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert isinstance(rt.api, APIServerProcess)
 
     def test_api_status(self):
-        with patch("domains.shell.kernel.Kernel"):
+        with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             with patch.object(rt._api, "status", return_value={"available": True, "model_loaded": True}):
@@ -190,7 +190,7 @@ class TestDaitRuntime:
             assert rt._model_loaded is True
 
     def test_status_summary(self):
-        with patch("domains.shell.kernel.Kernel") as MockKernel:
+        with patch("domain.shell._internal.kernel.Kernel") as MockKernel:
             mock_kernel = MockKernel.return_value
             mock_kernel.uptime = 100
             mock_kernel.list_processes.return_value = []
@@ -201,19 +201,19 @@ class TestDaitRuntime:
             assert "Kernel uptime" in summary
 
     def test_init_system_property(self):
-        with patch("domains.shell.kernel.Kernel"):
+        with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert rt.init_system is None
 
     def test_devices_property(self):
-        with patch("domains.shell.kernel.Kernel"):
+        with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert rt.devices is None
 
     def test_vfs_property(self):
-        with patch("domains.shell.kernel.Kernel"):
+        with patch("domain.shell._internal.kernel.Kernel"):
             from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert rt.vfs is None

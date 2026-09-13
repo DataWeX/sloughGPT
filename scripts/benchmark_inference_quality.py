@@ -17,7 +17,7 @@ import numpy as np
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional, Tuple
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloNet, SloEmbedding, SloLSTM, SloAdam,
     cross_entropy, tensor, zeros, no_grad,
     _sample_from_logits,

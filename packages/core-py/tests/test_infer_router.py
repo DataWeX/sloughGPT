@@ -268,7 +268,7 @@ class TestInferGenerate:
         patches = [
             patch.object(infer_mod.InferRouter, "_get_model", return_value=fake),
             patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=fake),
-            patch("domains.models.provider.get_provider", return_value=mock_provider),
+            patch("domain.models._internal.provider.get_provider", return_value=mock_provider),
         ]
         for p in patches:
             p.start()

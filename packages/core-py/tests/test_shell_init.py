@@ -1,4 +1,4 @@
-"""Coverage tests for domain.shell._internal.init.py."""
+"""Coverage tests for domains.shell.init.py."""
 
 import json
 import shlex

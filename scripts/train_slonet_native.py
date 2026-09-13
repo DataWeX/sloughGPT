@@ -21,7 +21,7 @@ logger = logging.getLogger("train_native")
 
 
 def main():
-    from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+    from domain.training.train_pipeline import SloughGPTTrainer, TrainerConfig
 
     data_path = os.environ.get("TRAIN_DATA", "datasets/api_conversations/input.txt")
     if not os.path.exists(data_path):

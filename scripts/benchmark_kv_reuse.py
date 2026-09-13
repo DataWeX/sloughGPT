@@ -28,7 +28,7 @@ import numpy as np
 
 sys.path.insert(0, "packages/core-py")
 
-from domains.training.slonet import SloTransformer
+from domain.training._internal.slonet import SloTransformer
 
 
 def create_model(vocab=32000, embed=128, layers=4, heads=8, seq_len=128):
@@ -431,8 +431,8 @@ def _make_stack(model, model_id="bench", quantize_kv=False):
         Tuple of ``(tokenizer, provider, server)``.
     """
     from types import MethodType
-    from domains.inference.slonet_provider import SloNetChatProvider
-    from domains.infrastructure.slonet_server import SloNetServer
+    from domain.inference._internal.slonet_provider import SloNetChatProvider
+    from domain.infrastructure._internal.slonet_server import SloNetServer
 
     tokenizer = _CharTokenizer()
     provider = _StackProvider(model)

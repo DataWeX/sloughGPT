@@ -23,7 +23,7 @@ from pathlib import Path
 def _default_dl_workers() -> int:
     """Default DataLoader workers — prefer ResourceManager, fall back to cpu_count // 2."""
     try:
-        from domains.infrastructure.resource_manager import get_resource_manager
+        from domain.infrastructure._internal.resource_manager import get_resource_manager
         return get_resource_manager().dataloader_workers
     except Exception:
         return max(0, (os.cpu_count() or 1) // 2)

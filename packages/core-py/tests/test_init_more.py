@@ -5,7 +5,7 @@ Supplementary tests for Shell Init System — subprocess lifecycle, respawn, use
 import json
 import logging
 import pytest
-from domains.shell import init as init_mod
+import domain.shell._internal.init as init_mod
 from domain.shell._internal.init import (
     ServiceDef, ServiceManager, InitSystem,
 )

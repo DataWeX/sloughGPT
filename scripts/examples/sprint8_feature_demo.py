@@ -19,7 +19,7 @@ logger = logging.getLogger("sprint8_tests")
 # =============================================================================
 print("\n=== Test 1: Model Registry ===")
 
-from domains.training.model_registry import get_available_models, create_model
+from domain.training.model_registry import get_available_models, create_model
 
 # Test model discovery
 models = get_available_models()
@@ -50,7 +50,7 @@ else:
 # =============================================================================
 print("\n=== Test 2: LoRA Training ===")
 
-from domains.training.lora import LoRAConfig, apply_lora_to_model
+from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 
 # Test LoRA functionality
 if models:
@@ -82,7 +82,7 @@ else:
 # =============================================================================
 print("\n=== Test 3: RLHF Reward Model ===")
 
-from domains.training.rlhf import RewardModel, RLHFConfig
+from domain.training.rlhf import RewardModel, RLHFConfig
 
 # Test RLHF functionality
 if models:
@@ -109,7 +109,7 @@ else:
 # =============================================================================
 print("\n=== Test 4: Model Pruning ===")
 
-from domains.training.pruning import MagnitudePruner, StructuredPruner
+from domain.training.pruning import MagnitudePruner, StructuredPruner
 
 # Test pruning functionality
 if models:
@@ -135,7 +135,7 @@ if models:
             print(f"  - Attention head pruning skipped: {e}")
 
         # Test memory estimation
-        from domains.training.efficient_inference import estimate_memory_usage
+        from domain.training.efficient_inference import estimate_memory_usage
         mem_est = estimate_memory_usage(
             sum(p.numel() for p in model.parameters()),
             quantization="int8",
@@ -154,7 +154,7 @@ else:
 # =============================================================================
 print("\n=== Test 5: Knowledge Distillation ===")
 
-from domains.training.distillation import DistillationConfig, DistillationTrainer
+from domain.training.distillation import DistillationConfig, DistillationTrainer
 
 # Test distillation functionality
 if models:
@@ -193,7 +193,7 @@ else:
 # =============================================================================
 print("\n=== Test 6: Quantization ===")
 
-from domains.training.efficient_inference import Quantizer, EfficientInference
+from domain.training.efficient_inference import Quantizer, EfficientInference
 
 # Test quantization functionality
 if models:
@@ -236,7 +236,7 @@ else:
 # =============================================================================
 print("\n=== Test 7: AWQ/GPTQ Quantization ===")
 
-from domains.training.efficient_inference import AWQQuantizer, GPTQQuantizer
+from domain.training.efficient_inference import AWQQuantizer, GPTQQuantizer
 
 # Test advanced quantization
 if models:
@@ -280,7 +280,7 @@ else:
 # =============================================================================
 print("\n=== Test 8: KV Cache Optimization ===")
 
-from domains.training.efficient_inference import KVCacheOptimizer
+from domain.training.efficient_inference import KVCacheOptimizer
 
 # Test KV cache optimization
 model = create_model(models[0].id) if models else None
@@ -322,7 +322,7 @@ else:
 # =============================================================================
 print("\n=== Test 9: CPU Optimizations ===")
 
-from domains.training.efficient_inference import CPUOptimizer
+from domain.training.efficient_inference import CPUOptimizer
 
 # Test CPU optimizations
 try:

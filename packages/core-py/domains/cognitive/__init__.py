@@ -12,6 +12,8 @@ from domain.cognitive import (
     CognitiveProcessor,
 )
 
+from domain.cognitive._internal import rag_service  # noqa: F401
+
 __all__ = [
     "CognitiveDomain",
     "CognitiveException",

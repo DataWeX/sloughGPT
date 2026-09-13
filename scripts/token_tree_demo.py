@@ -19,7 +19,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "packages" / "core-py"))
 
-from domains.training.token_tree import TokenTree
+from domain.training.token_tree import TokenTree
 
 
 def _pick_dataset() -> Path:

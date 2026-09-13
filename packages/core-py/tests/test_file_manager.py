@@ -193,7 +193,7 @@ class TestFileManagerResolve:
 class TestGetVfsFallback:
     def test_import_error_sets_sentinel(self):
         fm = FileManager()
-        with patch.dict("sys.modules", {"domains.shell.vfs": None}):
+        with patch.dict("sys.modules", {"domain.shell._internal.vfs": None}):
             result = fm._get_vfs()
         assert result is None
         assert fm._vfs is False  # sentinel

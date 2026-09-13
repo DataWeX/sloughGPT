@@ -1,5 +1,5 @@
 """
-Coverage-completion tests for domain.shell._internal.vm_devices.py.
+Coverage-completion tests for domains.shell.vm_devices.py.
 
 Exercises every layer-4 device driver (TensorDevice, PythonExecDevice,
 SlonetDevice, MultimodalDevice, EngineDevice, SlonetTrainingDevice,
@@ -541,7 +541,7 @@ class TestSlonetTrainingDevice:
         assert msg.startswith("load error:")
 
     def test_load_dataset_fallback_to_fs(self, tmp_path, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domains.shell.file_manager", None)
+        monkeypatch.setitem(sys.modules, "domain.shell._internal.file_manager", None)
         dev = SlonetTrainingDevice(model=_tiny_model())
         p = tmp_path / "d.txt"
         p.write_text("abcde")
@@ -550,7 +550,7 @@ class TestSlonetTrainingDevice:
         assert res[1] == 5
 
     def test_load_dataset_missing_fs(self, tmp_path, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domains.shell.file_manager", None)
+        monkeypatch.setitem(sys.modules, "domain.shell._internal.file_manager", None)
         dev = SlonetTrainingDevice(model=_tiny_model())
         assert dev._load_dataset(str(tmp_path / "nope.txt"), 8) is None
 

@@ -18,7 +18,7 @@ import numpy as np
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloNet, SloEmbedding, SloLSTM, SloAdam,
     SloTransformer, SloTransformerBlock,
     SloLinear, SloLayerNorm,
@@ -26,7 +26,7 @@ from domains.training.slonet import (
     sigmoid, tanh, gelu, softmax,
     import_from_sou,
 )
-from domains.inference import save_soul, SloProfile
+from domain.inference import save_soul, SloProfile
 
 
 @dataclass
@@ -276,7 +276,7 @@ class SloNetBenchmark:
         print("[4] Accelerator Speed")
         print("-" * 40)
 
-        from domains.slolib.gpu import get_accelerator, benchmark_accelerators, reset_accelerator
+        from domain.slolib.gpu import get_accelerator, benchmark_accelerators, reset_accelerator
         reset_accelerator()
         acc = get_accelerator()
 

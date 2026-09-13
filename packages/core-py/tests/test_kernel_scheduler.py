@@ -1,4 +1,4 @@
-"""Coverage tests for domain.shell._internal.kernel_scheduler.py."""
+"""Coverage tests for domains.shell.kernel_scheduler.py."""
 
 import time
 

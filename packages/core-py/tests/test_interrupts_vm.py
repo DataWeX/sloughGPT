@@ -1,4 +1,4 @@
-"""Tests for domain.shell._internal.kernel_interrupts and domain.shell._internal.vm_engine."""
+"""Tests for domain.shell._internal.kernel_interrupts and domains.shell.vm_engine."""
 
 from domain.shell._internal.kernel_interrupts import InterruptType, Interrupt, InterruptVector
 from domain.shell._internal.vm_engine import (

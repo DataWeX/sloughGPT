@@ -92,8 +92,8 @@ class TestSimTickRequest:
 
 
 class TestRenderWorld:
-    @patch("domains.shell.simulation.WorldGrid")
-    @patch("domains.shell.world_render.RenderBridge")
+    @patch("domain.shell._internal.simulation.WorldGrid")
+    @patch("domain.shell._internal.world_render.RenderBridge")
     def test_render_world_success(self, MockBridge, MockWorld):
         MockBridge.return_value = _mock_bridge()
         MockWorld.return_value = _mock_world()
@@ -105,8 +105,8 @@ class TestRenderWorld:
         assert "shapes" in body["data"]
         assert "tensor_keys" in body["data"]
 
-    @patch("domains.shell.simulation.WorldGrid")
-    @patch("domains.shell.world_render.RenderBridge")
+    @patch("domain.shell._internal.simulation.WorldGrid")
+    @patch("domain.shell._internal.world_render.RenderBridge")
     def test_render_world_custom_config(self, MockBridge, MockWorld):
         MockBridge.return_value = _mock_bridge()
         MockWorld.return_value = _mock_world()
@@ -116,8 +116,8 @@ class TestRenderWorld:
 
 
 class TestRenderWorldImage:
-    @patch("domains.shell.simulation.WorldGrid")
-    @patch("domains.shell.world_render.RenderBridge")
+    @patch("domain.shell._internal.simulation.WorldGrid")
+    @patch("domain.shell._internal.world_render.RenderBridge")
     def test_image_returns_ppm(self, MockBridge, MockWorld):
         MockBridge.return_value = _mock_bridge()
         MockWorld.return_value = _mock_world()
@@ -126,8 +126,8 @@ class TestRenderWorldImage:
         assert resp.status_code == 200
         assert "portable-pixmap" in resp.headers["content-type"]
 
-    @patch("domains.shell.simulation.WorldGrid")
-    @patch("domains.shell.world_render.RenderBridge")
+    @patch("domain.shell._internal.simulation.WorldGrid")
+    @patch("domain.shell._internal.world_render.RenderBridge")
     def test_image_default_config(self, MockBridge, MockWorld):
         MockBridge.return_value = _mock_bridge()
         MockWorld.return_value = _mock_world()
@@ -137,8 +137,8 @@ class TestRenderWorldImage:
 
 
 class TestNeuralProcess:
-    @patch("domains.shell.simulation.WorldGrid")
-    @patch("domains.shell.world_render.NeuralRenderBridge")
+    @patch("domain.shell._internal.simulation.WorldGrid")
+    @patch("domain.shell._internal.world_render.NeuralRenderBridge")
     def test_neural_success(self, MockBridge, MockWorld):
         MockBridge.return_value = _mock_bridge()
         MockWorld.return_value = _mock_world()
@@ -152,9 +152,9 @@ class TestNeuralProcess:
 
 
 class TestRunTick:
-    @patch("domains.shell.simulation.Simulation")
-    @patch("domains.shell.simulation.SimScene")
-    @patch("domains.shell.simulation.WorldParams")
+    @patch("domain.shell._internal.simulation.Simulation")
+    @patch("domain.shell._internal.simulation.SimScene")
+    @patch("domain.shell._internal.simulation.WorldParams")
     def test_tick_success(self, MockParams, MockScene, MockSim):
         MockScene.return_value = MagicMock(tick=0)
         MockSim.return_value = _mock_sim()
@@ -165,10 +165,10 @@ class TestRunTick:
         assert body["status"] == "success"
         assert body["data"]["tick"] == 0
 
-    @patch("domains.shell.world_render.RenderBridge")
-    @patch("domains.shell.simulation.Simulation")
-    @patch("domains.shell.simulation.SimScene")
-    @patch("domains.shell.simulation.WorldParams")
+    @patch("domain.shell._internal.world_render.RenderBridge")
+    @patch("domain.shell._internal.simulation.Simulation")
+    @patch("domain.shell._internal.simulation.SimScene")
+    @patch("domain.shell._internal.simulation.WorldParams")
     def test_tick_with_render(self, MockParams, MockScene, MockSim, MockRB):
         scene = MagicMock(tick=5)
         MockScene.return_value = scene

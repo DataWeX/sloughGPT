@@ -7,6 +7,8 @@ from domain.mobile import (
     get_notification_service,
 )
 
+from domain.mobile._internal import notifications  # noqa: F401
+
 __all__ = [
     "PushNotificationService",
     "NotificationPayload",

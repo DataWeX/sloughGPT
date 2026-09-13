@@ -8,6 +8,8 @@ from domain.multimodal import (
     initialize_multimodal,
 )
 
+from domain.multimodal._internal import engine  # noqa: F401
+
 __all__ = [
     "MultiModalConfig",
     "MultimodalCapabilities",

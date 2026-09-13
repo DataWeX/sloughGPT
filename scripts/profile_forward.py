@@ -1,8 +1,8 @@
 """Full forward pass profile after float32 fix."""
 import time, numpy as np
 from pathlib import Path
-from domains.infrastructure.arch_config import build_arch
-from domains.infrastructure.numpy_ops import rmsnorm, layer_norm, softmax, gelu, silu, rope
+from domain.infrastructure._internal.arch_config import build_arch
+from domain.infrastructure._internal.numpy_ops import rmsnorm, layer_norm, softmax, gelu, silu, rope
 from safetensors import safe_open
 
 snap = sorted((Path.home() / '.cache/huggingface/hub/models--gpt2/snapshots').glob('*'))[0]

@@ -7424,7 +7424,7 @@ class TestStreamTrainProgress:
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=0)
         repl._log_buffer.get.return_value = []
-        with patch('domains.shell.commands._api_get', return_value={"status": "completed", "progress": 100, "current_epoch": 5, "epochs": 5, "train_loss": 0.5, "checkpoint": "my_ckpt"}):
+        with patch('domain.shell._internal.commands._api_get', return_value={"status": "completed", "progress": 100, "current_epoch": 5, "epochs": 5, "train_loss": 0.5, "checkpoint": "my_ckpt"}):
             repl._stream_train_progress("j1")
         assert repl._last_exit_code == 0
 
@@ -7433,7 +7433,7 @@ class TestStreamTrainProgress:
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=0)
         repl._log_buffer.get.return_value = []
-        with patch('domains.shell.commands._api_get', return_value={"status": "failed", "progress": 30, "error": "OOM"}):
+        with patch('domain.shell._internal.commands._api_get', return_value={"status": "failed", "progress": 30, "error": "OOM"}):
             repl._stream_train_progress("j2")
         assert repl._last_exit_code == 0
 
@@ -7442,7 +7442,7 @@ class TestStreamTrainProgress:
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=0)
         repl._log_buffer.get.return_value = []
-        with patch('domains.shell.commands._api_get', return_value=None):
+        with patch('domain.shell._internal.commands._api_get', return_value=None):
             repl._stream_train_progress("j3")
         assert repl._last_exit_code == 0
 
@@ -7453,7 +7453,7 @@ class TestStreamTrainProgress:
         repl._log_buffer.get.return_value = []
         stdio = MagicMock()
         repl._stdio = stdio
-        with patch('domains.shell.commands._api_get', return_value={"status": "completed", "progress": 100, "current_epoch": 1, "epochs": 1, "train_loss": 0.1}):
+        with patch('domain.shell._internal.commands._api_get', return_value={"status": "completed", "progress": 100, "current_epoch": 1, "epochs": 1, "train_loss": 0.1}):
             repl._stream_train_progress("j4")
         assert repl._last_exit_code == 0
         repl._stdio = None
@@ -7582,7 +7582,7 @@ class TestCmdTui:
         import builtins
         real_import = builtins.__import__
         def mock_import(name, *args, **kwargs):
-            if name == "domains.shell.tui_repl":
+            if name == "domain.shell._internal.tui_repl":
                 mod = MagicMock()
                 mod.TuiRepl.side_effect = RuntimeError("tui crashed")
                 return mod
@@ -8542,7 +8542,7 @@ class TestStreamTrainProgressException:
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=0)
         repl._log_buffer.get.return_value = []
-        with patch('domains.shell.commands._api_get', side_effect=Exception("network error")):
+        with patch('domain.shell._internal.commands._api_get', side_effect=Exception("network error")):
             repl._stream_train_progress("j1")
         assert repl._last_exit_code == 0
 
@@ -11199,7 +11199,7 @@ class TestCmdChatExecution:
 
 class TestStreamTrainProgressV2:
     def test_job_not_found(self, repl):
-        with patch("domains.shell.commands._api_get", return_value=None):
+        with patch("domain.shell._internal.commands._api_get", return_value=None):
             repl._stream_train_progress("nonexistent")
         assert repl._last_exit_code == 0
 
@@ -11214,7 +11214,7 @@ class TestStreamTrainProgressV2:
             call_count[0] += 1
             return results[min(idx, len(results)-1)]
 
-        with patch("domains.shell.commands._api_get", side_effect=mock_get), \
+        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
              patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-123")
         assert repl._last_exit_code == 0
@@ -11230,7 +11230,7 @@ class TestStreamTrainProgressV2:
             call_count[0] += 1
             return results[min(idx, len(results)-1)]
 
-        with patch("domains.shell.commands._api_get", side_effect=mock_get), \
+        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
              patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-456")
         assert repl._last_exit_code == 0
@@ -11239,7 +11239,7 @@ class TestStreamTrainProgressV2:
         results = [
             {"status": "error", "progress": 0, "error": "crash"},
         ]
-        with patch("domains.shell.commands._api_get", return_value=results[0]), \
+        with patch("domain.shell._internal.commands._api_get", return_value=results[0]), \
              patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-789")
         assert repl._last_exit_code == 0
@@ -11252,13 +11252,13 @@ class TestStreamTrainProgressV2:
                 raise KeyboardInterrupt()
             return {"status": "running", "progress": 10}
 
-        with patch("domains.shell.commands._api_get", side_effect=mock_get), \
+        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
              patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-kbd")
         assert repl._last_exit_code == 0
 
     def test_job_exception(self, repl):
-        with patch("domains.shell.commands._api_get", side_effect=RuntimeError("network")), \
+        with patch("domain.shell._internal.commands._api_get", side_effect=RuntimeError("network")), \
              patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-err")
         assert repl._last_exit_code == 0
@@ -11276,7 +11276,7 @@ class TestStreamTrainProgressV2:
             call_count[0] += 1
             return results[min(idx, len(results)-1)]
 
-        with patch("domains.shell.commands._api_get", side_effect=mock_get), \
+        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
              patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-stdio")
         repl._stdio = None
@@ -11293,7 +11293,7 @@ class TestStreamTrainProgressV2:
             call_count[0] += 1
             return results[min(idx, len(results)-1)]
 
-        with patch("domains.shell.commands._api_get", side_effect=mock_get), \
+        with patch("domain.shell._internal.commands._api_get", side_effect=mock_get), \
              patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-half")
         assert repl._last_exit_code == 0
@@ -15921,7 +15921,7 @@ class TestCmdCommDeeper:
 class TestCmdTuiExtraV2:
     def test_tui_import_error(self, repl):
         from unittest.mock import patch as mp
-        with mp.dict('sys.modules', {'domains.shell.tui_repl': None}):
+        with mp.dict('sys.modules', {'domain.shell._internal.tui_repl': None}):
             out = _run_with_io(repl, [], lambda: repl._cmd_tui(""))
             assert "not available" in out.lower() or "error" in out.lower()
 
@@ -16166,7 +16166,7 @@ class TestInterpretNatural:
         assert repl._last_exit_code == 0
 
     def test_health_keyword(self, repl):
-        with patch("domains.shell.commands.ShellCommands.health", return_value={"status": "healthy"}):
+        with patch("domain.shell._internal.commands.ShellCommands.health", return_value={"status": "healthy"}):
             out = _run_with_io(repl, [], lambda: repl._interpret_natural("check health status"))
         assert repl._last_exit_code == 0
 
@@ -16936,7 +16936,7 @@ class TestCmdHelpDeeper:
 
 class TestCmdTuiDeeper:
     def test_tui_import_error(self, repl):
-        with patch.dict('sys.modules', {'domains.shell.tui_repl': None}):
+        with patch.dict('sys.modules', {'domain.shell._internal.tui_repl': None}):
             out = _run_with_io(repl, [], lambda: repl._cmd_tui(""))
             assert "TUI" in out or "not available" in out.lower() or repl._last_exit_code == 1
 
@@ -22907,7 +22907,7 @@ class TestConsoleOutputHelpers:
 
 class TestCmdTuiDeeperV2:
     def test_tui_import_error(self, repl):
-        with patch.dict('sys.modules', {'domains.shell.tui_repl': None}):
+        with patch.dict('sys.modules', {'domain.shell._internal.tui_repl': None}):
             with _CaptureOutput(repl) as cap:
                 repl._cmd_tui("")
         out = cap.getvalue()
@@ -24593,7 +24593,7 @@ class TestCmdVmpermsDeeperV2:
 
 class TestInterpretNaturalDeeperV2:
     def test_health_keyword(self, repl):
-        with patch("domains.shell.commands.ShellCommands.health", return_value={"status": "healthy"}):
+        with patch("domain.shell._internal.commands.ShellCommands.health", return_value={"status": "healthy"}):
             out = _run_with_io(repl, [], lambda: repl._interpret_natural("check health status"))
         assert repl._last_exit_code == 0
 

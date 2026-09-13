@@ -12,7 +12,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(_REPO_ROOT / "packages" / "core-py"))
 
-from domains.training.huggingface.local_loader import HuggingFaceLocalLoader, HFLocalConfig
+from domain.training.huggingface.local_loader import HuggingFaceLocalLoader, HFLocalConfig
 
 
 def self_train(

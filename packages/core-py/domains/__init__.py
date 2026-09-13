@@ -12,11 +12,19 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Optional, Protocol, runtime_checkable
 
-from domain.chat._internal.domain import ChatDomain, get_chat_domain
-from domain.benchmark._internal.domain import BenchmarkDomain, get_benchmark_domain
-from domains.infrastructure.errors import AppError
-
-from domain.companion import get_companion, CompanionSystem
+try:
+    from domain.chat._internal.domain import ChatDomain, get_chat_domain
+    from domain.benchmark._internal.domain import BenchmarkDomain, get_benchmark_domain
+    from domains.infrastructure.errors import AppError
+    from domain.companion import get_companion, CompanionSystem
+except (ImportError, ModuleNotFoundError):
+    AppError = Exception
+    ChatDomain = None
+    get_chat_domain = None
+    BenchmarkDomain = None
+    get_benchmark_domain = None
+    get_companion = None
+    CompanionSystem = None
 
 
 class BaseComponent:

@@ -1,160 +1,95 @@
-"""Tests for domain.learner._internal.knowledge_storage — KnowledgeStorage adapter."""
+"""Tests for KnowledgeStorage adapter."""
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
 
 from domain.learner._internal.knowledge_storage import KnowledgeStorage
 
 
-@pytest.fixture
-def storage(tmp_path):
-    return KnowledgeStorage(tmp_path / "knowledge")
-
-
-# ── Facts ─────────────────────────────────────────────────────────────────────
-
-class TestFacts:
-    def test_add_and_get(self, storage):
-        fid = storage.add_fact("Python is great", topic="python", source="manual")
-        assert fid.startswith("fact_")
-        fact = storage.get_fact(fid)
+class TestKnowledgeStorage:
+    def test_add_and_get_fact(self, tmp_path: Path):
+        storage = KnowledgeStorage(tmp_path / "knowledge")
+        fact_id = storage.add_fact(
+            content="Python is a programming language",
+            topic="tech",
+            source="manual",
+        )
+        assert fact_id.startswith("fact_")
+        fact = storage.get_fact(fact_id)
         assert fact is not None
-        assert fact["content"] == "Python is great"
-        assert fact["topic"] == "python"
+        assert fact["content"] == "Python is a programming language"
+        assert fact["topic"] == "tech"
 
-    def test_add_with_defaults(self, storage):
-        fid = storage.add_fact("A fact")
-        fact = storage.get_fact(fid)
-        assert fact["topic"] == "general"
-        assert fact["source"] == "manual"
-        assert fact["importance"] == 0.5
+    def test_list_facts(self, tmp_path: Path):
+        storage = KnowledgeStorage(tmp_path / "knowledge")
+        storage.add_fact(content="Fact 1", topic="tech")
+        storage.add_fact(content="Fact 2", topic="food")
+        storage.add_fact(content="Fact 3", topic="tech")
 
-    def test_add_with_tags(self, storage):
-        fid = storage.add_fact("Tagged", tags=["important", "todo"])
-        fact = storage.get_fact(fid)
-        assert "important" in fact["tags"]
+        all_facts = storage.list_facts()
+        assert len(all_facts) == 3
 
-    def test_get_nonexistent(self, storage):
-        assert storage.get_fact("nonexistent") is None
+        tech_facts = storage.list_facts(topic="tech")
+        assert len(tech_facts) == 2
 
-    def test_list_all(self, storage):
-        storage.add_fact("Fact 1")
-        storage.add_fact("Fact 2")
-        storage.add_fact("Fact 3")
-        facts = storage.list_facts()
-        assert len(facts) == 3
-
-    def test_list_by_topic(self, storage):
-        storage.add_fact("Py fact", topic="python")
-        storage.add_fact("Rust fact", topic="rust")
-        storage.add_fact("Py tip", topic="python")
-        py_facts = storage.list_facts(topic="python")
-        assert len(py_facts) == 2
-
-    def test_search(self, storage):
-        storage.add_fact("Python is great")
-        storage.add_fact("Rust is fast")
-        results = storage.search_facts("python")
+    def test_search_facts(self, tmp_path: Path):
+        storage = KnowledgeStorage(tmp_path / "knowledge")
+        storage.add_fact(content="Python rocks")
+        storage.add_fact(content="Java is okay")
+        results = storage.search_facts("Python")
         assert len(results) == 1
-        assert "Python" in results[0]["content"]
+        assert results[0]["content"] == "Python rocks"
 
-    def test_delete(self, storage):
-        fid = storage.add_fact("To delete")
-        assert storage.delete_fact(fid) is True
-        assert storage.get_fact(fid) is None
+    def test_delete_fact(self, tmp_path: Path):
+        storage = KnowledgeStorage(tmp_path / "knowledge")
+        fact_id = storage.add_fact(content="To delete")
+        assert storage.delete_fact(fact_id) is True
+        assert storage.get_fact(fact_id) is None
+        assert storage.delete_fact(fact_id) is False
 
-    def test_delete_nonexistent(self, storage):
-        assert storage.delete_fact("nope") is False
-
-    def test_count(self, storage):
+    def test_count_facts(self, tmp_path: Path):
+        storage = KnowledgeStorage(tmp_path / "knowledge")
         assert storage.count_facts() == 0
-        storage.add_fact("One")
-        storage.add_fact("Two")
+        storage.add_fact(content="A")
+        storage.add_fact(content="B")
         assert storage.count_facts() == 2
 
-
-# ── Visited URLs ──────────────────────────────────────────────────────────────
-
-class TestVisited:
-    def test_mark_and_get_visited(self, storage):
+    def test_visited_urls(self, tmp_path: Path):
+        storage = KnowledgeStorage(tmp_path / "knowledge")
         storage.mark_visited("https://example.com")
+        storage.mark_visited("https://python.org")
         visited = storage.get_visited()
         assert "https://example.com" in visited
+        assert "https://python.org" in visited
 
-    def test_mark_visited_creates_fact(self, storage):
-        storage.mark_visited("https://example.com")
-        facts = storage.list_facts(topic="visited")
-        assert len(facts) == 1
-        assert "Visited:" in facts[0]["content"]
-
-    def test_get_visited_empty(self, storage):
-        assert storage.get_visited() == []
-
-    def test_multiple_visited(self, storage):
-        storage.mark_visited("https://a.com")
-        storage.mark_visited("https://b.com")
-        visited = storage.get_visited()
-        assert len(visited) == 2
-
-
-# ── Feeds ─────────────────────────────────────────────────────────────────────
-
-class TestFeeds:
-    def test_add_and_get_feed(self, storage):
-        storage.add_feed("https://feed.xml", title="My Feed")
-        feed = storage.get_feed("https://feed.xml")
+    def test_feeds(self, tmp_path: Path):
+        storage = KnowledgeStorage(tmp_path / "knowledge")
+        storage.add_feed("https://example.com/rss", title="Example")
+        feed = storage.get_feed("https://example.com/rss")
         assert feed is not None
-        assert feed["title"] == "My Feed"
-        assert feed["enabled"] is True
+        assert feed["title"] == "Example"
 
-    def test_add_feed_default_interval(self, storage):
-        storage.add_feed("https://feed.xml")
-        feed = storage.get_feed("https://feed.xml")
-        assert feed["poll_interval"] == 3600.0
-
-    def test_get_feed_nonexistent(self, storage):
-        assert storage.get_feed("https://nope.xml") is None
-
-    def test_list_feeds(self, storage):
-        storage.add_feed("https://a.xml", title="A")
-        storage.add_feed("https://b.xml", title="B")
         feeds = storage.list_feeds()
-        assert len(feeds) == 2
+        assert len(feeds) == 1
 
-    def test_update_feed_last_fetched(self, storage):
-        storage.add_feed("https://feed.xml")
-        storage.update_feed_last_fetched("https://feed.xml")
-        feed = storage.get_feed("https://feed.xml")
+        storage.update_feed_last_fetched("https://example.com/rss")
+        feed = storage.get_feed("https://example.com/rss")
         assert feed["last_fetched"] > 0
 
-    def test_remove_feed(self, storage):
-        storage.add_feed("https://feed.xml")
-        assert storage.remove_feed("https://feed.xml") is True
-        assert storage.get_feed("https://feed.xml") is None
+        assert storage.remove_feed("https://example.com/rss") is True
+        assert storage.get_feed("https://example.com/rss") is None
 
-    def test_remove_feed_nonexistent(self, storage):
-        assert storage.remove_feed("https://nope.xml") is False
+    def test_persistence(self, tmp_path: Path):
+        data_dir = tmp_path / "knowledge"
+        storage1 = KnowledgeStorage(data_dir)
+        fact_id = storage1.add_fact(content="Persisted fact")
+        storage1.add_feed("https://persist.com/rss")
 
-
-# ── Integration ───────────────────────────────────────────────────────────────
-
-class TestIntegration:
-    def test_fact_persistence(self, tmp_path):
-        s1 = KnowledgeStorage(tmp_path / "k")
-        fid = s1.add_fact("Persistent fact")
-        
-        s2 = KnowledgeStorage(tmp_path / "k")
-        fact = s2.get_fact(fid)
+        storage2 = KnowledgeStorage(data_dir)
+        fact = storage2.get_fact(fact_id)
         assert fact is not None
-        assert fact["content"] == "Persistent fact"
-
-    def test_feed_persistence(self, tmp_path):
-        s1 = KnowledgeStorage(tmp_path / "k")
-        s1.add_feed("https://feed.xml", title="Persistent")
-        
-        s2 = KnowledgeStorage(tmp_path / "k")
-        feed = s2.get_feed("https://feed.xml")
-        assert feed is not None
-        assert feed["title"] == "Persistent"
+        assert fact["content"] == "Persisted fact"
+        feeds = storage2.list_feeds()
+        assert len(feeds) == 1

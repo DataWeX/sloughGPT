@@ -53,7 +53,7 @@ def print_stats(top_n=50):
 # ---------------------------------------------------------------------------
 def main():
     import numpy as np
-    from domains.training import slonet as sn
+    from domain.training import slonet as sn
 
     # Manually instrument all core ops by patching the module dict
     # We need to handle static/class methods properly, so we patch module-level

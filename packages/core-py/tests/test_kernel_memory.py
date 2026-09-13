@@ -1,4 +1,4 @@
-"""Coverage tests for domain.shell._internal.kernel_memory.py."""
+"""Coverage tests for domains.shell.kernel_memory.py."""
 
 import numpy as np
 import pytest

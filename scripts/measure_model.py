@@ -362,7 +362,7 @@ def measure_model(
     quick: bool = False,
 ) -> ModelMeasurement:
     """Run full measurement suite on a model."""
-    from domains.infrastructure.slonet_chat_provider import SloNetChatProvider
+    from domain.infrastructure.slonet_chat_provider import SloNetChatProvider
 
     log("Loading model...")
     if soul_path:

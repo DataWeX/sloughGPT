@@ -17,12 +17,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
 import numpy as np
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloNet, SloEmbedding, SloLSTM, SloAdam,
     cross_entropy, tensor, no_grad, _sample_from_logits,
     save_checkpoint_npz,
 )
-from domains.inference.slo_format import SloProfile, save_soul
+from domain.inference.slo_format import SloProfile, save_soul
 
 
 # ── Shakespeare training data ────────────────────────────────────────────

@@ -19,8 +19,8 @@ import numpy as np
 
 sys.path.insert(0, "packages/core-py")
 
-from domains.training.slonet import SloTransformer
-from domains.infrastructure.quantization import Quantine, walk_slo_linears
+from domain.training._internal.slonet import SloTransformer
+from domain.infrastructure.quantization import Quantine, walk_slo_linears
 
 
 def create_model(vocab=32000, embed=256, layers=4, heads=8, seq_len=128):
@@ -217,7 +217,7 @@ def main():
     # ── AVX2 check ──────────────────────────────────────────────────
     print(f"\n--- Hardware acceleration ---")
     try:
-        from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+        from domain.infrastructure._internal.quant_core.wrapper import HAS_AVX2
         if HAS_AVX2:
             print("  AVX2 kernels: AVAILABLE (int8/int4 GEMM accelerated)")
         else:

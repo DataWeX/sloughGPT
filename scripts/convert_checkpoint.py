@@ -16,8 +16,8 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "packages", "core-py"))
 import struct
 import json
 
-from domains.training.slonet import import_from_sou
-from domains.inference import write_v3_sou
+from domain.training._internal.slonet import import_from_sou
+from domain.inference import write_v3_sou
 
 
 def convert(inpath: str, outpath: str | None = None) -> str:

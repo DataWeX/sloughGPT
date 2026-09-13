@@ -26,6 +26,8 @@ from domain.logging import (
     get_global,
 )
 
+from domain.logging._internal import config  # noqa: F401
+
 __all__ = [
     "LogLevel",
     "LogRecord",

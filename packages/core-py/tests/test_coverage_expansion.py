@@ -2124,7 +2124,7 @@ class Addon:
         loader.discover()
 
         # Mock spec_from_file_location to return None
-        with patch("domains.shell.addons.module_loader.importlib.util.spec_from_file_location", return_value=None):
+        with patch("domain.shell._internal.addons.module_loader.importlib.util.spec_from_file_location", return_value=None):
             with pytest.raises(RuntimeError, match="Failed to load"):
                 loader.load("bad_spec")
 

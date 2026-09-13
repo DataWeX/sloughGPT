@@ -1,2 +1,3 @@
-"""Auto-generated shim — re-exports from canonical old-style location."""
-from domains.infrastructure.model_protector import *  # noqa: F401,F403
+"""Backward-compatibility shim."""
+from domains.infrastructure import model_protector as _mod
+globals().update({k: v for k, v in vars(_mod).items()})

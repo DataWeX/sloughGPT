@@ -110,7 +110,7 @@ def list_features(root: Path) -> None:
 
 def validate_feature_flags(root: Path) -> List[str]:
     """Validate that all FEATURE tags have corresponding feature flag entries."""
-    from domains.shared.feature_flags import FeatureFlags
+    from domain.shared.feature_flags import FeatureFlags
 
     errors = []
     files = find_feature_tagged_files(root)

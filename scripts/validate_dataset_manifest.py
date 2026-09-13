@@ -19,7 +19,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from domains.training.dataset_manifest import (  # noqa: E402
+from domain.training._internal.dataset_manifest import (  # noqa: E402
     ManifestError,
     load_manifest,
     resolve_training_data_path,

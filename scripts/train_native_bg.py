@@ -9,7 +9,7 @@ os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 with open("/tmp/native-train.pid", "w") as f:
     f.write(str(os.getpid()))
 
-from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+from domain.training.train_pipeline import SloughGPTTrainer, TrainerConfig
 
 config = TrainerConfig(
     vocab_size=0,

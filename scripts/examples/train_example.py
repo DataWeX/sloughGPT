@@ -6,8 +6,8 @@ Example: Train a custom SloughGPT model
 import sys
 sys.path.insert(0, "..")
 
-from domains.models import SloughGPTModel
-from domains.training.performance import get_optimal_device
+from domain.models import SloughGPTModel
+from domain.training.performance import get_optimal_device
 import torch
 
 def main():

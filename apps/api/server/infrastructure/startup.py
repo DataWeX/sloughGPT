@@ -993,7 +993,7 @@ async def _restore_training_runtime():
     try:
         from training.runtime import get_training_runtime
 
-        get_training_runtime().restore()
+        await asyncio.to_thread(get_training_runtime().restore)
     except Exception as e:
         logger.warning("Training runtime restore failed: %s", e, extra={"tag": "START"})
 

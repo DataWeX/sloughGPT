@@ -3,7 +3,7 @@
 import time, sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "packages", "core-py"))
 
-from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+from domain.training.train_pipeline import SloughGPTTrainer, TrainerConfig
 
 config = TrainerConfig(
     vocab_size=0,

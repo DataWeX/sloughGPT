@@ -22,7 +22,7 @@ import random
 import time
 from typing import Dict
 
-from domains.infrastructure.pugqeep.engine import Engine, Process
+from domain.infrastructure._internal.pugqeep.engine import Engine, Process
 
 logging.basicConfig(
     level=logging.INFO,

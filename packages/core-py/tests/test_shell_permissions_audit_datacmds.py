@@ -1,4 +1,4 @@
-"""Tests for domain.shell._internal.permissions.py, audit.py, cmds/data_cmds.py."""
+"""Tests for domains.shell.permissions.py, audit.py, cmds/data_cmds.py."""
 
 import json
 import os

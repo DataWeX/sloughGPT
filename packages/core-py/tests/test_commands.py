@@ -1,10 +1,10 @@
-"""Tests for domain.shell._internal.commands.py — ShellCommands API wrappers."""
+"""Tests for domains.shell.commands.py — ShellCommands API wrappers."""
 
 from __future__ import annotations
 
 import requests
 
-from domains.shell import commands
+import domain.shell._internal.commands as commands
 from domain.shell._internal.commands import ShellCommands
 
 
