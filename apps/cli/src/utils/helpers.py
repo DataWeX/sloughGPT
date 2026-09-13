@@ -12,7 +12,7 @@ logger = logging.getLogger("slo.cli.helpers")
 
 def chat_repository_root() -> Path:
     """Repository root (delegates to shared utility)."""
-    from domains.shared import find_repo_root
+    from domain.shared import find_repo_root
     return find_repo_root(Path(__file__).resolve())
 
 
@@ -23,7 +23,7 @@ def chat_uvicorn_bind_host(client_host: str) -> str:
 
 
 def chat_find_available_port(bind_host: str, start_port: int, max_attempts: int = 10) -> int:
-    from domains.shared import find_available_port
+    from domain.shared import find_available_port
     return find_available_port(host=bind_host, start_port=start_port, max_attempts=max_attempts)
 
 
@@ -120,7 +120,7 @@ def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = 
     if not marker.is_file():
         return base_url, None
 
-    from domains.shared import find_server_python
+    from domain.shared import find_server_python
     server_python = find_server_python(repo)
     cmd = [server_python, "-m", "apps.api.server.main"]
 

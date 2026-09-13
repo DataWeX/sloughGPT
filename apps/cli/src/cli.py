@@ -22,7 +22,7 @@ for _sys_path in [_CLI_DIR, str(_CORE_PY_DIR)]:
 
 # ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
 from domain.logging._internal.config import setup_logging  # noqa: E402
-from domains.logging import CLILogger, BridgeHandler, set_global  # noqa: E402
+from domain.logging import CLILogger, BridgeHandler, set_global  # noqa: E402
 
 setup_logging(enable_console=False, enable_output_buffer=False)
 log = CLILogger("slo")
@@ -305,7 +305,7 @@ def shell(ctx, command, tui, line):
     from utils.helpers import ensure_server
     actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
     from domain.shell._internal.repl import ShellREPL
-    from domains.shell import DaitRuntime
+    from domain.shell import DaitRuntime
 
     os = DaitRuntime(api_url=actual_url)
     # Default to TUI when TTY, line mode when piped or --line

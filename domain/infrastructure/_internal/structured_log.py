@@ -1,1 +1,2 @@
-from domains.infrastructure.structured_log import StructuredLogger  # noqa: F401
+"""Backward-compatibility shim."""
+from domains.infrastructure.structured_log import *  # noqa: F401,F403

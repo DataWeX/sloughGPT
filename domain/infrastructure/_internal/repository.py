@@ -1,1 +1,2 @@
-from domains.infrastructure.repository import FileRepository, JsonSerializer  # noqa: F401
+"""Backward-compatibility shim."""
+from domains.infrastructure.repository import *  # noqa: F401,F403

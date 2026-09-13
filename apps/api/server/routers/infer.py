@@ -168,7 +168,7 @@ class InferRouter:
         model = self._get_model()
         if model is None:
             return None
-        from domains.models import ModelInterface
+        from domain.models import ModelInterface
 
         if isinstance(model, ModelInterface):
             return model
@@ -205,7 +205,7 @@ class InferRouter:
         """
         # Block inference under memory pressure
         try:
-            from domains.infrastructure.memory_pressure import (
+            from domain.infrastructure.memory_pressure import (
                 PressureLevel,
                 get_memory_pressure_monitor,
             )
@@ -248,7 +248,7 @@ class InferRouter:
             elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
             tokens = len(result.split())
             try:
-                from domains.infrastructure.server_state import get_server_state
+                from domain.infrastructure.server_state import get_server_state
 
                 get_server_state().record_inference(
                     tokens=tokens, elapsed_ms=elapsed_ms, model=req.model
@@ -289,7 +289,7 @@ class InferRouter:
         """
         # Block streaming inference under memory pressure
         try:
-            from domains.infrastructure.memory_pressure import (
+            from domain.infrastructure.memory_pressure import (
                 PressureLevel,
                 get_memory_pressure_monitor,
             )
@@ -398,7 +398,7 @@ class InferRouter:
                     return
                 elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
                 try:
-                    from domains.infrastructure.server_state import get_server_state
+                    from domain.infrastructure.server_state import get_server_state
 
                     get_server_state().record_inference(
                         tokens=token_count, elapsed_ms=elapsed_ms, model=req.model

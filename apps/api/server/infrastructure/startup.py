@@ -399,7 +399,7 @@ class StartupOrchestrator:
         async def _init_metrics():
             # Prometheus metrics collector
             try:
-                from domains.infrastructure.metrics import get_metrics_collector
+                from domain.infrastructure.metrics import get_metrics_collector
                 get_metrics_collector()
             except Exception as e:
                 logger.debug("Metrics init deferred: %s", e)
@@ -470,7 +470,7 @@ class StartupOrchestrator:
                 server_state.model_type = cfg.autoload_model
                 server_state.provider = engine_client
                 try:
-                    from domains.infrastructure.server_state import get_server_state
+                    from domain.infrastructure.server_state import get_server_state
 
                     core = get_server_state()
                     core.model.set(engine_client)
@@ -562,7 +562,7 @@ class StartupOrchestrator:
         # Sync to persistent model catalog
         try:
             import state as server_state
-            from domains.infrastructure.model_catalog import get_model_catalog
+            from domain.infrastructure.model_catalog import get_model_catalog
 
             catalog = get_model_catalog()
             catalog.sync_from_disk()
@@ -640,7 +640,7 @@ class StartupOrchestrator:
             phase="model_registry", step=7, total=9, message="Initializing model registry..."
         )
         try:
-            from domains.infrastructure.model_registry import get_model_registry
+            from domain.infrastructure.model_registry import get_model_registry
 
             self._registry = get_model_registry()
             logger.info("Phase: model registry initialized", extra={"tag": "START"})
@@ -776,7 +776,7 @@ class StartupOrchestrator:
             phase="task_queue", step=2, total=9, message="Initializing task queue..."
         )
         try:
-            from domains.infrastructure.task_queue import get_task_queue
+            from domain.infrastructure.task_queue import get_task_queue
 
             self._task_queue = get_task_queue()
             await self._task_queue.start()
@@ -784,14 +784,14 @@ class StartupOrchestrator:
         except Exception as e:
             logger.warning("Task queue init failed: %s", e, extra={"tag": "START"})
         try:
-            from domains.infrastructure.training_queue import register_training_handlers
+            from domain.infrastructure.training_queue import register_training_handlers
 
             register_training_handlers()
             logger.info("Training handlers registered with task queue", extra={"tag": "START"})
         except Exception as e:
             logger.warning("Training handler registration failed: %s", e, extra={"tag": "START"})
         try:
-            from domains.memory import register_memory_handlers
+            from domain.memory import register_memory_handlers
 
             register_memory_handlers()
             logger.info("Memory handlers registered with task queue", extra={"tag": "START"})
@@ -820,7 +820,7 @@ class StartupOrchestrator:
             logger.warning("Config system init: %s", e, extra={"tag": "START"})
         # Init ResourceManager — applies BLAS env vars before numpy loads
         try:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure.resource_manager import get_resource_manager
 
             rm = get_resource_manager()
             rm.apply_blas_env()
@@ -909,7 +909,7 @@ class StartupOrchestrator:
     async def _shutdown_registry(self):
         """Reset model registry metrics."""
         try:
-            from domains.infrastructure.model_registry import get_model_registry
+            from domain.infrastructure.model_registry import get_model_registry
 
             get_model_registry().reset_metrics()
         except Exception as e:
@@ -1114,7 +1114,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     if not model_type:
         return False
     try:
-        from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
+        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         slnc_path = str(_get_model_dir(model_type) / "model.slnc")
         if not os.path.exists(slnc_path):
@@ -1146,7 +1146,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         return False
 
     try:
-        from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+        from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
 
         process_guard = ProcessGuard(
             slnc_path=slnc_path,
@@ -1180,7 +1180,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     # loaded model (provider-backed) instead of "No model loaded".
     # Mirrors the manual-load path in controllers/models.py.
     try:
-        from domains.infrastructure.server_state import get_server_state
+        from domain.infrastructure.server_state import get_server_state
 
         core = get_server_state()
         core.model.set(provider)
@@ -1198,7 +1198,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         logger.debug("ProcessGuard adoption into controller failed: %s", e, extra={"tag": "START"})
 
     try:
-        from domains.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure.model_registry import get_model_registry
         from domain.models._internal.provider import setup_providers
 
         setup_providers(
@@ -1242,8 +1242,8 @@ def _build_guard_for_model(cfg, model_type: str):
 
         if not get_process_guard_enabled():
             return None
-        from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
-        from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
+        from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
+        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         slnc_path = str(_get_model_dir(model_type) / "model.slnc")
         if not os.path.exists(slnc_path):
@@ -1292,8 +1292,8 @@ def _build_guard_for_model(cfg, model_type: str):
 def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     """Register a fully-loaded (eager) model with registry + providers."""
     import state as server_state
-    from domains.infrastructure.model_registry import get_model_registry
-    from domains.infrastructure.safetensors_loader import _get_model_dir
+    from domain.infrastructure.model_registry import get_model_registry
+    from domain.infrastructure.safetensors_loader import _get_model_dir
     from domain.models._internal.provider import setup_providers
 
     registry = get_model_registry()
@@ -1339,7 +1339,7 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     # state.py.__setattr__ is a no-op for modules (Python stores directly
     # into __dict__), so get_server_state() reads would see stale/None values.
     try:
-        from domains.infrastructure.server_state import get_server_state
+        from domain.infrastructure.server_state import get_server_state
 
         core = get_server_state()
         if server_state.model is not None:
@@ -1390,7 +1390,7 @@ def _autoload_model(cfg: ServerConfig):
     import time as _time
 
     import state as server_state
-    from domains.infrastructure.constants import DEFAULT_LOAD_MAX_RETRIES, DEFAULT_LOAD_RETRY_DELAY
+    from domain.infrastructure.constants import DEFAULT_LOAD_MAX_RETRIES, DEFAULT_LOAD_RETRY_DELAY
 
     max_retries = DEFAULT_LOAD_MAX_RETRIES
     retry_delay_s = DEFAULT_LOAD_RETRY_DELAY
@@ -1429,7 +1429,7 @@ def _autoload_model(cfg: ServerConfig):
     model_id = cfg.autoload_model
 
     # 1) Try local .slnc / safetensors via ModelLoader (with retries)
-    from domains.infrastructure.model_loader import ModelLoader
+    from domain.infrastructure.model_loader import ModelLoader
 
     loader = ModelLoader()
 
@@ -1478,8 +1478,8 @@ def _autoload_model(cfg: ServerConfig):
         extra={"tag": "START"},
     )
     try:
-        from domains.infrastructure.hf_hub import download_hf_model
-        from domains.infrastructure.safetensors_loader import _get_model_dir
+        from domain.infrastructure.hf_hub import download_hf_model
+        from domain.infrastructure.safetensors_loader import _get_model_dir
 
         cache_dir = _get_model_dir(model_id)
         logger.info("Downloading %s to %s ...", model_id, cache_dir, extra={"tag": "START"})
@@ -1555,7 +1555,7 @@ def _start_inference_engine(cfg) -> Any | None:
         return None
 
     try:
-        from domains.infrastructure.safetensors_loader import _get_model_dir
+        from domain.infrastructure.safetensors_loader import _get_model_dir
 
         slnc_path = _get_model_dir(model_type) / "model.slnc"
         if not slnc_path.exists():
@@ -1633,7 +1633,7 @@ def _start_inference_engine(cfg) -> Any | None:
         logger.error("Inference engine: failed to launch subprocess: %s", e, extra={"tag": "START"})
         return None
 
-    from domains.infrastructure.inference_client import InferenceClient
+    from domain.infrastructure.inference_client import InferenceClient
 
     restart_fn = _make_engine_restart_fn(cfg)
     client = InferenceClient(
@@ -1705,7 +1705,7 @@ def _make_engine_restart_fn(cfg):
             return None
 
         try:
-            from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
+            from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
             slnc_path = _get_model_dir(model_type) / "model.slnc"
             if not slnc_path.exists():
@@ -1763,7 +1763,7 @@ def _make_engine_restart_fn(cfg):
             logger.error("Inference engine: restart failed: %s", e, extra={"tag": "START"})
             return None
 
-        from domains.infrastructure.inference_client import InferenceClient
+        from domain.infrastructure.inference_client import InferenceClient
 
         new_client = InferenceClient(
             host=engine_host, port=port, connect_timeout=cfg.inference_engine_timeout

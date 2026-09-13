@@ -24,7 +24,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 
-from domains.infrastructure.correlation import set_correlation_id
+from domain.infrastructure.correlation import set_correlation_id
 from domain.logging._internal.config import set_request_id
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -82,7 +82,7 @@ def _model_ready() -> bool:
             return True
         # Lazy-guard path: provider lives in the core ServerState singleton
         # but state.__dict__["model"] stays None.
-        from domains.infrastructure.server_state import get_server_state
+        from domain.infrastructure.server_state import get_server_state
 
         core_model = get_server_state().model.get()
         if core_model is not None:
@@ -394,7 +394,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        from domains.infrastructure.metrics import get_metrics_collector
+        from domain.infrastructure.metrics import get_metrics_collector
 
         collector = get_metrics_collector()
         collector.set_active_requests(collector.get_active_requests() + 1)

@@ -33,7 +33,7 @@ def _traits(resp):
 def _fresh_companion():
     """Reset the companion singleton before each test."""
     import routers.companion as comp_mod
-    import domains.companion as dom_mod
+    import domain.companion as dom_mod
 
     comp_mod._companion_router._companion = None
     dom_mod._companion = None

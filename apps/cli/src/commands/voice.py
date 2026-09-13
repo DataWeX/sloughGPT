@@ -5,7 +5,7 @@ import sys
 import os
 from pathlib import Path
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 

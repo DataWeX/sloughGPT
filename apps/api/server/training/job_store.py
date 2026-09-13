@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from mogdb import MogDB
 
 logger = logging.getLogger("slo.job_store")

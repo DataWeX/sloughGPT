@@ -11,7 +11,7 @@ from typing import Optional, List
 
 import numpy as np
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 from utils.progress import ProgressBar
@@ -866,7 +866,7 @@ def _cmd_user_adapters(args):
     user_id = getattr(args, "adapters_user", None) or getattr(args, "user", None)
     users_str = getattr(args, "adapters_users", None) or getattr(args, "users", None)
     try:
-        from domains.feedback import get_per_user_lora
+        from domain.feedback import get_per_user_lora
 
         store = get_per_user_lora()
 
@@ -925,7 +925,7 @@ def _cmd_feedback_train(args):
     output_dir = getattr(args, "feedback_output", None) or getattr(args, "output", None)
 
     try:
-        from domains.feedback import create_training_pipeline
+        from domain.feedback import create_training_pipeline
 
         trainer = create_training_pipeline()
         stats = trainer.get_training_stats()
@@ -968,7 +968,7 @@ def _cmd_feedback_export(args):
     fmt = getattr(args, "export_feedback_format", None) or getattr(args, "format", "jsonl")
 
     try:
-        from domains.feedback import get_meta_weight_manager
+        from domain.feedback import get_meta_weight_manager
 
         manager = get_meta_weight_manager()
         if manager is None:
@@ -1086,7 +1086,7 @@ def cmd_demo(args):
 
     if args.component in ("all", "ewc"):
         log.section("EWC - Catastrophic Forgetting Prevention")
-        from domains.models import SloughGPTModel
+        from domain.models import SloughGPTModel
         model = SloughGPTModel(vocab_size=50, n_embed=32, n_layer=2, n_head=2, block_size=16)
         ewc = EwcContinualLearner(model)
         log.key_value("Fisher Params", str(len(ewc.fisher_estimator.fisher_accum)))
@@ -1107,7 +1107,7 @@ def cmd_rlhf(args):
 
     log.header("RLHF Demo")
     from domain.training._internal.rlhf import RLHFConfig
-    from domains.models import SloughGPTModel
+    from domain.models import SloughGPTModel
 
     device = "cpu"
     log.key_value("Device", device)

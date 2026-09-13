@@ -7,7 +7,7 @@ BaseHTTPMiddleware, JSONResponse 429, header injection.
 Supports per-workspace rate limiting when auth is enabled.
 """
 
-from domains.infrastructure.rate_limiter import (
+from domain.infrastructure.rate_limiter import (
     RATE_LIMIT_HEADER_LIMIT,
     RATE_LIMIT_HEADER_REMAINING,
     RateLimiter,

@@ -11,7 +11,7 @@ import threading
 import uuid
 from typing import Any
 
-from domains.mobile import get_notification_service
+from domain.mobile import get_notification_service
 from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
@@ -268,7 +268,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, req_snapshot)
 
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().register(
             op_type=OpType.TRAINING,

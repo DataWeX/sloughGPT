@@ -22,7 +22,7 @@ from typing import Optional
 
 import click
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 

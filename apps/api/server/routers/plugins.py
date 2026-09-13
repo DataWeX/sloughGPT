@@ -5,7 +5,7 @@ Plugins Router — endpoints for plugin management.
 import logging
 from pathlib import Path
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
@@ -38,7 +38,7 @@ class PluginsRouter:
     async def list_plugins(self) -> dict:
         """List all loaded plugins."""
         try:
-            from domains.plugins import get_plugin_manager
+            from domain.plugins import get_plugin_manager
             pm = get_plugin_manager()
             plugins = pm.list_plugins()
             return success_response(data={"plugins": plugins})
@@ -53,7 +53,7 @@ class PluginsRouter:
     ) -> dict:
         """Enable a plugin."""
         try:
-            from domains.plugins import get_plugin_manager
+            from domain.plugins import get_plugin_manager
             pm = get_plugin_manager()
             meta = pm._metadata.get(plugin_name)
             if meta:
@@ -71,7 +71,7 @@ class PluginsRouter:
     ) -> dict:
         """Disable a plugin."""
         try:
-            from domains.plugins import get_plugin_manager
+            from domain.plugins import get_plugin_manager
             pm = get_plugin_manager()
             meta = pm._metadata.get(plugin_name)
             if meta:
@@ -88,7 +88,7 @@ class PluginsRouter:
     ) -> dict:
         """Reload plugins from plugin directories."""
         try:
-            from domains.plugins import get_plugin_manager
+            from domain.plugins import get_plugin_manager
             pm = get_plugin_manager()
             repo_root = find_repo_root(Path(__file__).resolve())
             plugin_dir = repo_root / "plugins"

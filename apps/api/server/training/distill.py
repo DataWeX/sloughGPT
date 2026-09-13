@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
@@ -120,7 +120,7 @@ async def start_distillation(
     training_jobs[job_id] = job
 
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().register(
             op_type=OpType.TRAINING,
@@ -144,7 +144,7 @@ async def start_distillation(
             _random.seed(42)
             np.random.seed(42)
 
-            from domains.infrastructure.model_registry import get_model_registry
+            from domain.infrastructure.model_registry import get_model_registry
 
             registry = get_model_registry()
             server = registry.get(request.teacher_model) if registry else None
@@ -156,7 +156,7 @@ async def start_distillation(
                 teacher_model = server._model_ref
                 teacher_tokenizer = getattr(server, "_tokenizer", None)
             else:
-                from domains.infrastructure.server_state import get_server_state
+                from domain.infrastructure.server_state import get_server_state
 
                 provider = get_server_state().model.get()
                 if (
@@ -187,7 +187,7 @@ async def start_distillation(
             itos = {i: c for c, i in stoi.items()}
             vocab_size = len(stoi)
 
-            from domains.models import SloughGPTModel
+            from domain.models import SloughGPTModel
 
             student = SloughGPTModel(
                 vocab_size=vocab_size,

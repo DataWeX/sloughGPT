@@ -62,7 +62,7 @@ class SessionRouter:
         Existing code (e.g., ``main.py``) still calls this function. It now
         proxies to the unified ``SessionCore`` implementation.
         """
-        from domains.infrastructure.session_core import SessionCore
+        from domain.infrastructure.session_core import SessionCore
 
         return SessionCore.get_messages(session_id)
 
@@ -76,7 +76,7 @@ class SessionRouter:
         try:
             """Set session context (messages stored for regeneration)."""
             if ctx.messages:
-                from domains.infrastructure.session_core import SessionCore
+                from domain.infrastructure.session_core import SessionCore
 
                 result = SessionCore.store_context(session_id, ctx.messages)
                 safe_audit_log(
@@ -98,7 +98,7 @@ class SessionRouter:
 
         Used by the UI to load a chat history.
         """
-        from domains.infrastructure.session_core import SessionCore
+        from domain.infrastructure.session_core import SessionCore
 
         try:
             msgs = SessionCore.get_messages(session_id)
@@ -119,7 +119,7 @@ class SessionRouter:
         try:
 
             def _fetch_messages():
-                from domains.infrastructure.session_core import SessionCore
+                from domain.infrastructure.session_core import SessionCore
 
                 return SessionCore.get_messages(session_id)
 
@@ -167,7 +167,7 @@ class SessionRouter:
             def _fetch_workspace():
                 workspace = {"working_memory": [], "semantic_keys": [], "episodic_count": 0}
                 try:
-                    from domains.infrastructure.context_core import get_context_core
+                    from domain.infrastructure.context_core import get_context_core
 
                     cc = get_context_core()
                     insp = cc.get_context_inspector()
@@ -221,7 +221,7 @@ class SessionRouter:
     ) -> StreamingResponse:
         try:
             """Regenerate the last assistant response for a session."""
-            from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+            from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
             _op_id = None
             try:
@@ -237,7 +237,7 @@ class SessionRouter:
                 _regen_corr_id = f"regen-{session_id[:8]}-{int(_regen_start * 1000) % 100000}"
                 _token_count = 0
                 try:
-                    from domains.infrastructure.session_core import SessionCore
+                    from domain.infrastructure.session_core import SessionCore
 
                     msgs = SessionCore.get_messages(session_id)
                     if not msgs:

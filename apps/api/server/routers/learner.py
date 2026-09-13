@@ -53,7 +53,7 @@ class LearnerRouter:
         import time as _time
 
         _t0 = _time.monotonic()
-        from domains.learner import get_learner
+        from domain.learner import get_learner
 
         learner = get_learner()
         result = learner.search_and_learn(req.query, req.max_results)
@@ -84,7 +84,7 @@ class LearnerRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Manage RSS feed subscriptions."""
-        from domains.learner import get_learner
+        from domain.learner import get_learner
 
         learner = get_learner()
         if action == "subscribe":
@@ -122,7 +122,7 @@ class LearnerRouter:
         import time as _time
 
         _t0 = _time.monotonic()
-        from domains.learner import get_learner
+        from domain.learner import get_learner
 
         learner = get_learner()
         result = learner.ingest_url(url)
@@ -140,7 +140,7 @@ class LearnerRouter:
         top_k: int = Query(10, ge=1, le=100),
     ) -> dict:
         """Query learned knowledge by topic or keyword search."""
-        from domains.learner import get_learner
+        from domain.learner import get_learner
 
         learner = get_learner()
         if topic:
@@ -162,7 +162,7 @@ class LearnerRouter:
         import time as _time
 
         _t0 = _time.monotonic()
-        from domains.learner import get_learner
+        from domain.learner import get_learner
 
         try:
             learner = get_learner()
@@ -187,7 +187,7 @@ class LearnerRouter:
         import time as _time
 
         _t0 = _time.monotonic()
-        from domains.learner import get_learner
+        from domain.learner import get_learner
 
         learner = get_learner()
         status = learner.train_now()
@@ -204,7 +204,7 @@ class LearnerRouter:
         import time as _time
 
         _t0 = _time.monotonic()
-        from domains.learner import get_learner
+        from domain.learner import get_learner
 
         learner = get_learner()
         result = learner.deploy(name=name)
@@ -223,7 +223,7 @@ class LearnerRouter:
         import time as _time
 
         _t0 = _time.monotonic()
-        from domains.learner import get_learner
+        from domain.learner import get_learner
 
         learner = get_learner()
         result = learner.evaluate(text=text)
@@ -241,7 +241,7 @@ class LearnerRouter:
             current_loss, buffer_size, pending_tokens, knowledge stats,
             feed subscriptions
         """
-        from domains.learner import get_learner
+        from domain.learner import get_learner
 
         learner = get_learner()
         return success_response(data=learner.status())

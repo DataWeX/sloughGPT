@@ -118,7 +118,7 @@ class BenchmarkRouter:
         """
         try:
             from controllers.models import get_models_controller
-            from domains.infrastructure.server_state import get_server_state
+            from domain.infrastructure.server_state import get_server_state
 
             ctrl = get_models_controller()
             provider = get_server_state().model.get()
@@ -198,7 +198,7 @@ class BenchmarkRouter:
         """
         _t0 = _time.monotonic()
         try:
-            from domains.infrastructure.server_state import get_server_state
+            from domain.infrastructure.server_state import get_server_state
 
             provider = get_server_state().model.get()
             if provider is None:

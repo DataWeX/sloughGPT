@@ -27,7 +27,7 @@ import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -105,7 +105,7 @@ async def lifespan(app_inst: FastAPI):
 
         # Start PGQ core infra engine (background thread)
         try:
-            from domains.infrastructure.pugqeep import PGQ
+            from domain.infrastructure.pugqeep import PGQ
 
             _pgq_engine = PGQ("sloughgpt")
             logger.info("PGQ core engine created", extra={"tag": "START"})
@@ -150,7 +150,7 @@ async def lifespan(app_inst: FastAPI):
         # Start idle manager if configured
         if cfg.idle_timeout_seconds > 0:
             try:
-                from domains.infrastructure.model_server import get_idle_manager
+                from domain.infrastructure.model_server import get_idle_manager
 
                 idle_mgr = get_idle_manager()
                 idle_mgr._idle_timeout_s = cfg.idle_timeout_seconds
@@ -166,7 +166,7 @@ async def lifespan(app_inst: FastAPI):
 
         # Stop idle manager
         try:
-            from domains.infrastructure.model_server import get_idle_manager
+            from domain.infrastructure.model_server import get_idle_manager
 
             get_idle_manager().shutdown()
         except Exception as e:
@@ -323,7 +323,7 @@ def get_meta_weight_manager():
     global _meta_weight_manager
     if _meta_weight_manager is None:
         try:
-            from domains.feedback import get_meta_weight_manager as _get_manager
+            from domain.feedback import get_meta_weight_manager as _get_manager
 
             _meta_weight_manager = _get_manager()
         except ImportError:
@@ -359,7 +359,7 @@ VALID_API_KEYS = _sec.valid_api_keys
 def _start_feedback_workflow() -> None:
     """Start the automated feedback workflow at server startup."""
     try:
-        from domains.feedback import get_feedback_workflow
+        from domain.feedback import get_feedback_workflow
 
         auto_start = os.environ.get("SLO_AUTO_WORKFLOW", "true").lower() == "true"
         if not auto_start:
@@ -422,7 +422,7 @@ def _start_health_monitor() -> None:
 def _start_watchdog() -> None:
     """Start the health watchdog that auto-recovers from server crashes."""
     try:
-        from domains.infrastructure.watchdog import get_watchdog
+        from domain.infrastructure.watchdog import get_watchdog
 
         enabled = os.environ.get("SLO_WATCHDOG", "true").lower() == "true"
         if not enabled:
@@ -657,7 +657,7 @@ if __name__ == "__main__":
     if args.web:
         web_root = _REPO_ROOT / "apps" / "web"
         standalone_dir = web_root / ".next" / "standalone"
-        from domains.shared import find_available_port as _find_available_port
+        from domain.shared import find_available_port as _find_available_port
 
         web_port = _find_available_port(host="", start_port=3000)
         web_env = {**os.environ, "PORT": str(web_port)}

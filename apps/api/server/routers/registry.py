@@ -28,7 +28,7 @@ class RegistryRouter:
         self.router.add_api_route(path="/stats", endpoint=self.get_registry_stats, methods=["GET"])
 
     def _get_registry(self):
-        from domains.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure.model_registry import get_model_registry
 
         return get_model_registry()
 

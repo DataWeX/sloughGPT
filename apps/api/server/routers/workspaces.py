@@ -918,7 +918,7 @@ class WorkspacesRouter:
 
             # Clean old training jobs
             try:
-                from domains.training.repository import TrainingRepository
+                from domain.training.repository import TrainingRepository
                 repo = TrainingRepository()
                 training_cutoff = now - (training_retention * 86400)
                 old_jobs = repo.list_by_workspace(workspace_id)
@@ -1049,7 +1049,7 @@ class WorkspacesRouter:
 
             # Recent training job events
             try:
-                from domains.training.repository import TrainingRepository
+                from domain.training.repository import TrainingRepository
                 repo = TrainingRepository()
                 jobs = repo.list_by_workspace(workspace_id)
                 for job in jobs[-20:]:  # last 20
@@ -1177,7 +1177,7 @@ class WorkspacesRouter:
 
             # Search training jobs
             try:
-                from domains.training.repository import TrainingRepository
+                from domain.training.repository import TrainingRepository
                 repo = TrainingRepository()
                 jobs = repo.list_by_workspace(workspace_id)
                 for job in jobs:
@@ -1192,7 +1192,7 @@ class WorkspacesRouter:
 
             # Search datasets
             try:
-                from domains.dataset.repository import DatasetRepository
+                from domain.dataset._internal.repository import DatasetRepository
                 ds_repo = DatasetRepository()
                 datasets = ds_repo.list_by_workspace(workspace_id)
                 for ds in datasets:

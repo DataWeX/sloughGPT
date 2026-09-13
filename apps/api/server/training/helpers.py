@@ -51,7 +51,7 @@ def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
     if job is not None:
         training_jobs[job_id] = {**job, "status": status, **({"error": error} if error else {})}
     try:
-        from domains.infrastructure.cancel_manager import OpStatus, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpStatus, get_cancel_manager
 
         mgr = get_cancel_manager()
         op = mgr.get(job_id)

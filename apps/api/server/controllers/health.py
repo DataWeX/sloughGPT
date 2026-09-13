@@ -48,7 +48,7 @@ def _get_process_guard_status() -> dict[str, Any] | None:
 def _get_mps_monitor_info() -> dict[str, Any] | None:
     """Get MPS GPU memory monitor status if available."""
     try:
-        from domains.infrastructure.mps_monitor import get_mps_monitor
+        from domain.infrastructure.mps_monitor import get_mps_monitor
 
         mon = get_mps_monitor()
         return {
@@ -70,7 +70,7 @@ def _is_model_loading() -> bool:
     """
     try:
         # Check if ModelLoader has a load in progress
-        from domains.infrastructure.model_loader import ModelLoader
+        from domain.infrastructure.model_loader import ModelLoader
 
         if ModelLoader.is_loading():
             return True
@@ -94,7 +94,7 @@ def _get_mogdb_health() -> dict[str, Any] | None:
     try:
         from pathlib import Path
 
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
 
         data_root = find_repo_root(Path(__file__).resolve()) / "data"
         mogdb_dirs = list(data_root.glob("*_mogdb"))
@@ -185,7 +185,7 @@ def _get_model_info_with_registry() -> tuple[bool, str | None, dict[str, Any]]:
 
     # Check ModelRegistry first (most authoritative)
     try:
-        from domains.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure.model_registry import get_model_registry
 
         registry = get_model_registry()
         registry_health = registry.health_summary()
@@ -240,7 +240,7 @@ def _get_model_device() -> str | None:
     except ImportError:
         logger.debug("Models controller not available for device detection")
     try:
-        from domains.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure.model_registry import get_model_registry
 
         registry = get_model_registry()
         health = registry.health_summary()
@@ -365,7 +365,7 @@ def _build_status_message(
 def _get_resource_allocation() -> dict[str, Any]:
     """Get CPU topology resource allocation."""
     try:
-        from domains.infrastructure.resource_manager import get_resource_manager
+        from domain.infrastructure.resource_manager import get_resource_manager
 
         rm = get_resource_manager()
         return {
@@ -392,7 +392,7 @@ def _get_resource_allocation() -> dict[str, Any]:
 def _get_memory_pressure_stats() -> dict[str, Any]:
     """Get memory pressure monitor stats for health reporting."""
     try:
-        from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+        from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
 
         return get_memory_pressure_monitor().stats()
     except Exception:
@@ -529,7 +529,7 @@ class HealthController:
 
         # Idle manager status
         try:
-            from domains.infrastructure.model_server import get_idle_manager
+            from domain.infrastructure.model_server import get_idle_manager
 
             idle_mgr = get_idle_manager()
             import state as server_state
@@ -578,7 +578,7 @@ class HealthController:
 
         # Add ServerState counters if available
         try:
-            from domains.infrastructure.server_state import get_server_state
+            from domain.infrastructure.server_state import get_server_state
 
             ss = get_server_state()
             request_count = ss.request_count

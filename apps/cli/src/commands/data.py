@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 from utils.formatting import format_size, format_number

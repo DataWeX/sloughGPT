@@ -81,14 +81,14 @@ class ConsciousnessRouter:
     def _get_engine(self):
         """Lazy-load the consciousness engine."""
         if self._engine is None:
-            from domains.consciousness import get_consciousness
+            from domain.consciousness import get_consciousness
             self._engine = get_consciousness()
         return self._engine
 
     def _get_trainer(self):
         """Lazy-load the consciousness trainer."""
         if self._trainer is None:
-            from domains.consciousness.training import ConsciousnessTrainer, TrainingConfig
+            from domain.consciousness.training import ConsciousnessTrainer, TrainingConfig
             engine = self._get_engine()
             config = TrainingConfig(
                 model_path="",

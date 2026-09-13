@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 from utils.formatting import format_size, format_number, truncate
@@ -218,7 +218,7 @@ def _cmd_models_download(args):
     log.blank()
 
     try:
-        from domains.infrastructure.download_manager import get_download_manager
+        from domain.infrastructure.download_manager import get_download_manager
         import asyncio
 
         mgr = get_download_manager()
@@ -403,7 +403,7 @@ def _cmd_models_compare(args):
 def _cmd_models_personalities(args):
     """List available personalities."""
     try:
-        from domains.ai_personality import PERSONALITIES
+        from domain.ai_personality import PERSONALITIES
     except ImportError:
         log.error("Personalities module not found")
         return

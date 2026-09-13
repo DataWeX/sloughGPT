@@ -268,14 +268,14 @@ class MobileRouter:
             return _instance._build_session_metadata_index()
         except Exception as exc:
             logger.debug("Session list fallback to SessionCore: %s", exc)
-            from domains.infrastructure.session_core import SessionCore
+            from domain.infrastructure.session_core import SessionCore
 
             return SessionCore.list_sessions()
 
     @staticmethod
     def _get_session_messages(session_id: str):
         """Get session messages directly."""
-        from domains.infrastructure.session_core import SessionCore
+        from domain.infrastructure.session_core import SessionCore
 
         return SessionCore.get_messages(session_id)
 

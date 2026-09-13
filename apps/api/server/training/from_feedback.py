@@ -10,7 +10,7 @@ import threading
 import time
 from pathlib import Path
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
@@ -110,7 +110,7 @@ async def train_from_feedback(
 
         # Register with CancelManager
         try:
-            from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+            from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
             _mgr = get_cancel_manager()
             op_id = _mgr.register(

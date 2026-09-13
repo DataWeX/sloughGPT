@@ -10,7 +10,7 @@ from typing import Any
 def _rm_cpu_counts() -> tuple[int | None, int | None]:
     """Return (logical, physical) core counts from ResourceManager if available."""
     try:
-        from domains.infrastructure.resource_manager import get_resource_manager
+        from domain.infrastructure.resource_manager import get_resource_manager
 
         rm = get_resource_manager()
         return rm.topology.logical_cores, rm.topology.physical_cores

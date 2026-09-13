@@ -36,7 +36,7 @@ class WorkflowRouter:
     def _get_workflow(self):
         """Lazy-import and return the FeedbackWorkflowManager singleton."""
         try:
-            from domains.feedback import get_feedback_workflow
+            from domain.feedback import get_feedback_workflow
 
             return get_feedback_workflow()
         except ImportError:
@@ -55,7 +55,7 @@ class WorkflowRouter:
         self, request: WorkflowStartRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
         """Start the automated feedback workflow."""
-        from domains.feedback import WorkflowConfig
+        from domain.feedback import WorkflowConfig
 
         config = WorkflowConfig(
             aggregate_interval_minutes=request.aggregate_interval_minutes,

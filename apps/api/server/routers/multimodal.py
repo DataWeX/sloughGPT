@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from threading import Lock
 
-from domains.multimodal import get_multimodal_manager
+from domain.multimodal import get_multimodal_manager
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field

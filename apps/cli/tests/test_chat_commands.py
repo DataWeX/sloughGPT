@@ -35,7 +35,7 @@ class TestCmdGenerate:
         mock_engine = MagicMock()
         mock_engine.generate.return_value = "Generated text"
 
-        import domains.core.soul
+        import domain.core.soul
         monkeypatch.setattr(domains.core.soul, "SloEngine", lambda **kw: mock_engine)
 
         cmd_generate(args)
@@ -54,7 +54,7 @@ class TestCmdGenerate:
         mock_engine = MagicMock()
         mock_engine.generate.return_value = "ok"
 
-        import domains.core.soul
+        import domain.core.soul
         monkeypatch.setattr(domains.core.soul, "SloEngine", lambda **kw: mock_engine)
 
         cmd_generate(args)
@@ -75,7 +75,7 @@ class TestCmdGenerate:
         mock_engine = MagicMock()
         mock_engine.generate.return_value = "Demo"
 
-        import domains.core.soul
+        import domain.core.soul
         monkeypatch.setattr(domains.core.soul, "SloEngine", lambda **kw: mock_engine)
 
         cmd_generate(args)
@@ -96,7 +96,7 @@ class TestCmdGenerate:
         mock_engine.load_soul.return_value = mock_soul
         mock_engine.generate.return_value = "ok"
 
-        import domains.core.soul
+        import domain.core.soul
         monkeypatch.setattr(domains.core.soul, "SloEngine", lambda **kw: mock_engine)
         import utils.helpers
         monkeypatch.setattr(

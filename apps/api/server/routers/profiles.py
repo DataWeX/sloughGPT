@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from domains.infrastructure.serving_profiles import (
+from domain.infrastructure.serving_profiles import (
     apply_profile,
     detect_recommended_profile,
     get_active_profile_id,

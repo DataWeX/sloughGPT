@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from mogdb import MogDB
 
 logger = logging.getLogger("slo.webhooks")

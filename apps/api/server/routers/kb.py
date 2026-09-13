@@ -335,7 +335,7 @@ class KBRouter:
             # Auto-label semantic category if not set
             label = ""
             try:
-                from domains.infrastructure.truth_labeler import get_truth_labeler
+                from domain.infrastructure.truth_labeler import get_truth_labeler
 
                 labeler = get_truth_labeler()
                 lr = labeler.label(req.content)
@@ -679,7 +679,7 @@ class KBRouter:
         try:
             import time as _time
 
-            from domains.infrastructure.knowledge_weight_integrator import (
+            from domain.infrastructure.knowledge_weight_integrator import (
                 get_adapter_status,
                 train_knowledge_adapter,
             )
@@ -712,7 +712,7 @@ class KBRouter:
     def knowledge_adapter_status(self) -> dict:
         """Return status of the knowledge weight adapter."""
         try:
-            from domains.infrastructure.knowledge_weight_integrator import get_adapter_status
+            from domain.infrastructure.knowledge_weight_integrator import get_adapter_status
 
             return success_response(data=get_adapter_status())
 
@@ -1199,7 +1199,7 @@ class KBRouter:
 
     def _get_spaced_rep(self):
         if self._spaced_rep_scheduler is None:
-            from domains.infrastructure.spaced_repetition_engine import SpacedRepetitionScheduler
+            from domain.infrastructure.spaced_repetition_engine import SpacedRepetitionScheduler
 
             self._spaced_rep_scheduler = SpacedRepetitionScheduler()
         return self._spaced_rep_scheduler
@@ -1233,7 +1233,7 @@ class KBRouter:
     def label_text(self, text: str = Query(..., min_length=1)) -> dict:
         try:
             """Classify text into semantic category (factual, procedural, etc.)."""
-            from domains.infrastructure.truth_labeler import get_truth_labeler
+            from domain.infrastructure.truth_labeler import get_truth_labeler
 
             labeler = get_truth_labeler()
             result = labeler.label(text)

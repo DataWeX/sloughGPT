@@ -76,7 +76,7 @@ class TestHealthRouter:
     def test_detailed_health_records_trend_snapshots(self):
         """Each cache rebuild records a health + memory trend point."""
         from controllers.health import HealthController
-        from domains.infrastructure.server_state import get_server_state
+        from domain.infrastructure.server_state import get_server_state
 
         hc = HealthController()
         # Reset the trend throttle so the first call records

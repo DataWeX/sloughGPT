@@ -266,7 +266,7 @@ def register_all_handlers(app: FastAPI):
 
     # Domain errors (legacy hierarchy — now extends AppError, kept for safety)
     try:
-        from domains.errors import SloughGPTDomainError
+        from domain.errors import SloughGPTDomainError
 
         app.add_exception_handler(SloughGPTDomainError, _domain_error_handler)
     except ImportError:

@@ -5,7 +5,7 @@ Uses the ``MetricsCollector`` for full request/inference tracking and
 Prometheus text exposition format.
 """
 
-from domains.infrastructure.metrics import get_metrics_collector
+from domain.infrastructure.metrics import get_metrics_collector
 from fastapi import APIRouter, Response
 from schemas.common import classify_and_raise, endpoint, success_response
 

@@ -114,7 +114,7 @@ class StartupHistory:
 
         # Record to Prometheus metrics
         try:
-            from domains.infrastructure.metrics import get_metrics
+            from domain.infrastructure.metrics import get_metrics
             metrics = get_metrics()
             for stage, dur in record.stage_durations.items():
                 metrics.record_startup_stage_duration(stage, dur)

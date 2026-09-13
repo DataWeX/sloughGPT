@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from fastapi import APIRouter
 
 from .jobs import training_jobs

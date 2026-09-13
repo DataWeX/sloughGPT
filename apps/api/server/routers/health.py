@@ -907,7 +907,7 @@ class HealthRouter:
             services["settings"] = {"status": "error", "error": str(e)}
         # Plugins
         try:
-            from domains.plugins import PluginManager
+            from domain.plugins import PluginManager
             pm = PluginManager()
             services["plugins"] = {"status": "ok", "loaded": len(pm.list_plugins())}
         except Exception as e:

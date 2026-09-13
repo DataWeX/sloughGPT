@@ -4,7 +4,7 @@ Collect command group — collect data from files, URLs, RSS feeds, and APIs.
 
 from core.framework import click
 from core.helpers import ns as _ns
-from domains.logging import get_global
+from domain.logging import get_global
 log = get_global()
 
 
@@ -21,8 +21,8 @@ def register(cli):
     @click.option("--min-length", default=10, type=int, help="Min record length")
     @click.option("--dedup/--no-dedup", default=True, help="Deduplicate records")
     def collect_file(path, output, min_length, dedup):
-        from domains.collections import FileSource, MemoryStore, FileStore, Collector
-        from domains.collections import LengthFilter, DedupFilter
+        from domain.collections import FileSource, MemoryStore, FileStore, Collector
+        from domain.collections import LengthFilter, DedupFilter
         source = FileSource(path)
         store = FileStore(output) if output else MemoryStore()
         filters = []
@@ -41,8 +41,8 @@ def register(cli):
     @click.option("--output", "-o", default=None, help="Output JSONL file")
     @click.option("--min-length", default=10, type=int, help="Min record length")
     def collect_url(url, output, min_length):
-        from domains.collections import UrlSource, MemoryStore, FileStore, Collector
-        from domains.collections import LengthFilter
+        from domain.collections import UrlSource, MemoryStore, FileStore, Collector
+        from domain.collections import LengthFilter
         source = UrlSource(url)
         store = FileStore(output) if output else MemoryStore()
         filters = [LengthFilter(min_length=min_length)] if min_length > 0 else []
@@ -56,7 +56,7 @@ def register(cli):
     @click.argument("url")
     @click.option("--output", "-o", default=None, help="Output JSONL file")
     def collect_rss(url, output):
-        from domains.collections import RssSource, MemoryStore, FileStore, Collector
+        from domain.collections import RssSource, MemoryStore, FileStore, Collector
         source = RssSource(url)
         store = FileStore(output) if output else MemoryStore()
         collector = Collector(source, store)

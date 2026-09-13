@@ -40,7 +40,7 @@ def _signal_current_job(pause: bool | None = None, cancel: bool = False) -> dict
             ev.set()
             signaled["cancel"] = "requested"
         try:
-            from domains.infrastructure.cancel_manager import get_cancel_manager
+            from domain.infrastructure.cancel_manager import get_cancel_manager
 
             get_cancel_manager().cancel(jid)
         except Exception as e:

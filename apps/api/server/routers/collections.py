@@ -65,7 +65,7 @@ class CollectionsRouter:
     @endpoint("collections.list_pipelines")
     async def list_pipelines(self) -> dict:
         """List all registered collection pipelines."""
-        from domains.collections import get_registry
+        from domain.collections import get_registry
 
         registry = get_registry()
         pipelines = registry.list_pipelines()
@@ -175,7 +175,7 @@ class CollectionsRouter:
 
         try:
             _t0 = _time.monotonic()
-            from domains.collections import (
+            from domain.collections import (
                 Collector,
                 DedupFilter,
                 LengthFilter,

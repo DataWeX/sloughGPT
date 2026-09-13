@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response

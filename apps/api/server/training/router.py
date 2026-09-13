@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
@@ -330,7 +330,7 @@ async def recover_job(job_id: str):
 
     # Register with CancelManager
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         _mgr = get_cancel_manager()
         op_id = _mgr.register(

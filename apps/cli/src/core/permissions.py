@@ -22,7 +22,7 @@ from typing import Optional
 
 import click
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 from utils.formatting import format_size
@@ -91,7 +91,7 @@ class PermissionsManager:
             ModelSizeEstimate with total bytes and file list, or None on failure.
         """
         try:
-            from domains.infrastructure.hf_hub import fetch_model_info
+            from domain.infrastructure.hf_hub import fetch_model_info
 
             info = fetch_model_info(model_id)
             if info is None:
@@ -206,7 +206,7 @@ class PermissionsManager:
     def _is_cached(self, model_id: str) -> bool:
         """Check if model has weight files in HF cache."""
         try:
-            from domains.infrastructure.download_manager import (
+            from domain.infrastructure.download_manager import (
                 _cache_dir,
                 _has_weight_files,
                 _has_complete_snapshot,

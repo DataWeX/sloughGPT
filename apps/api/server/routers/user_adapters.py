@@ -45,7 +45,7 @@ class UserAdaptersRouter:
     def _get_store(self):
         """Get the per-user LoRA store, raising 503 if not available."""
         try:
-            from domains.feedback import get_per_user_lora
+            from domain.feedback import get_per_user_lora
 
             return get_per_user_lora()
         except ImportError:

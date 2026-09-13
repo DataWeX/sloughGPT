@@ -10,7 +10,7 @@ import secrets
 from pathlib import Path
 from typing import Optional
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 from core.validator import Doctor
@@ -34,7 +34,7 @@ def cmd_system(args):
     if psutil:
         log.section("CPU")
         try:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure.resource_manager import get_resource_manager
             rm = get_resource_manager()
             cores = f"{rm.topology.logical_cores} logical / {rm.topology.physical_cores} physical"
         except (ImportError, AttributeError):
@@ -136,7 +136,7 @@ def cmd_optimize(args):
         log.blank()
         log.step("Applying optimizations...")
         try:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure.resource_manager import get_resource_manager
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()

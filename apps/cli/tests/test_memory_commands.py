@@ -214,7 +214,7 @@ class TestArchive:
     }
 
     def _patch(self, monkeypatch, stats=None, records=None):
-        from domains.memory import task_memory as tm
+        from domain.memory import task_memory as tm
         monkeypatch.setattr(tm, "archive_stats", lambda: stats if stats is not None else self.STATS)
         monkeypatch.setattr(tm, "list_archive",
                             lambda limit: records if records is not None else
@@ -235,7 +235,7 @@ class TestArchive:
         assert any("Records" in str(c) for c in mock_log.key_value.call_args_list)
 
     def test_archive_prune_confirmed(self, monkeypatch, mock_log):
-        from domains.memory import task_memory as tm
+        from domain.memory import task_memory as tm
         calls = []
         monkeypatch.setattr(tm, "prune_archive", lambda retain_days: calls.append(retain_days) or 3)
         import click
@@ -246,7 +246,7 @@ class TestArchive:
         assert any("Pruned 3" in str(c) for c in mock_log.success.call_args_list)
 
     def test_archive_prune_declined(self, monkeypatch):
-        from domains.memory import task_memory as tm
+        from domain.memory import task_memory as tm
         calls = []
         monkeypatch.setattr(tm, "prune_archive", lambda retain_days: calls.append(retain_days) or 3)
         import click

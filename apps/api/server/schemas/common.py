@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Generic, TypeVar
 
-from domains.infrastructure.correlation import get_correlation_id
+from domain.infrastructure.correlation import get_correlation_id
 from pydantic import BaseModel, Field
 
 _audit_logger = logging.getLogger("audit")

@@ -27,7 +27,7 @@ def _d(resp):
 @pytest.fixture(autouse=True)
 def _fresh_agent_system():
     """Reset the agent system singleton before each test."""
-    import domains.agents.system as sys_mod
+    import domain.agents.system as sys_mod
 
     sys_mod._default_system = None
     yield

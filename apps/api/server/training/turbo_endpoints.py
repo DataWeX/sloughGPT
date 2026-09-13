@@ -84,7 +84,7 @@ async def start_from_sessions_unified(req: FromSessionsRequest):
 async def start_turbo_training_unified(req: TurboStartRequest):
     """Start turbo training."""
     try:
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
         from domain.training._internal.service import run_turbo_worker, start_turbo_training
 
         # Pre-flight validation
@@ -130,7 +130,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
         # Register with CancelManager for cancellation support
         cancel_event = threading.Event()
         try:
-            from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+            from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
             get_cancel_manager().register(
                 op_type=OpType.TRAINING,
                 label=f"turbo:{job_info['job_id']}",

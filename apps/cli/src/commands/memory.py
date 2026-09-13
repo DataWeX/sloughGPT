@@ -7,7 +7,7 @@ operators visibility and manual control over that store.
 import sys
 import time
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 

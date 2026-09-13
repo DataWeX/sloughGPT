@@ -12,8 +12,8 @@ import webbrowser
 from pathlib import Path
 from collections import deque
 
-from domains.logging import get_global
-from domains.shared import find_server_python
+from domain.logging import get_global
+from domain.shared import find_server_python
 from utils.formatting import format_time
 
 log = get_global()
@@ -322,7 +322,7 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True,
 
 def _repo_root() -> Path:
     """Get the repository root from this file's location."""
-    from domains.shared import find_repo_root
+    from domain.shared import find_repo_root
     return find_repo_root(str(Path(__file__).resolve()))
 
 

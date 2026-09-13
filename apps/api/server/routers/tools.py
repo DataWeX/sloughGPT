@@ -9,9 +9,9 @@ import logging
 import threading
 from collections.abc import AsyncIterator
 
-from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.models._internal.provider import get_provider
-from domains.tools import get_tools_engine
+from domain.tools import get_tools_engine
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled

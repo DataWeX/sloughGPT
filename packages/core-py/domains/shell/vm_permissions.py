@@ -1,2 +1,3 @@
-"""Backward-compatibility shim — imports from the new ``domain.shell._internal.vm_permissions`` package."""
-from domain.shell._internal.vm_permissions import *  # noqa: F401,F403
+"""Backward-compatibility shim."""
+from domain.shell._internal import vm_permissions as _mod
+globals().update({k: v for k, v in vars(_mod).items()})

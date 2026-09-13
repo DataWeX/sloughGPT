@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 

@@ -77,7 +77,7 @@ def build_training_sse_response(
         def _enqueue(event_str: str) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, event_str)
 
-        from domains.infrastructure.task_queue import Priority, Task, get_task_queue
+        from domain.infrastructure.task_queue import Priority, Task, get_task_queue
 
         tq = get_task_queue()
         await tq.start()
@@ -99,7 +99,7 @@ def build_training_sse_response(
         # Register with CancelManager
         cm_op_id: str | None = None
         try:
-            from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+            from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
             _mgr = get_cancel_manager()
             cm_op_id = _mgr.register(
@@ -147,7 +147,7 @@ def build_training_sse_response(
             def _finish_cm(status: str, error: str = "") -> None:
                 if cm_op_id:
                     try:
-                        from domains.infrastructure.cancel_manager import get_cancel_manager
+                        from domain.infrastructure.cancel_manager import get_cancel_manager
 
                         get_cancel_manager().finish(
                             cm_op_id, error=error if status != "complete" else ""
@@ -242,7 +242,7 @@ def stop_all_training() -> dict:
     It delegates to CancelManager which tracks all active operations.
     """
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
     except Exception as e:
@@ -291,7 +291,7 @@ def stop_all_training() -> dict:
 def cancel_from_sessions() -> dict:
     """Cancel from-sessions training specifically."""
     try:
-        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
     except Exception as e:
