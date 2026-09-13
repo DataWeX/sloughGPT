@@ -4574,12 +4574,12 @@ class TestFinalCoveragePush:
 
     def test_load_shape_non_numeric(self):
         from domains.shell.vm import CPU, _op_load_shape
-        cpu = CPU()
-        cpu.regs[0] = 3
-        cpu.regs[1] = 4
-        _op_load_shape(cpu, ["R0", "R1", ""])
         import numpy as np
+        cpu = CPU()
+        _op_load_shape(cpu, ["R0", 3, 4])
         assert cpu.regs[0].shape == (3, 4)
+        _op_load_shape(cpu, ["R1", "abc", "xyz"])
+        assert cpu.regs[1].shape == (1, 1)
 
     def test_blockdevice_read_sectors(self):
         from domains.shell.vm import BlockDevice
