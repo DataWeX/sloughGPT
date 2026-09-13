@@ -16,11 +16,23 @@ Usage:
 
 from __future__ import annotations
 
+import json
+import logging
+import os
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# Default persistence path
+DEFAULT_HISTORY_PATH = Path(os.environ.get(
+    "SLO_STARTUP_HISTORY_PATH",
+    str(Path.home() / ".slogpt" / "startup_history.json")
+))
 
 
 @dataclass
@@ -54,11 +66,13 @@ class StartupHistory:
     percentiles, and comparisons for monitoring dashboards.
     """
 
-    def __init__(self, max_records: int = 50) -> None:
+    def __init__(self, max_records: int = 50, persist_path: Path | None = None) -> None:
         self._lock = threading.Lock()
         self._records: deque[StartupRecord] = deque(maxlen=max_records)
         self._current_startup: StartupRecord | None = None
         self._current_start_time: float = 0.0
+        self._persist_path = persist_path or DEFAULT_HISTORY_PATH
+        self._load_from_disk()
 
     def start_startup(self) -> None:
         """Mark the beginning of a startup."""
@@ -113,6 +127,48 @@ class StartupHistory:
 
         self._save_to_disk()
         return record
+
+    def _save_to_disk(self) -> None:
+        """Persist startup records to disk."""
+        try:
+            self._persist_path.parent.mkdir(parents=True, exist_ok=True)
+            records = [r.to_dict() for r in self._records]
+            with open(self._persist_path, "w") as f:
+                json.dump(records, f, indent=2)
+        except Exception as e:
+            logger.warning("Failed to save startup history: %s", e)
+
+    def _load_from_disk(self) -> None:
+        """Load startup records from disk."""
+        try:
+            if self._persist_path.exists():
+                with open(self._persist_path) as f:
+                    records = json.load(f)
+                for record_data in records:
+                    record = StartupRecord(
+                        timestamp=record_data.get("timestamp", 0),
+                        total_duration=record_data.get("total_duration", 0),
+                        stage_durations=record_data.get("stage_durations", {}),
+                        hook_durations=record_data.get("hook_durations", {}),
+                        model_load_duration=record_data.get("model_load_duration", 0),
+                        success=record_data.get("success", True),
+                        error=record_data.get("error"),
+                    )
+                    self._records.append(record)
+                logger.info("Loaded %d startup records from disk", len(self._records))
+        except Exception as e:
+            logger.warning("Failed to load startup history: %s", e)
+
+    def clear_history(self) -> None:
+        """Clear all startup records."""
+        with self._lock:
+            self._records.clear()
+        self._save_to_disk()
+
+    def export_history(self) -> list[dict]:
+        """Export all startup records."""
+        with self._lock:
+            return [r.to_dict() for r in self._records]
 
     def get_records(self, limit: int = 10) -> list[dict]:
         """Get recent startup records."""
