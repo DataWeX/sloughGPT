@@ -281,6 +281,13 @@ class StagedLoader:
                 info.status = HookStatus.TIMEOUT
                 info.end_time = time.monotonic()
                 info.error = f"timeout after {timeout}s"
+            # Record failure for rollback
+            try:
+                from infrastructure.startup_rollback import get_startup_rollback
+                rollback = get_startup_rollback()
+                rollback.record_failure(name, f"timeout after {timeout}s")
+            except Exception:
+                pass
         except Exception as exc:
             logger.warning(
                 "Stage %s hook '%s' failed: %s",
@@ -294,6 +301,13 @@ class StagedLoader:
                 info.status = HookStatus.ERROR
                 info.end_time = time.monotonic()
                 info.error = str(exc)
+            # Record failure for rollback
+            try:
+                from infrastructure.startup_rollback import get_startup_rollback
+                rollback = get_startup_rollback()
+                rollback.record_failure(name, str(exc))
+            except Exception:
+                pass
 
     def get_status(self) -> dict:
         """Return current staged loader status for health endpoints."""

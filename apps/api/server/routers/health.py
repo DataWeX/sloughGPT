@@ -62,6 +62,7 @@ class HealthRouter:
         self.router.add_api_route("/startup-config", self.startup_config, methods=["GET"])
         self.router.add_api_route("/startup-health", self.startup_health, methods=["GET"])
         self.router.add_api_route("/startup-compare", self.startup_compare, methods=["GET"])
+        self.router.add_api_route("/startup-rollback", self.startup_rollback, methods=["GET"])
         self.router.add_api_route(
             "/startup-stream", self.startup_stream, methods=["GET"], response_model=None
         )
@@ -359,6 +360,21 @@ class HealthRouter:
             })
 
         return success_response(data=comparison)
+
+    @endpoint("health.startup_rollback")
+    async def startup_rollback(self) -> dict:
+        """Startup rollback status and controls.
+
+        Returns the current rollback state, registered actions,
+        and provides an endpoint to trigger rollback manually.
+
+        Returns:
+            Envelope with rollback status.
+        """
+        from infrastructure.startup_rollback import get_startup_rollback
+
+        rollback = get_startup_rollback()
+        return success_response(data=rollback.get_status())
 
     async def startup_stream(self, request: Request) -> StreamingResponse:
         """SSE stream for real-time startup progress updates.
