@@ -298,6 +298,43 @@ class TrainingMonitor:
 
         log_fn("Training alert: %s", message, extra={"tag": "TRAIN"})
 
+    def check_convergence(self, epoch: int, min_improvement: float = 0.01, window: int = 5) -> bool:
+        """Check if training is converging.
+
+        Returns True if training is converging, False if convergence issues detected.
+        """
+        with self._lock:
+            if len(self._loss_history) < window * 2:
+                return True
+
+            recent = list(self._loss_history)[-window:]
+            previous = list(self._loss_history)[-window * 2:-window]
+
+            recent_avg = sum(recent) / len(recent)
+            previous_avg = sum(previous) / len(previous)
+
+            if previous_avg == 0:
+                return True
+
+            improvement = (previous_avg - recent_avg) / previous_avg
+
+            if improvement < min_improvement:
+                self._add_alert(
+                    AlertType.CONVERGENCE_ISSUE,
+                    AlertSeverity.WARNING,
+                    f"Convergence slowing: {improvement:.2%} improvement < {min_improvement:.2%} threshold",
+                    epoch=epoch,
+                    value=improvement,
+                    threshold=min_improvement,
+                    metadata={
+                        "recent_avg_loss": recent_avg,
+                        "previous_avg_loss": previous_avg,
+                    },
+                )
+                return False
+
+            return True
+
     def get_alerts(
         self,
         severity: AlertSeverity | None = None,

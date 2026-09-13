@@ -1496,6 +1496,15 @@ class SloughGPTTrainer:
                         eval_metrics['eval_loss'], eval_metrics['eval_ppl'],
                         extra={"tag": "TRAIN"},
                     )
+
+                    # Check convergence
+                    try:
+                        from domains.training.monitor import get_training_monitor
+                        monitor = get_training_monitor()
+                        monitor.check_convergence(epoch=getattr(self, "current_epoch", 0))
+                    except Exception:
+                        pass
+
                     if self._experiment_tracker is not None:
                         self._experiment_tracker.log_metrics(
                             {
