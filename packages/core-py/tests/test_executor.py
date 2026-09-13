@@ -43,8 +43,8 @@ def _rm_factory():
     return rm
 
 
-RM_PATCH = "domains.infrastructure.resource_manager.get_resource_manager"
-PC_PATCH = "domains.infrastructure.pugqeep.PointCompressor"
+RM_PATCH = "domain.infrastructure._internal.resource_manager.get_resource_manager"
+PC_PATCH = "domain.infrastructure._internal.pugqeep.PointCompressor"
 
 
 @pytest.fixture(autouse=True)

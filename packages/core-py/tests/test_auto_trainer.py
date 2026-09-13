@@ -137,15 +137,15 @@ class TestAutoTrainer:
         t = AutoTrainer()
         t.stop()  # Should not raise
 
-    @patch("domains.training.pair_extractor.write_training_text")
-    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+    @patch("domain.training._internal.pair_extractor.write_training_text")
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
         {"user_msg": "Hello", "assistant_msg": "Hi there!", "session_id": "s1"},
         {"user_msg": "Bye", "assistant_msg": "Goodbye!", "session_id": "s1"},
         {"user_msg": "Thanks", "assistant_msg": "You're welcome!", "session_id": "s1"},
         {"user_msg": "Test", "assistant_msg": "Result!", "session_id": "s1"},
         {"user_msg": "One", "assistant_msg": "More!", "session_id": "s1"},
     ])
-    @patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[])
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[])
     def test_do_train_success(self, mock_logs, mock_sessions, mock_write, tmp_path):
         """Successful training updates state."""
         mock_write.return_value = tmp_path / "train.txt"
@@ -172,9 +172,9 @@ class TestAutoTrainer:
         assert t._conversation_count == 0
         assert t._last_train_loss == 2.5
 
-    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[])
-    @patch("domains.training.pair_extractor.extract_pairs_from_corpus", return_value=[])
-    @patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[])
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[])
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_corpus", return_value=[])
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[])
     def test_do_train_insufficient_pairs(self, mock_logs, mock_corpus, mock_sessions):
         """Training skipped when fewer than 5 pairs found."""
         t = AutoTrainer()
@@ -190,12 +190,12 @@ class TestAutoTrainer:
         t._conversation_count = 5
 
         with patch(
-            "domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+            "domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
                 {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
                 for i in range(5)
             ]
         ), patch(
-            "domains.training.pair_extractor.write_training_text", return_value=tmp_path / "train.txt"
+            "domain.training._internal.pair_extractor.write_training_text", return_value=tmp_path / "train.txt"
         ):
             result = t._do_train()
         assert result is False
@@ -219,13 +219,13 @@ class TestAutoTrainer:
             t._check_and_train()
         assert t._conversation_count == 0
 
-    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[])
-    @patch("domains.training.pair_extractor.extract_pairs_from_corpus", return_value=[])
-    @patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[])
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_corpus", return_value=[])
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[
         {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
         for i in range(5)
     ])
-    @patch("domains.training.pair_extractor.write_training_text")
+    @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_falls_back_to_logs(self, mock_write, mock_logs, mock_corpus, mock_sessions, tmp_path):
         """Training falls back to response logs when sessions/corpus are empty."""
         mock_write.return_value = tmp_path / "train.txt"
@@ -247,13 +247,13 @@ class TestAutoTrainer:
         assert result is True
         assert t._total_trains == 1
 
-    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[])
-    @patch("domains.training.pair_extractor.extract_pairs_from_corpus", return_value=[])
-    @patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[])
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_corpus", return_value=[])
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[
         {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
         for i in range(5)
     ])
-    @patch("domains.training.pair_extractor.write_training_text")
+    @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_subprocess_failed(self, mock_write, mock_logs, mock_corpus, mock_sessions, tmp_path):
         """Training reports False when the subprocess exits non-zero."""
         mock_write.return_value = tmp_path / "train.txt"
@@ -271,11 +271,11 @@ class TestAutoTrainer:
         assert result is False
         assert t._total_trains == 0
 
-    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
         {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
         for i in range(5)
     ])
-    @patch("domains.training.pair_extractor.write_training_text")
+    @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_store_failure_is_logged(self, mock_write, mock_sessions, tmp_path):
         """Store failures are logged without failing the training run."""
         mock_write.return_value = tmp_path / "train.txt"
@@ -293,16 +293,16 @@ class TestAutoTrainer:
                 stderr="",
             )
             with patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path), \
-                    patch("domains.training.quality_scorer.score_batch", side_effect=RuntimeError("db down")):
+                    patch("domain.training._internal.quality_scorer.score_batch", side_effect=RuntimeError("db down")):
                 result = t._do_train()
         assert result is True
         assert t._total_trains == 1
 
-    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
         {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
         for i in range(5)
     ])
-    @patch("domains.training.pair_extractor.write_training_text")
+    @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_result_not_success(self, mock_write, mock_sessions, tmp_path):
         """Training reports False when the subprocess result is not successful."""
         mock_write.return_value = tmp_path / "train.txt"
@@ -324,11 +324,11 @@ class TestAutoTrainer:
         assert result is False
         assert t._total_trains == 0
 
-    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
         {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
         for i in range(5)
     ])
-    @patch("domains.training.pair_extractor.write_training_text")
+    @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_subprocess_timeout(self, mock_write, mock_sessions, tmp_path):
         """Training reports False when the subprocess times out."""
         mock_write.return_value = tmp_path / "train.txt"
@@ -344,11 +344,11 @@ class TestAutoTrainer:
             result = t._do_train()
         assert result is False
 
-    @patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[
+    @patch("domain.training._internal.pair_extractor.extract_pairs_from_sessions", return_value=[
         {"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough", "session_id": "s1"}
         for i in range(5)
     ])
-    @patch("domains.training.pair_extractor.write_training_text")
+    @patch("domain.training._internal.pair_extractor.write_training_text")
     def test_do_train_subprocess_other_error(self, mock_write, mock_sessions, tmp_path):
         """Training reports False on an unexpected subprocess error."""
         mock_write.return_value = tmp_path / "train.txt"

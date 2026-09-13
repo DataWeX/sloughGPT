@@ -253,9 +253,9 @@ class TestIntegration:
         import types as _types
         import sys
         fake_tok = SimpleNamespace(vocab_size=100)
-        fake_service = _types.ModuleType("domains.training.service")
+        fake_service = _types.ModuleType("domain.training._internal.service")
         fake_service.get_state = lambda: SimpleNamespace(student_tokenizer=fake_tok)
-        monkeypatch.setitem(sys.modules, "domains.training.service", fake_service)
+        monkeypatch.setitem(sys.modules, "domain.training._internal.service", fake_service)
         mgr = TokenizerManager()
         mgr._tokenizer = None
         assert mgr.borrow_from_autotrain() is True
@@ -264,9 +264,9 @@ class TestIntegration:
     def test_borrow_from_autotrain_ignores_small(self, monkeypatch):
         import types as _types
         import sys
-        fake_service = _types.ModuleType("domains.training.service")
+        fake_service = _types.ModuleType("domain.training._internal.service")
         fake_service.get_state = lambda: SimpleNamespace(student_tokenizer=SimpleNamespace(vocab_size=3))
-        monkeypatch.setitem(sys.modules, "domains.training.service", fake_service)
+        monkeypatch.setitem(sys.modules, "domain.training._internal.service", fake_service)
         mgr = TokenizerManager()
         mgr._tokenizer = None
         assert mgr.borrow_from_autotrain() is False
