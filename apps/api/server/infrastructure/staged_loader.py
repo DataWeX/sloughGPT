@@ -202,9 +202,13 @@ class StagedLoader:
     async def run_stage(self, stage: Stage) -> None:
         """Run all hooks for the given stage."""
         from infrastructure.startup_profiler import get_profiler
+        from infrastructure.startup_terminal import get_terminal_viz
 
         profiler = get_profiler()
         profiler.start_stage(stage.name)
+
+        viz = get_terminal_viz()
+        viz.set_stage(stage.name)
 
         hooks = self._hooks.get(stage, [])
         if not hooks:
@@ -219,6 +223,10 @@ class StagedLoader:
             len(hooks),
             extra={"tag": "START"},
         )
+
+        # Register hooks with terminal viz
+        for name, _, _ in hooks:
+            viz.add_hook(name, stage.name)
 
         stage_start = time.monotonic()
         tasks = []
@@ -256,6 +264,11 @@ class StagedLoader:
 
     async def _run_hook(self, stage: Stage, name: str, hook: Callable, timeout: float) -> None:
         """Run a single hook with timeout and error isolation."""
+        from infrastructure.startup_terminal import get_terminal_viz
+
+        viz = get_terminal_viz()
+        viz.update_hook(name, "running")
+
         info = self._hook_infos.get(name)
         if info:
             info.status = HookStatus.RUNNING
@@ -266,6 +279,7 @@ class StagedLoader:
             if info:
                 info.status = HookStatus.OK
                 info.end_time = time.monotonic()
+                viz.update_hook(name, "ok", info.duration * 1000)
                 # Record hook metrics
                 try:
                     from domains.infrastructure.metrics import get_metrics_collector
@@ -288,6 +302,7 @@ class StagedLoader:
                 info.status = HookStatus.TIMEOUT
                 info.end_time = time.monotonic()
                 info.error = f"timeout after {timeout}s"
+                viz.update_hook(name, "timeout", info.duration * 1000)
             # Record failure for rollback
             try:
                 from infrastructure.startup_rollback import get_startup_rollback
@@ -308,6 +323,7 @@ class StagedLoader:
                 info.status = HookStatus.ERROR
                 info.end_time = time.monotonic()
                 info.error = str(exc)
+                viz.update_hook(name, "error", info.duration * 1000)
             # Record failure for rollback
             try:
                 from infrastructure.startup_rollback import get_startup_rollback

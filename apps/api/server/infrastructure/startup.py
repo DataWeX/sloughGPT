@@ -326,6 +326,11 @@ class StartupOrchestrator:
         from infrastructure.startup_preloader import preload_common_modules
         preload_common_modules(delay=0.5)
 
+        # Start terminal visualization
+        from infrastructure.startup_terminal import get_terminal_viz
+        viz = get_terminal_viz()
+        viz.start()
+
         from infrastructure.staged_loader import Stage, get_staged_loader
 
         loader = get_staged_loader()
