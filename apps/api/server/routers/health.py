@@ -385,6 +385,65 @@ class HealthRouter:
         rollback = get_startup_rollback()
         return success_response(data=rollback.get_status())
 
+    @endpoint("health.startup_benchmark")
+    async def startup_benchmark(self) -> dict:
+        """Startup benchmark comparison.
+
+        Compares current startup against historical averages and
+        provides performance grade and recommendations.
+
+        Returns:
+            Envelope with benchmark results.
+        """
+        from infrastructure.startup_history import get_startup_history
+        from infrastructure.staged_loader import get_staged_loader
+
+        history = get_startup_history()
+        loader = get_staged_loader()
+        stats = history.get_stats()
+
+        current_duration = loader.elapsed
+        avg_duration = stats.get("avg_duration", 0)
+        p50_duration = stats.get("p50_duration", 0)
+        p95_duration = stats.get("p95_duration", 0)
+
+        # Calculate performance grade
+        if avg_duration == 0:
+            grade = "N/A"
+            percentile = 0
+        elif current_duration <= p50_duration:
+            grade = "A"
+            percentile = 90
+        elif current_duration <= avg_duration:
+            grade = "B"
+            percentile = 70
+        elif current_duration <= p95_duration:
+            grade = "C"
+            percentile = 50
+        else:
+            grade = "D"
+            percentile = 20
+
+        # Generate recommendations
+        recommendations = []
+        if current_duration > avg_duration * 1.5:
+            recommendations.append("Startup is significantly slower than average")
+        if current_duration > 120:
+            recommendations.append("Consider disabling non-essential hooks")
+        if stats.get("failure_rate", 0) > 0.1:
+            recommendations.append("High failure rate detected - check system resources")
+
+        return success_response(data={
+            "current_duration": round(current_duration, 2),
+            "avg_duration": round(avg_duration, 2),
+            "p50_duration": round(p50_duration, 2),
+            "p95_duration": round(p95_duration, 2),
+            "grade": grade,
+            "percentile": percentile,
+            "recommendations": recommendations,
+            "sample_size": stats.get("count", 0),
+        })
+
     async def startup_stream(self, request: Request) -> StreamingResponse:
         """SSE stream for real-time startup progress updates.
 
