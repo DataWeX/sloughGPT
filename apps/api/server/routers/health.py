@@ -444,6 +444,78 @@ class HealthRouter:
             "sample_size": stats.get("count", 0),
         })
 
+    @endpoint("health.startup_health")
+    async def startup_health_check(self) -> dict:
+        """Startup health check aggregation.
+
+        Combines all startup metrics into a single health status.
+        Returns overall status, component statuses, and any issues.
+
+        Returns:
+            Envelope with aggregated startup health.
+        """
+        from infrastructure.staged_loader import get_staged_loader
+        from infrastructure.startup_history import get_startup_history
+        from infrastructure.startup_preloader import get_preload_status
+        from infrastructure.startup_cache import get_startup_cache
+        from infrastructure.startup_rollback import get_startup_rollback
+
+        loader = get_staged_loader()
+        history = get_startup_history()
+        preload = get_preload_status()
+        cache = get_startup_cache()
+        rollback = get_startup_rollback()
+
+        # Determine overall health
+        issues = []
+        status = "healthy"
+
+        # Check loader status
+        if loader.current_stage.name == "INIT":
+            status = "starting"
+        elif loader.current_stage.name == "CRITICAL":
+            status = "initializing"
+
+        # Check for errors
+        loader_status = loader.get_status()
+        errors = loader_status.get("errors", {})
+        if errors:
+            issues.extend([f"Hook error: {name}: {err}" for name, err in errors.items()])
+            status = "degraded"
+
+        # Check history for failures
+        stats = history.get_stats()
+        if stats.get("failure_rate", 0) > 0.2:
+            issues.append(f"High failure rate: {stats['failure_rate']:.0%}")
+            status = "degraded"
+
+        # Check cache performance
+        cache_stats = cache.get_stats()
+        if cache_stats.total_misses > cache_stats.total_hits and cache_stats.total_hits > 0:
+            issues.append("Low cache hit rate")
+
+        # Check rollback state
+        rollback_status = rollback.get_status()
+        if rollback_status.get("failure_count", 0) > 0:
+            issues.append(f"Rollback recorded {rollback_status['failure_count']} failures")
+
+        return success_response(data={
+            "status": status,
+            "stage": loader.current_stage.name,
+            "elapsed": round(loader.elapsed, 2),
+            "model_progress": round(loader.model_progress, 2),
+            "preloader_running": preload.running,
+            "cache_entries": cache_stats.entries,
+            "issues": issues,
+            "components": {
+                "loader": "ok" if not errors else "error",
+                "history": "ok",
+                "preloader": "ok" if preload.finished or not preload.running else "running",
+                "cache": "ok",
+                "rollback": "ok" if not rollback_status.get("failure_count") else "warning",
+            },
+        })
+
     async def startup_stream(self, request: Request) -> StreamingResponse:
         """SSE stream for real-time startup progress updates.
 
