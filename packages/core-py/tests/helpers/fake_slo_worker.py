@@ -3,7 +3,7 @@ Fake SloNet worker for testing process-level isolation.
 
 Replaces _slo_worker_main with a fake that uses the same Queue protocol
 but no actual model loading. The subprocess imports this module instead
-of domain.inference.slonet_provider.
+of domain.inference._internal.slonet_provider.
 """
 import os
 import queue

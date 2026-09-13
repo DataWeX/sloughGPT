@@ -1,4 +1,4 @@
-"""Tests for domain.inference.ops.layernorm and rmsnorm."""
+"""Tests for domain.inference._internal.ops.layernorm and rmsnorm."""
 
 from __future__ import annotations
 

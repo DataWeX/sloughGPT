@@ -169,7 +169,7 @@ class TestListRuns:
         mock_gs.return_value = _mock_system()
         ar = AgentsRouter()
         # runs comes from run_history store
-        with patch("domain.agents.run_history.get_agent_run_store") as mock_rs:
+        with patch("domain.agents._internal.run_history.get_agent_run_store") as mock_rs:
             mock_rs.return_value.list_runs.return_value = []
             client = TestClient(_app(ar))
             resp = client.get("/agents/runs")

@@ -443,7 +443,7 @@ _dataset_repo: Optional[DatasetRepository] = None
 def get_knowledge_repository(data_dir: str | Path | None = None) -> KnowledgeRepository:
     global _knowledge_repo
     if _knowledge_repo is None:
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
         from pathlib import Path as _Path
         base = _Path(data_dir) if data_dir else find_repo_root(_Path(__file__).resolve()) / "data" / "knowledge"
         _knowledge_repo = KnowledgeRepository(base)
@@ -453,7 +453,7 @@ def get_knowledge_repository(data_dir: str | Path | None = None) -> KnowledgeRep
 def get_session_repository(persist_dir: str | Path | None = None) -> SessionRepository:
     global _session_repo
     if _session_repo is None:
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
         from pathlib import Path as _Path
         base = _Path(persist_dir) if persist_dir else find_repo_root(_Path(__file__).resolve()) / "data" / "sessions"
         _session_repo = SessionRepository(base)
@@ -463,7 +463,7 @@ def get_session_repository(persist_dir: str | Path | None = None) -> SessionRepo
 def get_feedback_repository(db_path: str | None = None) -> FeedbackRepository:
     global _feedback_repo
     if _feedback_repo is None:
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
         from pathlib import Path as _Path
         path = db_path or str(find_repo_root(_Path(__file__).resolve()) / "data" / "feedback.db")
         _feedback_repo = FeedbackRepository(path)
@@ -473,7 +473,7 @@ def get_feedback_repository(db_path: str | None = None) -> FeedbackRepository:
 def get_dataset_repository(data_dir: str | Path | None = None) -> DatasetRepository:
     global _dataset_repo
     if _dataset_repo is None:
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
         from pathlib import Path as _Path
         base = _Path(data_dir) if data_dir else find_repo_root(_Path(__file__).resolve()) / "data" / "datasets"
         _dataset_repo = DatasetRepository(base)

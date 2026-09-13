@@ -14,22 +14,16 @@ import pytest
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from domains.inference.vector_store import InMemoryVectorStore
-from domains.learner.entity_extractor import (
-    extract_entities,
+from domain.inference._internal.vector_store import InMemoryVectorStorefrom domain.learner._internal.entity_extractor import (    extract_entities,
     extract_relationships,
     extract_facts_from_conversation,
 )
-from domains.learner.knowledge import (
-    KnowledgeMemory,
+from domain.learner._internal.knowledge import (    KnowledgeMemory,
     KnowledgeFact,
     KnowledgeIngestor,
 )
 from domain.knowledge._internal.knowledge import _extract_topics
-from domains.learner.knowledge_augmenter import enrich_with_knowledge
-from domains.learner.continual import ContinualLearner, _tokenize
-from domains.learner.data_filter import DataFilter
-
+from domain.learner._internal.knowledge_augmenter import enrich_with_knowledgefrom domain.learner._internal.continual import ContinualLearner, _tokenizefrom domain.learner._internal.data_filter import DataFilter
 
 # ===== Entity Extraction → Storage =====
 

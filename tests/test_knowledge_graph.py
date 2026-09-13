@@ -3,8 +3,7 @@ Tests for Production-Grade Knowledge Graph
 """
 
 import pytest
-from domains.cognitive.knowledge_graph_v2 import (
-    Entity,
+from domain.cognitive._internal.knowledge_graph_v2 import (    Entity,
     Fact,
     RelationType,
     KnowledgeGraph,

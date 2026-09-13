@@ -89,13 +89,13 @@ class TestGetSessionInspector:
         mock_cc = MagicMock()
         mock_cc.get_context_inspector.return_value = {"working_memory": [], "semantic_keys": [], "episodic_count": 0}
         with patch("domain.infrastructure.session_core.SessionCore", mock_sc), \
-             patch("domain.feedback.message_feedback.get_message_feedback", return_value=mock_fb), \
+             patch("domain.feedback._internal.message_feedback.get_message_feedback", return_value=mock_fb), \
              patch("domain.learner.knowledge.get_knowledge_memory", return_value=mock_km), \
-             patch("domain.context.managers.get_trait_config", return_value=mock_tc), \
-             patch("domain.context.managers.PersonalityManager"), \
-             patch("domain.context.managers.MemoryManager"), \
-             patch("domain.context.managers.StyleManager"), \
-             patch("domain.context.managers.TaskManager"), \
+             patch("domain.context._internal.managers.get_trait_config", return_value=mock_tc), \
+             patch("domain.context._internal.managers.PersonalityManager"), \
+             patch("domain.context._internal.managers.MemoryManager"), \
+             patch("domain.context._internal.managers.StyleManager"), \
+             patch("domain.context._internal.managers.TaskManager"), \
              patch("domain.infrastructure.context_core.get_context_core", return_value=mock_cc):
             client = TestClient(_app(sr))
             resp = client.get("/session/s1/inspector")

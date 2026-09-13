@@ -1,4 +1,4 @@
-"""Tests for domain.context.managers — TraitWeightsConfig, PersonalityManager."""
+"""Tests for domain.context._internal.managers — TraitWeightsConfig, PersonalityManager."""
 
 from __future__ import annotations
 

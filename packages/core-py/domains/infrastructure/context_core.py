@@ -555,7 +555,7 @@ def get_context_core() -> ContextCore:
                 )
                 # Connect consciousness engine to the manager
                 try:
-                    from domains.consciousness import get_consciousness
+                    from domain.consciousness import get_consciousness
                     cm.set_engine(get_consciousness())
                 except Exception:
                     pass  # Consciousness optional — degrade gracefully

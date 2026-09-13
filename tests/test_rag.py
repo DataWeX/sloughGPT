@@ -3,8 +3,7 @@ Tests for Production-Grade RAG System
 """
 
 import pytest
-from domains.cognitive.rag import (
-    TextChunk,
+from domain.cognitive._internal.rag import (    TextChunk,
     BM25Indexer,
     HybridRetriever,
     CitationTracker,

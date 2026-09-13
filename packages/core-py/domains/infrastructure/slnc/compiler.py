@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 from domains.infrastructure.slnc.spec import (
     MAGIC,
     VERSION,

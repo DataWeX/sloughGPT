@@ -1,8 +1,7 @@
 """Tests for knowledge_augmenter — chat enrichment with vector-retrieved facts."""
 import pytest
 from unittest.mock import patch, MagicMock
-from domains.learner.knowledge_augmenter import (
-    _needs_web_search,
+from domain.learner._internal.knowledge_augmenter import (    _needs_web_search,
     enrich_with_knowledge,
 )
 

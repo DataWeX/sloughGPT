@@ -218,7 +218,7 @@ class TestBackgroundTraining:
         tokenizer = MagicMock()
         manager.set_model(model, tokenizer)
         with patch(
-            "domain.feedback.training.FeedbackTrainer",
+            "domain.feedback._internal.training.FeedbackTrainer",
             autospec=True,
         ) as mock_trainer_cls:
             mock_trainer = mock_trainer_cls.return_value
@@ -229,7 +229,7 @@ class TestBackgroundTraining:
     def test_background_training_skips_without_model(self, manager):
         manager.set_model(None, None)
         with patch(
-            "domain.feedback.training.FeedbackTrainer",
+            "domain.feedback._internal.training.FeedbackTrainer",
             autospec=True,
         ) as mock_trainer_cls:
             manager._run_background_training()
@@ -240,7 +240,7 @@ class TestBackgroundTraining:
         (always None), so background training never ran even when a model was set."""
         manager.set_model(object(), None)
         with patch(
-            "domain.feedback.training.FeedbackTrainer",
+            "domain.feedback._internal.training.FeedbackTrainer",
             autospec=True,
         ) as mock_trainer_cls:
             manager._run_background_training()
@@ -249,7 +249,7 @@ class TestBackgroundTraining:
     def test_background_training_requires_two_recent_items(self, manager):
         manager.set_model(object(), MagicMock())
         with patch(
-            "domain.feedback.training.FeedbackTrainer",
+            "domain.feedback._internal.training.FeedbackTrainer",
             autospec=True,
         ) as mock_trainer_cls:
             mock_trainer = mock_trainer_cls.return_value

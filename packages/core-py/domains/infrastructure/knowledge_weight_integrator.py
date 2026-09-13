@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 
 import numpy as np
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.infrastructure.knowledge_weight_integrator")
 
@@ -73,7 +73,7 @@ def _resolve_model(model, vocab_size: int):
     if model is not None:
         return model
     try:
-        from domains.models import SloughGPTModel
+        from domain.models import SloughGPTModel
         return SloughGPTModel(
             vocab_size=vocab_size, n_embed=128, n_layer=4, n_head=4,
             block_size=_BLOCK_SIZE, max_seq_len=_BLOCK_SIZE,

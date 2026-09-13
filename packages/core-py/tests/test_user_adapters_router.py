@@ -4,7 +4,7 @@ Covers: UserAdaptersRouter CRUD, merge, aggregate-best, quality, prune, delete.
 All domain calls are mocked; only HTTP-level behavior is tested.
 
 Note: the user_adapters router imports get_per_user_lora INSIDE each handler,
-so we must patch at 'domain.feedback.get_per_user_lora'.
+so we must patch at 'domain.feedback._internal.per_user_lora.get_per_user_lora'.
 """
 from __future__ import annotations
 
@@ -64,10 +64,10 @@ def _app():
 
 
 # ---------------------------------------------------------------------------
-# Tests — patch at 'domain.feedback.get_per_user_lora' (lazy import in handler)
+# Tests — patch at 'domain.feedback._internal.per_user_lora.get_per_user_lora' (lazy import in handler)
 # ---------------------------------------------------------------------------
 
-MOCK_TARGET = "domain.feedback.get_per_user_lora"
+MOCK_TARGET = "domain.feedback._internal.per_user_lora.get_per_user_lora"
 
 
 class TestListAdapters:

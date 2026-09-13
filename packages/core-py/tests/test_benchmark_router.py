@@ -83,7 +83,7 @@ class TestGetLoggedResponses:
         mock_tracker = MagicMock()
         r1 = SimpleNamespace(timestamp=1.0, user_message="hi", assistant_response="hello", model="gpt2", tokens_generated=5, duration_ms=100)
         mock_tracker.get_responses.return_value = [r1]
-        with patch("domain.feedback.response_tracker.get_response_tracker", return_value=mock_tracker):
+        with patch("domain.feedback._internal.response_tracker.get_response_tracker", return_value=mock_tracker):
             client = TestClient(_app(br))
             resp = client.get("/benchmark/responses")
         assert resp.status_code == 200

@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import numpy as np
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
 

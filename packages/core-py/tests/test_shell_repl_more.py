@@ -5264,7 +5264,7 @@ class TestCmdAgents:
         from unittest.mock import MagicMock, patch
         orch = MagicMock()
         orch.execute.return_value = {"response": "task done", "tasks": [{"status": "completed"}]}
-        with patch('domain.agents.multi.get_orchestrator', return_value=orch), \
+        with patch('domain.agents._internal.multi.get_orchestrator', return_value=orch), \
              patch.object(repl, '_require_api', return_value=True), \
              patch.object(repl, '_spinner_call', side_effect=lambda msg, fn: fn()):
             out = capture_cmd(repl, repl._cmd_agents, "research topic X")
@@ -13120,7 +13120,7 @@ class TestCmdAgentsException:
         repl.os._api = mock_api
         mock_orch = MagicMock()
         mock_orch.execute.side_effect = RuntimeError("API down")
-        with patch('domain.agents.multi.get_orchestrator', return_value=mock_orch):
+        with patch('domain.agents._internal.multi.get_orchestrator', return_value=mock_orch):
             repl._cmd_agents("do something")
         assert repl._last_exit_code == 0
 
@@ -13130,7 +13130,7 @@ class TestCmdAgentsException:
         repl.os._api = mock_api
         mock_orch = MagicMock()
         mock_orch.execute.return_value = {"response": None, "tasks": []}
-        with patch('domain.agents.multi.get_orchestrator', return_value=mock_orch):
+        with patch('domain.agents._internal.multi.get_orchestrator', return_value=mock_orch):
             repl._cmd_agents("do something")
         assert repl._last_exit_code == 0
 
@@ -13140,7 +13140,7 @@ class TestCmdAgentsException:
         repl.os._api = mock_api
         mock_orch = MagicMock()
         mock_orch.execute.return_value = {"response": "done"}
-        with patch('domain.agents.multi.get_orchestrator', return_value=mock_orch):
+        with patch('domain.agents._internal.multi.get_orchestrator', return_value=mock_orch):
             repl._cmd_agents("do something")
         assert repl._last_exit_code == 0
 
@@ -13458,7 +13458,7 @@ class TestCmdAgentsBranches:
         repl.os._api = mock_api
         mock_orch = MagicMock()
         mock_orch.execute.return_value = "simple string response"
-        with patch('domain.agents.multi.get_orchestrator', return_value=mock_orch):
+        with patch('domain.agents._internal.multi.get_orchestrator', return_value=mock_orch):
             repl._cmd_agents("do something")
         assert repl._last_exit_code == 0
 

@@ -115,7 +115,7 @@ class TestCreatePipeline:
     @patch("routers.collections._build_filter", return_value=MagicMock())
     @patch("routers.collections._build_store", return_value=MagicMock())
     @patch("routers.collections._build_source", return_value=MagicMock())
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_create(self, mock_gr, mock_src, mock_sto, mock_flt):
         mock_reg = _mock_registry()
         mock_gr.return_value = mock_reg
@@ -134,7 +134,7 @@ class TestCreatePipeline:
         assert data["name"] == "pipe1"
         assert data["source_type"] == "generator"
 
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_create_with_filters(self, mock_gr):
         mock_gr.return_value = _mock_registry()
         app = _app()
@@ -150,7 +150,7 @@ class TestCreatePipeline:
 
 
 class TestRunPipeline:
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_run_existing(self, mock_gr):
         pipe = _mock_pipeline("run1", stats={"total": 10})
         pipe.collect.return_value = 5
@@ -165,7 +165,7 @@ class TestRunPipeline:
         assert data["collected"] == 5
         assert data["pipeline"] == "run1"
 
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_run_missing(self, mock_gr):
         mock_reg = _mock_registry()
         mock_reg.collect.side_effect = KeyError("not found")
@@ -177,7 +177,7 @@ class TestRunPipeline:
 
 
 class TestGetStats:
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_stats(self, mock_gr):
         mock_gr.return_value = _mock_registry()
         app = _app()
@@ -186,7 +186,7 @@ class TestGetStats:
         assert resp.status_code == 200
         assert resp.json()["data"]["total_pipelines"] == 0
 
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_stats_with_pipelines(self, mock_gr):
         mock_gr.return_value = _mock_registry([_mock_pipeline("x"), _mock_pipeline("y")])
         app = _app()
@@ -197,7 +197,7 @@ class TestGetStats:
 
 
 class TestGetPipeline:
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_get_existing(self, mock_gr):
         pipe = _mock_pipeline("g1", stats={"total": 42})
         mock_gr.return_value = _mock_registry([pipe])
@@ -209,7 +209,7 @@ class TestGetPipeline:
         assert data["id"] == "g1"
         assert data["stats"]["total"] == 42
 
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_get_missing(self, mock_gr):
         mock_gr.return_value = _mock_registry()
         app = _app()
@@ -219,7 +219,7 @@ class TestGetPipeline:
 
 
 class TestDeletePipeline:
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_delete(self, mock_gr):
         mock_reg = _mock_registry()
         mock_gr.return_value = mock_reg
@@ -231,7 +231,7 @@ class TestDeletePipeline:
 
 
 class TestCollect:
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_collect_existing(self, mock_gr):
         pipe = _mock_pipeline("c1")
         pipe.collect.return_value = 3
@@ -243,7 +243,7 @@ class TestCollect:
         assert resp.status_code == 200
         assert resp.json()["data"]["collected"] == 3
 
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_collect_missing(self, mock_gr):
         mock_gr.return_value = _mock_registry()
         app = _app()
@@ -253,7 +253,7 @@ class TestCollect:
 
 
 class TestGetRecords:
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_records_empty(self, mock_gr):
         pipe = _mock_pipeline("r1")
         pipe.read.return_value = []
@@ -266,7 +266,7 @@ class TestGetRecords:
         assert data["records"] == []
         assert data["total"] == 0
 
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_records_with_data(self, mock_gr):
         rec1 = MagicMock(content="hello", metadata={})
         rec2 = MagicMock(content="world", metadata={})
@@ -282,7 +282,7 @@ class TestGetRecords:
         assert data["total"] == 2
         assert data["returned"] == 1
 
-    @patch("domain.collections.registry.get_registry")
+    @patch("domain.collections._internal.registry.get_registry")
     def test_records_missing_pipeline(self, mock_gr):
         mock_gr.return_value = _mock_registry()
         app = _app()

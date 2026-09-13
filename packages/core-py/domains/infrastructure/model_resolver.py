@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 
 def get_model_dir(model_id: str) -> Path:

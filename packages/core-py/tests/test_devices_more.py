@@ -134,7 +134,7 @@ class TestEmbeddingDevice:
 
     def test_compute_fallback_is_deterministic(self):
         dev = EmbeddingDevice()
-        with patch("domain.inference.vector_store.simple_embed", side_effect=ImportError):
+        with patch("domain.inference._internal.vector_store.simple_embed", side_effect=ImportError):
             a = dev._compute_embedding("same text")
             b = dev._compute_embedding("same text")
         assert a == b

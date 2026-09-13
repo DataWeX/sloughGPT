@@ -20,7 +20,7 @@ import threading
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Optional
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.training_queue")
 

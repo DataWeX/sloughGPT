@@ -172,7 +172,7 @@ class TestModelLoaderSlncLoad:
             lambda model_id: tmp_path,
         )
         monkeypatch.setattr(
-            "domain.inference.slonet_provider.SloNetChatProvider.from_slnc",
+            "domain.inference._internal.slonet_provider.SloNetChatProvider.from_slnc",
             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("corrupt")),
         )
         loader = ModelLoader(models_dir=tmp_path)
@@ -205,7 +205,7 @@ class TestModelLoaderSlncLoad:
         fake_provider._model = fake_model
         fake_provider._tokenizer = MagicMock()
         monkeypatch.setattr(
-            "domain.inference.slonet_provider.SloNetChatProvider.from_slnc",
+            "domain.inference._internal.slonet_provider.SloNetChatProvider.from_slnc",
             lambda *a, **k: fake_provider,
         )
         loader = ModelLoader(models_dir=tmp_path)
@@ -239,7 +239,7 @@ class TestModelLoaderSlncLoad:
         fake_provider._model = MagicMock()
         fake_provider._tokenizer = MagicMock()
         monkeypatch.setattr(
-            "domain.inference.slonet_provider.SloNetChatProvider.from_slnc",
+            "domain.inference._internal.slonet_provider.SloNetChatProvider.from_slnc",
             lambda *a, **k: fake_provider,
         )
         loader = ModelLoader(models_dir=tmp_path)
@@ -259,7 +259,7 @@ class TestModelLoaderSlncLoad:
             lambda model_id: tmp_path,
         )
         monkeypatch.setattr(
-            "domain.inference.slonet_provider.SloNetChatProvider.from_slnc",
+            "domain.inference._internal.slonet_provider.SloNetChatProvider.from_slnc",
             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("corrupt slnc")),
         )
         loader = ModelLoader(models_dir=tmp_path)

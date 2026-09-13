@@ -34,7 +34,7 @@ def _app(mr: ModelsRouter):
 
 
 class TestGetExportFormats:
-    @patch("domain.training.export.list_export_formats")
+    @patch("domain.training._internal.export.list_export_formats")
     def test_formats(self, mock_list):
         mock_list.return_value = [{"format": "safetensors", "recommended": True}]
         mr = ModelsRouter()

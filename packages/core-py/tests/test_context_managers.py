@@ -1,4 +1,4 @@
-"""Comprehensive tests for domain.context.managers — TraitWeightsConfig lifecycle,
+"""Comprehensive tests for domain.context._internal.managers — TraitWeightsConfig lifecycle,
 PersonalityManager, MemoryManager, StyleManager, TaskManager, helpers."""
 
 import json

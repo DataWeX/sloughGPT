@@ -1,4 +1,4 @@
-"""Tests for domain.inference.ops.blas — sgemm numpy fallback + is_available."""
+"""Tests for domain.inference._internal.ops.blas — sgemm numpy fallback + is_available."""
 
 import numpy as np
 import pytest
