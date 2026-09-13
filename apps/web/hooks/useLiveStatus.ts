@@ -54,6 +54,7 @@ export interface LiveHealthSnapshot {
   startup_elapsed: number
   startup_model_progress: number
   startup_model_progress_message: string
+  startup_hooks: Record<string, HookStatus>
   model_type: string | null
   device: string | null
   soul: string | null
@@ -133,6 +134,7 @@ export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
     startup_elapsed: stagedLoader?.elapsed_seconds ?? 0,
     startup_model_progress: stagedLoader?.model_progress ?? 0,
     startup_model_progress_message: stagedLoader?.model_progress_message ?? '',
+    startup_hooks: stagedLoader?.hooks ?? {},
     model_type: d.model_type ?? null,
     device: d.device ?? null,
     soul: d.soul ?? null,
@@ -288,6 +290,7 @@ export function initLiveStatus(): () => void {
       startup_elapsed: stagedLoader?.elapsed_seconds ?? d.startup_elapsed ?? 0,
       startup_model_progress: stagedLoader?.model_progress ?? d.startup_model_progress ?? 0,
       startup_model_progress_message: stagedLoader?.model_progress_message ?? d.startup_model_progress_message ?? '',
+      startup_hooks: stagedLoader?.hooks ?? d.startup_hooks ?? {},
       model_type: d.model_type ?? null,
       device: d.device ?? null,
       soul: d.soul ?? null,
@@ -434,6 +437,8 @@ export function useLiveStatus() {
     startupModelProgress: health?.startup_model_progress ?? 0,
     /** Model load progress message */
     startupModelProgressMessage: health?.startup_model_progress_message ?? '',
+    /** Startup hook statuses */
+    startupHooks: health?.startup_hooks ?? {},
   }
 }
 

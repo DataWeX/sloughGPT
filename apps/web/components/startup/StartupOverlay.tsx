@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useLiveStatus, type StartupStage } from '@/hooks/useLiveStatus'
+import { useLiveStatus, type StartupStage, type HookStatus } from '@/hooks/useLiveStatus'
 import { cn } from '@/lib/utils'
 
 const STAGE_LABELS: Record<StartupStage, string> = {
@@ -14,8 +14,21 @@ const STAGE_LABELS: Record<StartupStage, string> = {
 
 const STAGE_ORDER: StartupStage[] = ['init', 'critical', 'ready', 'background']
 
+const HOOK_LABELS: Record<string, string> = {
+  db_pool: 'Database',
+  model_load: 'AI Model',
+  core_routers: 'API Routes',
+  model_ready: 'Model Warmup',
+  training_restore: 'Training',
+  wandb: 'Experiment Tracking',
+  multimodal: 'Multimodal',
+  metrics: 'Metrics',
+  autotrainer: 'Auto Trainer',
+  rag_ingest: 'RAG Ingestion',
+}
+
 export function StartupOverlay() {
-  const { startupStage, startupModelProgress, startupModelProgressMessage, connected } = useLiveStatus()
+  const { startupStage, startupModelProgress, startupModelProgressMessage, startupHooks, connected } = useLiveStatus()
   const [visible, setVisible] = useState(true)
   const [fadeOut, setFadeOut] = useState(false)
 
@@ -37,6 +50,11 @@ export function StartupOverlay() {
     : stageIndex >= 0
       ? (stageIndex + 1) / STAGE_ORDER.length
       : 0.1
+
+  // Get active hooks (running or recently completed)
+  const activeHooks = Object.values(startupHooks)
+    .filter((h: HookStatus) => h.status === 'running' || (h.status === 'ok' && h.duration_seconds < 2))
+    .slice(0, 3)
 
   return (
     <div
@@ -66,7 +84,7 @@ export function StartupOverlay() {
       </div>
 
       {/* Progress details */}
-      <div className="flex items-center gap-2 text-[11px] text-[#636366]">
+      <div className="flex items-center gap-2 text-[11px] text-[#636366] mb-4">
         {startupModelProgress > 0 && (
           <span className="font-mono">{Math.round(startupModelProgress * 100)}%</span>
         )}
@@ -75,8 +93,26 @@ export function StartupOverlay() {
         )}
       </div>
 
+      {/* Active hooks */}
+      {activeHooks.length > 0 && (
+        <div className="flex flex-col items-center gap-1.5 mb-6">
+          {activeHooks.map((hook: HookStatus) => (
+            <div key={hook.name} className="flex items-center gap-2 text-[10px]">
+              <span className={cn(
+                'w-1 h-1 rounded-full',
+                hook.status === 'running' ? 'bg-[#febc2e] animate-pulse' : 'bg-[#28c840]',
+              )} />
+              <span className="text-[#8e8e93]">{HOOK_LABELS[hook.name] ?? hook.name}</span>
+              {hook.status === 'ok' && (
+                <span className="text-[#28c840] font-mono">{hook.duration_seconds}s</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Stage indicators */}
-      <div className="flex items-center gap-1.5 mt-6">
+      <div className="flex items-center gap-1.5">
         {STAGE_ORDER.map((stage, i) => (
           <div
             key={stage}
