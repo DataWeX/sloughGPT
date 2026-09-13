@@ -228,6 +228,9 @@ class TestConfigs:
         assert g.use_gpu is True
 
 
+pytest.importorskip("gguf", reason="gguf not installed")
+
+
 class TestGGUFWrappers:
     def test_export_to_gguf(self, monkeypatch):
         rec = {}

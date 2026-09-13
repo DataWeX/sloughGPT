@@ -174,7 +174,7 @@ class TaskQueue:
         # Event bus integration
         self._event_bus = None
         try:
-            from domain.infrastructure._internal.event_bus import get_event_bus
+            from domains.infrastructure.event_bus import get_event_bus
             self._event_bus = get_event_bus()
         except Exception as e:
             logger.debug("TaskQueue event bus unavailable: %s", e, extra={"tag": "INFRA"})

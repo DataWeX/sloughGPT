@@ -2013,7 +2013,7 @@ Examples:
         if not arg:
             # Show current setting
             try:
-                from domain.infrastructure._internal.config import get_config
+                from domains.infrastructure.config import get_config
                 cfg = get_config()
                 current = cfg.features.auto_download
             except Exception:
@@ -2038,7 +2038,7 @@ Examples:
 
         # Update config file
         try:
-            from domain.infrastructure._internal.config import _REPO_ROOT, get_config
+            from domains.infrastructure.config import _REPO_ROOT, get_config
             config_path = _REPO_ROOT / "config" / "defaults.yaml"
             if config_path.exists():
                 with open(config_path) as f:
@@ -2214,7 +2214,7 @@ Examples:
           events circuit 10    — filter by "circuit", show last 10
         """
         try:
-            from domain.infrastructure._internal.event_bus import get_event_bus
+            from domains.infrastructure.event_bus import get_event_bus
             bus = get_event_bus()
         except Exception:
             self._print("  EventBus not available")

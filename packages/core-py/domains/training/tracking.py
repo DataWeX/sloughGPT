@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from domain.infrastructure._internal.config import get_config
+from domains.infrastructure.config import get_config
 
 logger = logging.getLogger("slo.tracking")
 

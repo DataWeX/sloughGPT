@@ -1,37 +1,38 @@
-"""Tests for domains.errors — exception hierarchy and require_non_empty_prompt."""
+"""Tests for domain.errors — exception hierarchy and require_non_empty_prompt."""
 
 import pytest
-from domains.errors import (
+from domain.errors._internal.errors import (
     SloughGPTDomainError,
     InvalidGenerationInputError,
     EmptyPromptError,
     require_non_empty_prompt,
 )
+from domain.infrastructure._internal.errors import AppError, ValidationError
 
 
 class TestExceptionHierarchy:
-    def test_sloughgpt_domain_error_is_exception(self):
-        assert issubclass(SloughGPTDomainError, Exception)
+    def test_sloughgpt_domain_error_is_app_error(self):
+        assert issubclass(SloughGPTDomainError, AppError)
 
-    def test_invalid_generation_input_is_domain_error(self):
-        assert issubclass(InvalidGenerationInputError, SloughGPTDomainError)
+    def test_invalid_generation_input_is_validation_error(self):
+        assert issubclass(InvalidGenerationInputError, ValidationError)
 
     def test_empty_prompt_is_invalid_generation_input(self):
         assert issubclass(EmptyPromptError, InvalidGenerationInputError)
 
     def test_default_http_status(self):
         exc = SloughGPTDomainError("test")
-        assert exc.http_status == 500
-        assert exc.code == "domain_error"
+        assert exc.http_status == 400
+        assert exc.code == "E_DOMAIN"
 
     def test_invalid_generation_input_http_status(self):
         exc = InvalidGenerationInputError("bad input")
         assert exc.http_status == 422
-        assert exc.code == "invalid_generation_input"
+        assert exc.code == "E_VAL_FIELD"
 
     def test_empty_prompt_code(self):
         exc = EmptyPromptError()
-        assert exc.code == "empty_prompt"
+        assert exc.code == "E_VAL_FIELD"
 
     def test_empty_prompt_default_message(self):
         exc = EmptyPromptError()
@@ -42,7 +43,7 @@ class TestExceptionHierarchy:
         assert str(exc) == "custom msg"
 
     def test_inheritance_chain_catch(self):
-        with pytest.raises(SloughGPTDomainError):
+        with pytest.raises(AppError):
             raise EmptyPromptError()
 
     def test_inheritance_chain_catch_intermediate(self):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from typing import Any, Dict
 
-from domain.infrastructure._internal.config import get_config
+from domains.infrastructure.config import get_config
 
 
 def wandb_training_enabled_from_env() -> bool:

@@ -3,7 +3,7 @@ Config System — typed hierarchical config with env override, file defaults,
 per-environment profiles, and runtime reload via EventBus.
 
 Usage:
-    from domain.infrastructure._internal.config import get_config
+    from domains.infrastructure.config import get_config
     cfg = get_config()
     cfg.model.name          # "Qwen/Qwen2.5-0.5B-Instruct"
     cfg.model.device        # "cpu"
@@ -334,7 +334,7 @@ class ConfigManager:
                 logger.exception("Config reload callback failed", extra={"tag": "INFRA"})
 
         try:
-            from domain.infrastructure._internal.event_bus import get_event_bus
+            from domains.infrastructure.event_bus import get_event_bus
             bus = get_event_bus()
             import asyncio
             payload = {

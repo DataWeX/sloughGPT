@@ -1,7 +1,7 @@
 """Backward-compatibility shim — imports from the new ``domain.infrastructure`` package."""
 
 try:
-    from domain.infrastructure._internal.config import (
+    from domains.infrastructure.config import (
         AppConfig,
         get_config,
         reload_config,
@@ -9,15 +9,15 @@ try:
         get_config_manager,
         set_config_manager,
     )
-    from domain.infrastructure._internal.event_bus import (
+    from domains.infrastructure.event_bus import (
         EventBus,
         get_event_bus,
     )
-    from domain.infrastructure._internal.lifecycle import (
+    from domains.infrastructure.lifecycle import (
         LifecycleManager,
         LifecyclePhase,
     )
-    from domain.infrastructure._internal.errors import (
+    from domains.infrastructure.errors import (
         AppError,
         ErrorCode,
     )
