@@ -14,6 +14,7 @@ import { authFetch } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { StartupTimeline } from '@/components/startup/StartupTimeline'
+import { StartupHistoryChart } from '@/components/startup/StartupHistoryChart'
 
 
 const QUICK_ACTIONS = [
@@ -749,6 +750,9 @@ function StartupTab() {
           ))}
         </div>
       )}
+
+      {/* History Chart */}
+      <StartupHistoryChart />
 
       {/* Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
