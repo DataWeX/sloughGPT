@@ -6,8 +6,8 @@ Chromadb is not a dependency; ``connect()`` is exercised via import mocking.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from domains.inference.vector_store import VectorEntry, QueryResult
-from domains.inference.vector_stores.chromadb_store import ChromaDBVectorStore
+from domain.inference._internal.vector_store import VectorEntry, QueryResult
+from domain.inference._internal.vector_stores.chromadb_store import ChromaDBVectorStore
 
 
 class TestConstruction:
@@ -451,7 +451,7 @@ class TestEdgeCases:
             "metadatas": [[{}]],
         }
         results = await store.query([1.0])
-        from domains.inference.vector_store import QueryResult
+        from domain.inference._internal.vector_store import QueryResult
         assert isinstance(results[0], QueryResult)
 
     @pytest.mark.asyncio
@@ -550,7 +550,7 @@ class TestEdgeCases:
 
     @pytest.mark.asyncio
     async def test_store_inherits_vector_store_interface(self):
-        from domains.inference.vector_store import VectorStore
+        from domain.inference._internal.vector_store import VectorStore
         store = ChromaDBVectorStore()
         assert isinstance(store, VectorStore)
 

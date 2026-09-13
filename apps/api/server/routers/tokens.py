@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from domains.billing.token_service import (
+from domain.billing._internal.token_service import (
     Tier,
     get_token_billing_service,
 )

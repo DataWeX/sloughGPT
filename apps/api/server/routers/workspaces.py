@@ -8,8 +8,8 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
-from domains.auth.models import Role, User, Workspace, WorkspaceMember
-from domains.auth.repositories import UserRepository, WorkspaceRepository
+from domain.auth._internal.models import Role, User, Workspace, WorkspaceMember
+from domain.auth._internal.repositories import UserRepository, WorkspaceRepository
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
@@ -1207,7 +1207,7 @@ class WorkspacesRouter:
 
             # Search knowledge
             try:
-                from domains.learner.knowledge import KnowledgeRepository
+                from domain.learner._internal.knowledge import KnowledgeRepository
                 k_repo = KnowledgeRepository()
                 facts = k_repo.list_by_workspace(workspace_id)
                 for fact in facts:
@@ -1235,7 +1235,7 @@ class WorkspacesRouter:
             if not member and not user.is_admin:
                 raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
 
-            from domains.auth.models import ROLE_PERMISSIONS, Permission
+            from domain.auth._internal.models import ROLE_PERMISSIONS, Permission
 
             # Build permission matrix
             roles = {}

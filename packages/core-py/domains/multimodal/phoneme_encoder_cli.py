@@ -16,7 +16,7 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from domains.multimodal.unified_phoneme_encoder import UnifiedPhonemeEncoder, detect_language
+from domain.multimodal._internal.unified_phoneme_encoder import UnifiedPhonemeEncoder, detect_language
 
 
 def main():

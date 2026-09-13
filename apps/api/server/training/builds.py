@@ -19,7 +19,7 @@ router = APIRouter(tags=["training-builds"])
 @router.get("/training/builds")
 async def list_builds():
     """List all training builds (checkpoints + fine-tuned models + LoRA adapters)."""
-    from domains.training.service import load_lora_soul, load_soul
+    from domain.training._internal.service import load_lora_soul, load_soul
 
     _repo_root = find_repo_root(Path(__file__).resolve())
     _checkpoints_dir = _repo_root / "models" / "auto-training"

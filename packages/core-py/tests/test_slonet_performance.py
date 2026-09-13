@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.performance import (
+from domain.training._internal.performance import (
     get_optimal_device,
     get_device_name,
     setup_device_environment,

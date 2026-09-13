@@ -343,8 +343,8 @@ class TestConfirm:
 class TestUsageTracking:
     def test_record_usage(self, tmp_path):
         usage_file = tmp_path / "usage.json"
-        import cli as _cli
-        with patch.object(_cli, "_USAGE_PATH", usage_file):
+        from core import framework as _fw
+        with patch.object(_fw, "_USAGE_PATH", usage_file):
             _record_usage("model list")
             _record_usage("model list")
             _record_usage("train start")

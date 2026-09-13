@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domains.shell.device_decorators import with_ioctl, add_ioctl_command
+from domain.shell._internal.device_decorators import with_ioctl, add_ioctl_command
 
 
 # ── with_ioctl decorator ──────────────────────────────────────────────────

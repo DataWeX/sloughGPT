@@ -1,6 +1,6 @@
-"""Tests for domains.shell.kernel_process — ProcessState, Priority, TensorRef, Process."""
+"""Tests for domain.shell._internal.kernel_process — ProcessState, Priority, TensorRef, Process."""
 
-from domains.shell.kernel_process import ProcessState, Priority, TensorRef, Process
+from domain.shell._internal.kernel_process import ProcessState, Priority, TensorRef, Process
 
 
 class TestProcessState:

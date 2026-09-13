@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domains.shell.simulation import (
+from domain.shell._internal.simulation import (
     BabyAction,
     CellWrite,
     Entity,
@@ -43,7 +43,7 @@ from domains.shell.simulation import (
     cell_update_water,
     generate_world,
 )
-from domains.shell.memory import EpisodicMemory, WorldMemory
+from domain.shell._internal.memory import EpisodicMemory, WorldMemory
 
 SIGNAL_IDX = 4  # 5th feature — broadcast strength
 
@@ -294,7 +294,7 @@ class TestCellUpdates:
         g.material[g.idx(2, 2, 2)] = MATERIAL_ORGANIC
         g.temperature[g.idx(2, 2, 2)] = 150.0
         cell_update_combustion(g, params)
-        from domains.shell.simulation import MATERIAL_EMBER
+        from domain.shell._internal.simulation import MATERIAL_EMBER
         assert g.material[g.idx(2, 2, 2)] == MATERIAL_EMBER
 
     def test_combustion_no_ignite_below_temp(self):
@@ -986,7 +986,7 @@ class TestWorldGeneration:
         g = WorldGrid(params.grid_size)
         generate_world(g, params, seed=42)
         # y=0 should be stone or ember (ember vents are buried in the floor)
-        from domains.shell.simulation import MATERIAL_EMBER
+        from domain.shell._internal.simulation import MATERIAL_EMBER
         for x in range(16):
             for z in range(16):
                 mat = g.material[g.idx(x, 0, z)]
@@ -1117,7 +1117,7 @@ class TestWorldMemory:
         assert len(wm) == 0
 
     def test_initial_with_episodes(self):
-        from domains.shell.memory import WorldEpisode
+        from domain.shell._internal.memory import WorldEpisode
         ep = WorldEpisode(features=np.zeros(3), action=(0.5,), reward=1.0, tick=0)
         wm = WorldMemory(episodes=[ep])
         assert len(wm) == 1

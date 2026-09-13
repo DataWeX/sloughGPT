@@ -50,7 +50,7 @@ class WorldRenderRouter:
     def _get_world(self):
         """Return persistent world state, initializing with default blocks on first call."""
         if self._world is None:
-            from domains.shell.simulation import WorldGrid
+            from domain.shell._internal.simulation import WorldGrid
 
             self._world = WorldGrid()
             self._world.material[self._world.idx(32, 0, 32)] = 1
@@ -67,7 +67,7 @@ class WorldRenderRouter:
     ) -> dict:
         """Render the current world state and return state tensors."""
         _t0 = _time.monotonic()
-        from domains.shell.world_render import RenderBridge, RenderConfig
+        from domain.shell._internal.world_render import RenderBridge, RenderConfig
 
         cfg = RenderConfig(
             width=config.width if config else 160,
@@ -111,7 +111,7 @@ class WorldRenderRouter:
         import io
 
         import numpy as np
-        from domains.shell.world_render import RenderBridge, RenderConfig
+        from domain.shell._internal.world_render import RenderBridge, RenderConfig
         from PIL import Image
 
         cfg = RenderConfig(
@@ -151,7 +151,7 @@ class WorldRenderRouter:
     ) -> dict:
         """Render the world and process through the neural pipeline."""
         _t0 = _time.monotonic()
-        from domains.shell.world_render import NeuralRenderBridge, RenderConfig
+        from domain.shell._internal.world_render import NeuralRenderBridge, RenderConfig
 
         cfg = RenderConfig(
             width=config.width if config else 160,
@@ -200,7 +200,7 @@ class WorldRenderRouter:
     ) -> dict:
         """Run a simulation tick with optional rendering."""
         _t0 = _time.monotonic()
-        from domains.shell.simulation import SimScene, Simulation, WorldParams
+        from domain.shell._internal.simulation import SimScene, Simulation, WorldParams
 
         params = WorldParams()
         if self._scene is None:
@@ -209,7 +209,7 @@ class WorldRenderRouter:
 
         render_bridge = None
         if config and config.render:
-            from domains.shell.world_render import RenderBridge
+            from domain.shell._internal.world_render import RenderBridge
 
             render_bridge = RenderBridge()
             self._last_render_bridge = render_bridge

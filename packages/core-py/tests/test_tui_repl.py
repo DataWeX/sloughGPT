@@ -6,8 +6,8 @@ import os
 import pytest
 from unittest.mock import MagicMock
 
-from domains.shell.tui_repl import TuiIo, _complete_path, _STYLE_PAIRS, _P_LOG_INFO
-from domains.shell.surface import TextSurface
+from domain.shell._internal.tui_repl import TuiIo, _complete_path, _STYLE_PAIRS, _P_LOG_INFO
+from domain.shell._internal.surface import TextSurface
 
 
 # ── _complete_path ──────────────────────────────────────────────────────────
@@ -84,15 +84,15 @@ class TestTuiIo:
 class TestTuiReplConstants:
 
     def test_console_ratio(self):
-        from domains.shell.tui_repl import TuiRepl
+        from domain.shell._internal.tui_repl import TuiRepl
         assert TuiRepl.CONSOLE_RATIO == 0.3
 
     def test_console_min(self):
-        from domains.shell.tui_repl import TuiRepl
+        from domain.shell._internal.tui_repl import TuiRepl
         assert TuiRepl.CONSOLE_MIN == 4
 
     def test_output_min(self):
-        from domains.shell.tui_repl import TuiRepl
+        from domain.shell._internal.tui_repl import TuiRepl
         assert TuiRepl.OUTPUT_MIN == 6
 
 
@@ -102,35 +102,35 @@ class TestTuiReplConstants:
 class TestReadEscapeRemainder:
 
     def test_no_more_bytes(self):
-        from domains.shell.tui_repl import _read_escape_remainder
+        from domain.shell._internal.tui_repl import _read_escape_remainder
         mock_stdscr = MagicMock()
         mock_stdscr.getch.return_value = -1
         result = _read_escape_remainder(mock_stdscr, {})
         assert result is None
 
     def test_ctrl_sequence(self):
-        from domains.shell.tui_repl import _read_escape_remainder
+        from domain.shell._internal.tui_repl import _read_escape_remainder
         mock_stdscr = MagicMock()
         mock_stdscr.getch.side_effect = [ord("["), ord("5"), ord("C")]
         result = _read_escape_remainder(mock_stdscr, {})
         assert result == "seq:ctrl-right"
 
     def test_ctrl_left(self):
-        from domains.shell.tui_repl import _read_escape_remainder
+        from domain.shell._internal.tui_repl import _read_escape_remainder
         mock_stdscr = MagicMock()
         mock_stdscr.getch.side_effect = [ord("["), ord("5"), ord("D")]
         result = _read_escape_remainder(mock_stdscr, {})
         assert result == "seq:ctrl-left"
 
     def test_alt_key(self):
-        from domains.shell.tui_repl import _read_escape_remainder
+        from domain.shell._internal.tui_repl import _read_escape_remainder
         mock_stdscr = MagicMock()
         mock_stdscr.getch.side_effect = [ord("f")]
         result = _read_escape_remainder(mock_stdscr, {"f": "find"})
         assert result == "alt:find"
 
     def test_alt_key_no_mapping(self):
-        from domains.shell.tui_repl import _read_escape_remainder
+        from domain.shell._internal.tui_repl import _read_escape_remainder
         mock_stdscr = MagicMock()
         mock_stdscr.getch.side_effect = [ord("x")]
         result = _read_escape_remainder(mock_stdscr, {})

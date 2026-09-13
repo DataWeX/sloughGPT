@@ -23,27 +23,27 @@ class TestBreakpoint:
     """Test Breakpoint dataclass and should_trigger logic."""
 
     def test_breakpoint_disabled(self):
-        from domains.shell.vm_engine import Breakpoint
+        from domain.shell._internal.vm_engine import Breakpoint
         bp = Breakpoint(address=0x1000, enabled=False)
         assert bp.should_trigger() is False
 
     def test_breakpoint_enabled_no_condition(self):
-        from domains.shell.vm_engine import Breakpoint
+        from domain.shell._internal.vm_engine import Breakpoint
         bp = Breakpoint(address=0x1000, enabled=True)
         assert bp.should_trigger() is True
 
     def test_breakpoint_condition_true(self):
-        from domains.shell.vm_engine import Breakpoint
+        from domain.shell._internal.vm_engine import Breakpoint
         bp = Breakpoint(address=0x1000, enabled=True, condition=lambda: True)
         assert bp.should_trigger() is True
 
     def test_breakpoint_condition_false(self):
-        from domains.shell.vm_engine import Breakpoint
+        from domain.shell._internal.vm_engine import Breakpoint
         bp = Breakpoint(address=0x1000, enabled=True, condition=lambda: False)
         assert bp.should_trigger() is False
 
     def test_breakpoint_condition_raises_exception(self):
-        from domains.shell.vm_engine import Breakpoint
+        from domain.shell._internal.vm_engine import Breakpoint
         def bad_condition():
             raise RuntimeError("boom")
         bp = Breakpoint(address=0x1000, enabled=True, condition=bad_condition)
@@ -58,7 +58,7 @@ class TestDeviceBus:
     """Test DeviceBus I/O methods."""
 
     def test_outb_with_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         received = []
         bus.register_out(0x3F8, lambda port, val, width: received.append((port, val, width)))
@@ -66,13 +66,13 @@ class TestDeviceBus:
         assert received == [(0x3F8, 0x41, 8)]
 
     def test_outb_no_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         bus.outb(0x3F8, 0x42)  # no handler registered
         assert len(bus.log) == 1
 
     def test_outw_with_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         received = []
         bus.register_out(0x100, lambda port, val, width: received.append((port, val, width)))
@@ -80,13 +80,13 @@ class TestDeviceBus:
         assert received == [(0x100, 0xBEEF, 16)]
 
     def test_outw_no_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         bus.outw(0x100, 0x1234)
         assert len(bus.log) == 1
 
     def test_outd_with_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         received = []
         bus.register_out(0x200, lambda port, val, width: received.append((port, val, width)))
@@ -94,46 +94,46 @@ class TestDeviceBus:
         assert received == [(0x200, 0xDEADBEEF, 32)]
 
     def test_outd_no_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         bus.outd(0x200, 0x12345678)
         assert len(bus.log) == 1
 
     def test_inb_with_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         bus.register_in(0x3F8, lambda port: 0x55)
         assert bus.inb(0x3F8) == 0x55
 
     def test_inb_no_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         assert bus.inb(0x3F8) == 0
 
     def test_inw_with_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         bus.register_in(0x100, lambda port: 0xBEEF)
         assert bus.inw(0x100) == 0xBEEF
 
     def test_inw_no_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         assert bus.inw(0x100) == 0
 
     def test_ind_with_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         bus.register_in(0x200, lambda port: 0xDEADBEEF)
         assert bus.ind(0x200) == 0xDEADBEEF
 
     def test_ind_no_handler(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         assert bus.ind(0x200) == 0
 
     def test_log_returns_copy(self):
-        from domains.shell.vm_engine import DeviceBus
+        from domain.shell._internal.vm_engine import DeviceBus
         bus = DeviceBus()
         bus.outb(0x100, 1)
         log1 = bus.log
@@ -151,19 +151,19 @@ class TestConsoleDevice:
     """Test ConsoleDevice I/O."""
 
     def test_write_byte(self):
-        from domains.shell.vm_engine import ConsoleDevice
+        from domain.shell._internal.vm_engine import ConsoleDevice
         dev = ConsoleDevice()
         dev.write_byte(0x3F8, 0x41, 8)
         assert dev.output == [0x41]
 
     def test_write_byte_mask(self):
-        from domains.shell.vm_engine import ConsoleDevice
+        from domain.shell._internal.vm_engine import ConsoleDevice
         dev = ConsoleDevice()
         dev.write_byte(0x3F8, 0x141, 8)
         assert dev.output == [0x41]
 
     def test_write_byte_callback(self):
-        from domains.shell.vm_engine import ConsoleDevice
+        from domain.shell._internal.vm_engine import ConsoleDevice
         dev = ConsoleDevice()
         received = []
         dev.on_output = lambda val: received.append(val)
@@ -171,12 +171,12 @@ class TestConsoleDevice:
         assert received == [0x42]
 
     def test_read_byte_empty(self):
-        from domains.shell.vm_engine import ConsoleDevice
+        from domain.shell._internal.vm_engine import ConsoleDevice
         dev = ConsoleDevice()
         assert dev.read_byte(0x3F8) == 0
 
     def test_read_byte_with_data(self):
-        from domains.shell.vm_engine import ConsoleDevice
+        from domain.shell._internal.vm_engine import ConsoleDevice
         dev = ConsoleDevice()
         dev.feed_input(b"AB")
         assert dev.read_byte(0x3F8) == 0x41  # 'A'
@@ -192,42 +192,42 @@ class TestVMEngineProperties:
     """Test VMEngine property accessors."""
 
     def test_cpu_property(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert engine.cpu is not None
 
     def test_assembler_property(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert engine.assembler is not None
 
     def test_devices_property(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert engine.devices is not None
 
     def test_console_property(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert engine.console is not None
 
     def test_process_table_property(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert engine.process_table is not None
 
     def test_trace_property(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert engine.trace is not None
 
     def test_is_running_property(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert engine.is_running is False
 
     def test_is_halted_property(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert engine.is_halted is False
 
@@ -240,74 +240,74 @@ class TestVMEngineRegisters:
     """Test VMEngine register get/set for all register widths."""
 
     def test_get_all_32bit_regs(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         for name in ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "eip"]:
             val = engine.get_reg(name)
             assert isinstance(val, int)
 
     def test_get_all_16bit_regs(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         for name in ["ax", "cx", "dx", "bx", "sp", "bp", "si", "di"]:
             val = engine.get_reg(name)
             assert isinstance(val, int)
 
     def test_get_all_8bit_regs(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         for name in ["al", "cl", "dl", "bl", "ah", "ch", "dh", "bh"]:
             val = engine.get_reg(name)
             assert isinstance(val, int)
 
     def test_get_unknown_register(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         with pytest.raises(ValueError, match="Unknown register"):
             engine.get_reg("zzz")
 
     def test_set_all_32bit_regs(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         for name in ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi", "eip"]:
             engine.set_reg(name, 0x12345678)
             assert engine.get_reg(name) == 0x12345678
 
     def test_set_all_16bit_regs(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         for name in ["ax", "cx", "dx", "bx", "sp", "bp", "si", "di"]:
             engine.set_reg(name, 0xBEEF)
             assert engine.get_reg(name) == 0xBEEF
 
     def test_set_all_8bit_low_regs(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         for name in ["al", "cl", "dl", "bl"]:
             engine.set_reg(name, 0x42)
             assert engine.get_reg(name) == 0x42
 
     def test_set_all_8bit_high_regs(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         for name in ["ah", "ch", "dh", "bh"]:
             engine.set_reg(name, 0x99)
             assert engine.get_reg(name) == 0x99
 
     def test_set_unknown_register(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         with pytest.raises(ValueError, match="Unknown register"):
             engine.set_reg("zzz", 0)
 
     def test_set_reg_masks_to_32bit(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.set_reg("eax", 0x1FFFFFFFF)
         assert engine.get_reg("eax") == 0xFFFFFFFF
 
     def test_registers_dict(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         regs = engine.registers()
         assert "eax" in regs
@@ -318,7 +318,7 @@ class TestVMEngineRegisters:
         assert "eip" in regs
 
     def test_flags_dict(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         flags = engine.flags()
         assert "cf" in flags
@@ -335,54 +335,54 @@ class TestVMEngineMemory:
     """Test VMEngine memory read/write methods."""
 
     def test_read_write_memory(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.write_memory(0x1000, b"\x41\x42\x43\x44")
         data = engine.read_memory(0x1000, 4)
         assert data == b"\x41\x42\x43\x44"
 
     def test_read_memory_out_of_bounds(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         # Read near end of memory
         data = engine.read_memory(0xFFFFFFFF, 4)
         assert len(data) == 4
 
     def test_write_memory_out_of_bounds(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.write_memory(0xFFFFFFFF, b"\x41")  # Should not crash
 
     def test_read_write_dword(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.write_dword(0x1000, 0xDEADBEEF)
         assert engine.read_dword(0x1000) == 0xDEADBEEF
 
     def test_read_write_word(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.write_word(0x1000, 0xBEEF)
         assert engine.read_word(0x1000) == 0xBEEF
 
     def test_read_write_byte(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.write_byte(0x1000, 0x42)
         assert engine.read_byte(0x1000) == 0x42
 
     def test_read_byte_out_of_bounds(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert engine.read_byte(0xFFFFFFFF) == 0
 
     def test_write_byte_out_of_bounds(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.write_byte(0xFFFFFFFF, 0x42)  # Should not crash
 
     def test_dump_memory(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.write_memory(0x1000, b"Hello, World!")
         dump = engine.dump_memory(0x1000, 16)
@@ -398,20 +398,20 @@ class TestVMEngineLoading:
     """Test VMEngine program loading."""
 
     def test_load_source(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         entry = engine.load_source("nop\nhlt")
         assert entry == 0x1000
         assert engine.cpu.eip == 0x1000
 
     def test_load_bytes(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         entry = engine.load_bytes(b"\x90\xF4")  # NOP, HLT
         assert entry == 0x1000
 
     def test_load_file(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
             f.write(b"\x90\xF4")
@@ -421,7 +421,7 @@ class TestVMEngineLoading:
         os.unlink(f.name)
 
     def test_set_entry(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.set_entry(0x2000)
         assert engine.cpu.eip == 0x2000
@@ -435,38 +435,38 @@ class TestVMEngineBreakpoints:
     """Test VMEngine breakpoint set/remove/enable/disable/clear."""
 
     def test_set_breakpoint(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         bp_id = engine.set_breakpoint(0x1000, "test")
         assert bp_id == 1
 
     def test_set_breakpoint_with_condition(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         bp_id = engine.set_breakpoint(0x1000, condition=lambda: True)
         assert bp_id >= 1
 
     def test_set_breakpoint_once(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         bp_id = engine.set_breakpoint_once(0x1000, "once")
         bps = engine.list_breakpoints()
         assert len(bps) == 1
 
     def test_remove_breakpoint(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         bp_id = engine.set_breakpoint(0x1000)
         engine.remove_breakpoint(bp_id)
         assert len(engine.list_breakpoints()) == 0
 
     def test_remove_nonexistent_breakpoint(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.remove_breakpoint(999)  # Should not raise
 
     def test_enable_breakpoint(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         bp_id = engine.set_breakpoint(0x1000)
         engine.disable_breakpoint(bp_id)
@@ -475,12 +475,12 @@ class TestVMEngineBreakpoints:
         assert bps[0]["enabled"] is True
 
     def test_enable_nonexistent_breakpoint(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.enable_breakpoint(999)  # Should not raise
 
     def test_disable_breakpoint(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         bp_id = engine.set_breakpoint(0x1000)
         engine.disable_breakpoint(bp_id)
@@ -488,12 +488,12 @@ class TestVMEngineBreakpoints:
         assert bps[0]["enabled"] is False
 
     def test_disable_nonexistent_breakpoint(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.disable_breakpoint(999)  # Should not raise
 
     def test_clear_breakpoints(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.set_breakpoint(0x1000)
         engine.set_breakpoint(0x2000)
@@ -509,35 +509,35 @@ class TestVMEngineEventHooks:
     """Test VMEngine event hook registration."""
 
     def test_on_step(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         callback = MagicMock()
         engine.on_step(callback)
         assert engine._on_step is callback
 
     def test_on_breakpoint(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         callback = MagicMock()
         engine.on_breakpoint(callback)
         assert engine._on_breakpoint is callback
 
     def test_on_fault(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         callback = MagicMock()
         engine.on_fault(callback)
         assert engine._on_fault is callback
 
     def test_on_syscall(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         callback = MagicMock()
         engine.on_syscall(callback)
         assert engine._on_syscall is callback
 
     def test_on_halt(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         callback = MagicMock()
         engine.on_halt(callback)
@@ -552,14 +552,14 @@ class TestVMEngineStepping:
     """Test VMEngine step/run with various scenarios."""
 
     def test_step_nop(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nhlt")
         result = engine.step()
         assert result is True
 
     def test_step_halt(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("hlt")
         result = engine.step()
@@ -567,21 +567,21 @@ class TestVMEngineStepping:
         assert engine.is_halted is True
 
     def test_run_simple(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("mov eax, 1\nmov ebx, 2\nadd eax, ebx\nhlt")
         trace = engine.run()
         assert trace.exit_reason == "halt"
 
     def test_run_with_max_steps(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nnop\nnop\nnop\nnop")
         trace = engine.run(max_steps=3)
         assert trace.exit_reason == "max_steps"
 
     def test_run_with_breakpoint(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nnop\nnop\nhlt")
         engine.set_breakpoint(0x1002)
@@ -589,7 +589,7 @@ class TestVMEngineStepping:
         assert trace.exit_reason == "breakpoint"
 
     def test_step_with_breakpoint_callback(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nnop\nhlt")
         callback = MagicMock()
@@ -599,7 +599,7 @@ class TestVMEngineStepping:
         callback.assert_called_once()
 
     def test_step_with_fault_callback(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("hlt")
         callback = MagicMock()
@@ -608,7 +608,7 @@ class TestVMEngineStepping:
         # The step returns False for HLT, no fault callback (HALT path)
 
     def test_step_with_halt_callback(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("hlt")
         callback = MagicMock()
@@ -617,7 +617,7 @@ class TestVMEngineStepping:
         callback.assert_called_once()
 
     def test_step_with_step_callback(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nhlt")
         callback = MagicMock()
@@ -626,7 +626,7 @@ class TestVMEngineStepping:
         callback.assert_called_once()
 
     def test_step_tracing(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nhlt")
         engine.enable_tracing()
@@ -636,7 +636,7 @@ class TestVMEngineStepping:
 
     def test_step_with_breakpoint_halt(self):
         """Test step returning False when breakpoint triggers."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nnop\nhlt")
         engine.set_breakpoint(0x1000)
@@ -644,7 +644,7 @@ class TestVMEngineStepping:
         assert result is False
 
     def test_run_with_on_step_hook(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nhlt")
         callback = MagicMock()
@@ -654,7 +654,7 @@ class TestVMEngineStepping:
 
     def test_step_0x66_prefix_not_hlt(self):
         """Test step handling of 0x66 prefix when next byte is not 0xF4."""
-        from domains.shell.vm_engine import VMEngine, InsFault
+        from domain.shell._internal.vm_engine import VMEngine, InsFault
         engine = VMEngine()
         # Put a 0x66 prefix followed by non-0xF4 opcode
         engine.load_bytes(b"\x66\x90\xF4", org=0x1000)  # 0x66 prefix + NOP, HLT
@@ -665,14 +665,14 @@ class TestVMEngineStepping:
         assert isinstance(result, bool)
 
     def test_continue_execution(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nnop\nhlt")
         trace = engine.continue_execution()
         assert trace is not None
 
     def test_continue_execution_when_halted(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("hlt")
         engine._halted = True
@@ -680,20 +680,20 @@ class TestVMEngineStepping:
         assert trace is not None
 
     def test_request_break(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.request_break()
         assert engine._break_requested is True
 
     def test_step_over_non_call(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nhlt")
         result = engine.step_over()
         assert result is True
 
     def test_step_out(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("hlt")
         result = engine.step_out()
@@ -701,7 +701,7 @@ class TestVMEngineStepping:
 
     def test_step_over_call(self):
         """Test step_over on a CALL instruction."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         # CALL rel32 = 0xE8 + 4-byte offset
         # Let's use a simple CALL target that immediately RETs
@@ -719,7 +719,7 @@ class TestVMEngineTracing:
     """Test VMEngine tracing and trace summary."""
 
     def test_enable_disable_tracing(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.enable_tracing()
         assert engine._tracing is True
@@ -727,7 +727,7 @@ class TestVMEngineTracing:
         assert engine._tracing is False
 
     def test_get_trace_summary(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nhlt")
         engine.enable_tracing()
@@ -739,7 +739,7 @@ class TestVMEngineTracing:
         assert "instructions_per_ms" in summary
 
     def test_trace_summary_zero_time(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         summary = engine.get_trace_summary()
         assert summary["instructions_per_ms"] == 0
@@ -753,20 +753,20 @@ class TestVMEngineProcessManagement:
     """Test VMEngine process creation and switching."""
 
     def test_create_process(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         pcb = engine.create_process("test", priority=5)
         assert pcb is not None
 
     def test_switch_to_process(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         pcb = engine.create_process("test")
         engine.switch_to_process(pcb.pid)
         # Should succeed
 
     def test_switch_to_nonexistent_process(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         with pytest.raises(ValueError, match="Process 999 not found"):
             engine.switch_to_process(999)
@@ -780,7 +780,7 @@ class TestVMEngineDisassembly:
     """Test VMEngine disassembly."""
 
     def test_disassemble(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nhlt\nret")
         lines = engine.disassemble(0x1000, 3)
@@ -789,7 +789,7 @@ class TestVMEngineDisassembly:
         assert "HLT" in lines[1]
 
     def test_disassemble_beyond_memory(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         # Disassemble from address that's beyond memory size
         lines = engine.disassemble(0xFFFFFFFF, 5)
@@ -797,7 +797,7 @@ class TestVMEngineDisassembly:
         assert isinstance(lines, list)
 
     def test_opcode_name_known(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         assert "NOP" in engine._opcode_name(0x90)
         assert "HLT" in engine._opcode_name(0xF4)
@@ -813,13 +813,13 @@ class TestVMEngineDisassembly:
         assert "RET imm16" in engine._opcode_name(0xC2)
 
     def test_opcode_name_unknown(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         name = engine._opcode_name(0xFE)
         assert "OP 0xFE" in name
 
     def test_instruction_length_various(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_bytes(b"\x90" * 100, org=0x1000)
         # NOP = 1 byte
@@ -889,7 +889,7 @@ class TestVMEngineReset:
     """Test VMEngine reset and state snapshot."""
 
     def test_reset(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("mov eax, 42\nhlt")
         engine.run()
@@ -900,7 +900,7 @@ class TestVMEngineReset:
         assert len(engine.console.output) == 0
 
     def test_state_snapshot(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("mov eax, 1\nhlt")
         engine.run()
@@ -912,13 +912,13 @@ class TestVMEngineReset:
         assert "trace_summary" in snap
 
     def test_state_snapshot_no_trace(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         snap = engine.state_snapshot()
         assert snap["trace_summary"] is None
 
     def test_repr(self):
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         r = repr(engine)
         assert "VMEngine" in r
@@ -936,7 +936,7 @@ class TestExecutionTrace:
     """Test ExecutionTrace dataclass defaults."""
 
     def test_execution_trace_defaults(self):
-        from domains.shell.vm_engine import ExecutionTrace
+        from domain.shell._internal.vm_engine import ExecutionTrace
         trace = ExecutionTrace()
         assert trace.steps == []
         assert trace.breakpoints_hit == []
@@ -955,23 +955,23 @@ class TestSymbolTable:
     """Test SymbolTable resolve and name_for."""
 
     def test_resolve_int_passthrough(self):
-        from domains.shell.vm_debugger import SymbolTable
+        from domain.shell._internal.vm_debugger import SymbolTable
         st = SymbolTable()
         assert st.resolve(0x1000) == 0x1000
 
     def test_resolve_not_found(self):
-        from domains.shell.vm_debugger import SymbolTable
+        from domain.shell._internal.vm_debugger import SymbolTable
         st = SymbolTable()
         assert st.resolve("nonexistent") is None
 
     def test_name_for_not_found(self):
-        from domains.shell.vm_debugger import SymbolTable
+        from domain.shell._internal.vm_debugger import SymbolTable
         st = SymbolTable()
         st.add("main", 0x1000)
         assert st.name_for(0x2000) is None
 
     def test_all(self):
-        from domains.shell.vm_debugger import SymbolTable
+        from domain.shell._internal.vm_debugger import SymbolTable
         st = SymbolTable()
         st.add("main", 0x1000)
         st.add("loop", 0x1010, size=16, kind="function")
@@ -987,7 +987,7 @@ class TestDebuggerOutput:
     """Test Debugger output callback."""
 
     def test_set_output_callback(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         callback = MagicMock()
         debugger.set_output(callback)
@@ -995,7 +995,7 @@ class TestDebuggerOutput:
         callback.assert_called_once_with("hello")
 
     def test_no_output_callback(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         # Should not raise when no callback set (uses print)
         debugger._out("hello")
@@ -1009,7 +1009,7 @@ class TestDebuggerLoadSymbols:
     """Test Debugger.load_symbols."""
 
     def test_load_symbols_with_labels(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         source = """
         main:
@@ -1027,13 +1027,13 @@ class TestDebuggerLoadSymbols:
         assert "loop" in names
 
     def test_load_symbols_empty(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.load_symbols("")
         assert len(debugger.list_symbols()) == 0
 
     def test_load_symbols_comments_only(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.load_symbols("; just a comment\n; another comment")
         assert len(debugger.list_symbols()) == 0
@@ -1047,27 +1047,27 @@ class TestDebuggerBreakpoints:
     """Test Debugger breakpoint operations."""
 
     def test_bp_set_unresolvable(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         with pytest.raises(ValueError, match="Cannot resolve"):
             debugger.bp_set("nonexistent")
 
     def test_bp_set_by_name(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.symbols.add("main", 0x1000)
         bp_id = debugger.bp_set("main", "test_bp")
         assert bp_id >= 1
 
     def test_bp_remove(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         bp_id = debugger.bp_set("0x1000")
         debugger.bp_remove(bp_id)
         assert len(debugger.bp_list()) == 0
 
     def test_bp_clear(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.bp_set("0x1000")
         debugger.bp_set("0x2000")
@@ -1083,27 +1083,27 @@ class TestDebuggerWatchpoints:
     """Test Debugger watchpoint operations."""
 
     def test_wp_set_by_name(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.symbols.add("data", 0x2000)
         wp_id = debugger.wp_set("data", 4, "test_data")
         assert wp_id >= 1
 
     def test_wp_set_unresolvable(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         with pytest.raises(ValueError, match="Cannot resolve"):
             debugger.wp_set("nonexistent")
 
     def test_wp_remove(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         wp_id = debugger.wp_set("0x2000")
         debugger.wp_remove(wp_id)
         assert len(debugger.wp_list()) == 0
 
     def test_check_watchpoints(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         # Set up watchpoint
@@ -1117,7 +1117,7 @@ class TestDebuggerWatchpoints:
         assert wps[0]["hit_count"] == 1
 
     def test_check_watchpoints_disabled(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         wp_id = debugger.wp_set("0x1000")
         debugger._watchpoints[wp_id].enabled = False
@@ -1128,7 +1128,7 @@ class TestDebuggerWatchpoints:
         assert wps[0]["hit_count"] == 0
 
     def test_check_watchpoints_same_value(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         wp_id = debugger.wp_set("0x1000", 4, "test")
         debugger._check_watchpoints()  # sets initial
@@ -1145,7 +1145,7 @@ class TestDebuggerExecution:
     """Test Debugger stepi, step_over, step_out, run_until."""
 
     def test_stepi_multiple(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("nop\nnop\nhlt")
@@ -1153,7 +1153,7 @@ class TestDebuggerExecution:
         assert result is True
 
     def test_stepi_fault(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("hlt")
@@ -1161,7 +1161,7 @@ class TestDebuggerExecution:
         assert result is False
 
     def test_step_over_non_call(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("nop\nhlt")
@@ -1169,7 +1169,7 @@ class TestDebuggerExecution:
         assert result is True
 
     def test_step_over_call(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("call target\nhlt\ntarget: ret")
@@ -1178,7 +1178,7 @@ class TestDebuggerExecution:
 
     def test_step_over_indirect_call(self):
         """Test step_over on FF opcode (indirect call)."""
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         # FF opcode = indirect CALL, should just step into
@@ -1187,7 +1187,7 @@ class TestDebuggerExecution:
         assert isinstance(result, bool)
 
     def test_step_out_no_return_address(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("hlt")
@@ -1196,7 +1196,7 @@ class TestDebuggerExecution:
         assert result is False
 
     def test_step_out(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         # Push a return address onto stack, then call step_out
@@ -1206,7 +1206,7 @@ class TestDebuggerExecution:
         assert isinstance(result, bool)
 
     def test_run_until_reaches_target(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("nop\nnop\nnop\nhlt")
@@ -1214,7 +1214,7 @@ class TestDebuggerExecution:
         assert result is True
 
     def test_run_until_timeout(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("nop\nnop\nnop\nhlt")
@@ -1223,7 +1223,7 @@ class TestDebuggerExecution:
         assert result is False
 
     def test_continue_exec(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("nop\nnop\nhlt")
@@ -1240,7 +1240,7 @@ class TestDebuggerInspection:
     """Test Debugger dump_regs, dump_flags, dump_memory, dump_stack, disassemble."""
 
     def test_dump_regs(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("mov eax, 0x42\nhlt")
@@ -1248,19 +1248,19 @@ class TestDebuggerInspection:
         assert "eax" in regs
 
     def test_dump_regs_with_symbol(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.symbols.add("test_val", 0x42)
         regs = debugger.dump_regs()
         assert "eax" in regs
 
     def test_dump_flags(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.dump_flags()  # Should not crash
 
     def test_dump_memory_by_symbol(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("mov eax, 0xDEADBEEF\nmov [0x1000], eax")
@@ -1268,32 +1268,32 @@ class TestDebuggerInspection:
         debugger.dump_memory("data", 16)  # Should not crash
 
     def test_dump_memory_by_address(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.dump_memory(0x1000, 16)  # Should not crash
 
     def test_dump_memory_unresolvable(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         with pytest.raises(ValueError, match="Cannot resolve"):
             debugger.dump_memory("nonexistent")
 
     def test_dump_stack(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.set_reg("esp", 0x200000)
         debugger.dump_stack(4)  # Should not crash
 
     def test_disassemble(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("nop\nhlt\nret")
         debugger.disassemble(5)  # Should not crash
 
     def test_disassemble_with_symbol(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("nop\nhlt")
@@ -1309,8 +1309,8 @@ class TestDebuggerAnalyzeTrace:
     """Test Debugger.analyze_trace with various trace contents."""
 
     def test_analyze_trace_empty(self):
-        from domains.shell.vm_debugger import Debugger
-        from domains.shell.vm_engine import ExecutionTrace
+        from domain.shell._internal.vm_debugger import Debugger
+        from domain.shell._internal.vm_engine import ExecutionTrace
         debugger = Debugger()
         trace = ExecutionTrace()
         analysis = debugger.analyze_trace(trace)
@@ -1318,8 +1318,8 @@ class TestDebuggerAnalyzeTrace:
         assert analysis["exit_reason"] == ""
 
     def test_analyze_trace_with_steps(self):
-        from domains.shell.vm_debugger import Debugger
-        from domains.shell.vm_engine import ExecutionTrace, StepEvent
+        from domain.shell._internal.vm_debugger import Debugger
+        from domain.shell._internal.vm_engine import ExecutionTrace, StepEvent
         debugger = Debugger()
         trace = ExecutionTrace()
         trace.steps = [
@@ -1336,8 +1336,8 @@ class TestDebuggerAnalyzeTrace:
         assert analysis["hot_addresses"][0]["symbol"] == "loop"
 
     def test_analyze_trace_with_syscalls(self):
-        from domains.shell.vm_debugger import Debugger
-        from domains.shell.vm_engine import ExecutionTrace, SyscallEvent
+        from domain.shell._internal.vm_debugger import Debugger
+        from domain.shell._internal.vm_engine import ExecutionTrace, SyscallEvent
         debugger = Debugger()
         trace = ExecutionTrace()
         trace.syscalls = [
@@ -1358,12 +1358,12 @@ class TestDebuggerListSymbols:
     """Test Debugger.list_symbols."""
 
     def test_list_symbols_empty(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         assert debugger.list_symbols() == []
 
     def test_list_symbols(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.symbols.add("main", 0x1000, size=32, kind="function")
         debugger.symbols.add("data", 0x2000, size=64, kind="data")
@@ -1784,8 +1784,8 @@ class TestStatusCommand:
 
     def _make_console(self):
         """Create a mock Console with StringIO backend."""
-        from domains.shell.console import Console
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.console import Console
+        from domain.shell._internal.io import MemoryIO
         io = MemoryIO()
         return Console(io)
 
@@ -1893,7 +1893,7 @@ class TestVMEngineEdgeCases:
 
     def test_set_breakpoint_once_auto_disable(self):
         """Test set_breakpoint_once: should_trigger auto-disables after first hit."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nnop\nhlt")
         bp_id = engine.set_breakpoint_once(0x1000)
@@ -1908,7 +1908,7 @@ class TestVMEngineEdgeCases:
 
     def test_step_out_with_nested_calls(self):
         """Test step_out handles nested CALL/RET correctly."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         # Load enough NOPs + HLT to prevent memory access errors
         engine.load_source("nop\nnop\nnop\nnop\nhlt")
@@ -1922,7 +1922,7 @@ class TestVMEngineEdgeCases:
 
     def test_run_with_breakpoint_and_tracing(self):
         """Test run() hits breakpoint with tracing enabled."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nnop\nhlt")
         engine.set_breakpoint(0x1002)
@@ -1933,7 +1933,7 @@ class TestVMEngineEdgeCases:
 
     def test_run_with_break_requested(self):
         """Test run() handles _break_requested via finally block."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         # Program with many NOPs so the break request has time to take effect
         nops = "\n".join(["nop"] * 50) + "\nhlt"
@@ -1951,7 +1951,7 @@ class TestVMEngineEdgeCases:
 
     def test_step_over_call_executes(self):
         """Test step_over on a CALL instruction executes the call."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         # CALL rel32 is opcode E8 followed by 4 byte relative offset
         # Assemble: nop; call target; hlt; target: nop; ret
@@ -1965,7 +1965,7 @@ class TestVMEngineEdgeCases:
 
     def test_run_fault_exit_reason(self):
         """Test run() sets exit_reason to 'fault' on unexpected CPU error."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         # Load a program that triggers a CPU fault (bad instruction)
         # 0xFF /4 = JMP r/m32, but without proper ModR/M it may fault
@@ -1978,7 +1978,7 @@ class TestVMEngineEdgeCases:
 
     def test_run_max_steps_with_trace_summary(self):
         """Test that trace summary is computed correctly after max_steps."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         engine.load_source("nop\nnop\nnop\nnop\nnop")
         engine.enable_tracing()
@@ -1990,7 +1990,7 @@ class TestVMEngineEdgeCases:
 
     def test_disassemble_at_high_address(self):
         """Test disassemble when IP is beyond memory."""
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm_engine import VMEngine
         engine = VMEngine()
         # Try disassembling from a very high address
         lines = engine.disassemble(0x80000000, 5)
@@ -2007,7 +2007,7 @@ class TestDebuggerEdgeCases:
 
     def test_bp_list_with_symbols(self):
         """Test bp_list annotates symbols correctly."""
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.symbols.add("main", 0x1000)
         debugger.symbols.add("loop", 0x2000)
@@ -2022,7 +2022,7 @@ class TestDebuggerEdgeCases:
 
     def test_step_over_indirect_call(self):
         """Test step_over on FF opcode (indirect CALL) falls through to stepi."""
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         # Put an FF opcode at EIP (indirect CALL)
@@ -2033,7 +2033,7 @@ class TestDebuggerEdgeCases:
 
     def test_run_until_reaches_target_quickly(self):
         """Test run_until hits target on first step."""
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("nop\nhlt")
@@ -2043,7 +2043,7 @@ class TestDebuggerEdgeCases:
 
     def test_continue_exec_with_breakpoints(self):
         """Test continue_exec resets _break_requested."""
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("nop\nnop\nhlt")
@@ -2053,8 +2053,8 @@ class TestDebuggerEdgeCases:
 
     def test_analyze_trace_empty_steps_and_syscalls(self):
         """Test analyze_trace with no steps or syscalls."""
-        from domains.shell.vm_debugger import Debugger
-        from domains.shell.vm_engine import ExecutionTrace
+        from domain.shell._internal.vm_debugger import Debugger
+        from domain.shell._internal.vm_engine import ExecutionTrace
         debugger = Debugger()
         trace = ExecutionTrace()
         trace.total_instructions = 5

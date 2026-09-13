@@ -108,7 +108,7 @@ class TestComponentException:
         assert issubclass(ComponentException, Exception)
 
     def test_is_app_error(self):
-        from domains.infrastructure.errors import AppError
+        from domain.infrastructure._internal.errors import AppError
         assert issubclass(ComponentException, AppError)
 
     def test_message(self):
@@ -437,7 +437,7 @@ class TestDomainException:
         assert issubclass(DomainException, Exception)
 
     def test_is_app_error(self):
-        from domains.infrastructure.errors import AppError
+        from domain.infrastructure._internal.errors import AppError
         assert issubclass(DomainException, AppError)
 
     def test_message(self):

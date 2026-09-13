@@ -19,7 +19,7 @@ class TestComprehensiveTrainer:
     """Unit tests for ComprehensiveTrainer."""
 
     def test_config_to_dict(self):
-        from domains.training.comprehensive_trainer import TrainingConfig
+        from domain.training._internal.comprehensive_trainer import TrainingConfig
 
         cfg = TrainingConfig(method="lora", epochs=5, use_lora=True)
         d = cfg.to_dict()
@@ -29,7 +29,7 @@ class TestComprehensiveTrainer:
         assert "learning_rate" in d
 
     def test_config_defaults(self):
-        from domains.training.comprehensive_trainer import TrainingConfig
+        from domain.training._internal.comprehensive_trainer import TrainingConfig
 
         cfg = TrainingConfig()
         assert cfg.method == "sft"
@@ -39,7 +39,7 @@ class TestComprehensiveTrainer:
         assert cfg.use_ewc is False
 
     def test_training_method_enum(self):
-        from domains.training.comprehensive_trainer import TrainingMethod
+        from domain.training._internal.comprehensive_trainer import TrainingMethod
 
         assert TrainingMethod.SFT.value == "sft"
         assert TrainingMethod.RLHF.value == "rlhf"
@@ -48,7 +48,7 @@ class TestComprehensiveTrainer:
         assert TrainingMethod.AUTO.value == "auto"
 
     def test_training_phase_enum(self):
-        from domains.training.comprehensive_trainer import TrainingPhase
+        from domain.training._internal.comprehensive_trainer import TrainingPhase
 
         phases = list(TrainingPhase)
         assert TrainingPhase.IDLE in phases
@@ -57,7 +57,7 @@ class TestComprehensiveTrainer:
         assert TrainingPhase.FAILED in phases
 
     def test_phase_result_dataclass(self):
-        from domains.training.comprehensive_trainer import PhaseResult, TrainingPhase
+        from domain.training._internal.comprehensive_trainer import PhaseResult, TrainingPhase
 
         pr = PhaseResult(
             phase=TrainingPhase.VALIDATING,
@@ -70,7 +70,7 @@ class TestComprehensiveTrainer:
         assert pr.error is None
 
     def test_comprehensive_result_summary(self):
-        from domains.training.comprehensive_trainer import (
+        from domain.training._internal.comprehensive_trainer import (
             ComprehensiveResult,
             PhaseResult,
             TrainingPhase,
@@ -96,7 +96,7 @@ class TestComprehensiveTrainer:
         assert "sft" in summary
 
     def test_comprehensive_result_failure_summary(self):
-        from domains.training.comprehensive_trainer import (
+        from domain.training._internal.comprehensive_trainer import (
             ComprehensiveResult,
         )
 
@@ -113,7 +113,7 @@ class TestComprehensiveTrainer:
         assert "Data file not found" in summary
 
     def test_trainer_validates_missing_file(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         trainer = ComprehensiveTrainer()
         result = trainer.run_full_cycle(
@@ -124,7 +124,7 @@ class TestComprehensiveTrainer:
         assert "not found" in result.error.lower()
 
     def test_trainer_validates_short_data(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("short")
@@ -138,7 +138,7 @@ class TestComprehensiveTrainer:
             assert "too short" in result.error.lower()
 
     def test_trainer_validates_empty_data(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("")
@@ -151,7 +151,7 @@ class TestComprehensiveTrainer:
             assert result.success is False
 
     def test_trainer_runs_validation_phase(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer, TrainingPhase
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer, TrainingPhase
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("The quick brown fox jumps over the lazy dog. " * 200)
@@ -163,7 +163,7 @@ class TestComprehensiveTrainer:
             assert TrainingPhase.VALIDATING in phases_recorded
 
     def test_trainer_records_outcome(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             text = "The quick brown fox jumps over the lazy dog. " * 100
@@ -177,7 +177,7 @@ class TestComprehensiveTrainer:
             assert result.final_loss is not None
 
     def test_trainer_adaptive_config(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("The quick brown fox jumps over the lazy dog. " * 200)
@@ -190,14 +190,14 @@ class TestComprehensiveTrainer:
             assert result.success is True
 
     def test_trainer_cancel(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         trainer = ComprehensiveTrainer()
         trainer.cancel()
         assert trainer._cancel_event.is_set()
 
     def test_trainer_phase_callback(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("The quick brown fox jumps over the lazy dog. " * 200)
@@ -210,7 +210,7 @@ class TestComprehensiveTrainer:
             assert "configuring" in called_phases
 
     def test_trainer_jsonl_data(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             for i in range(20):
@@ -221,7 +221,7 @@ class TestComprehensiveTrainer:
             assert result.success is True
 
     def test_trainer_multiple_methods(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         for method in ["sft", "rlhf", "dpo", "lora"]:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
@@ -238,7 +238,7 @@ class TestComprehensiveTrainer:
 # ── Computer-Use Agent Unit Tests ──────────────────────────────────
 
     def test_trainer_performance_metrics(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("The quick brown fox jumps over the lazy dog. " * 200)
@@ -252,7 +252,7 @@ class TestComprehensiveTrainer:
             assert result.performance["phases_completed"] >= 4
 
     def test_trainer_progress_callbacks(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("The quick brown fox jumps over the lazy dog. " * 200)
@@ -267,7 +267,7 @@ class TestComprehensiveTrainer:
             assert progress_events[-1]["progress"] == 1.0
 
     def test_trainer_result_summary_with_performance(self):
-        from domains.training.comprehensive_trainer import (
+        from domain.training._internal.comprehensive_trainer import (
             ComprehensiveResult,
             PhaseResult,
             TrainingPhase,
@@ -290,7 +290,7 @@ class TestComputerUseAgent:
     """Unit tests for ComputerUseAgent (without Playwright)."""
 
     def test_agent_init_defaults(self):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         agent = ComputerUseAgent()
         assert agent.base_url == "http://localhost:3000"
@@ -299,7 +299,7 @@ class TestComputerUseAgent:
         assert agent._page is None
 
     def test_agent_init_custom(self):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         agent = ComputerUseAgent(
             base_url="http://localhost:4000",
@@ -314,7 +314,7 @@ class TestComputerUseAgent:
         assert agent.viewport_width == 1920
 
     def test_devtools_report_empty(self):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         agent = ComputerUseAgent()
         report = agent.devtools_report()
@@ -324,7 +324,7 @@ class TestComputerUseAgent:
         assert "Console: 0" in report.summary
 
     def test_devtools_log_tracking(self):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         agent = ComputerUseAgent()
         agent._console_messages.append({"type": "log", "text": "hello", "timestamp": time.time()})
@@ -337,7 +337,7 @@ class TestComputerUseAgent:
         assert report.total_errors == 1
 
     def test_clear_logs(self):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         agent = ComputerUseAgent()
         agent._console_messages.append({"type": "log", "text": "x", "timestamp": time.time()})
@@ -348,7 +348,7 @@ class TestComputerUseAgent:
         assert report.total_errors == 0
 
     def test_step_counter(self):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         agent = ComputerUseAgent()
         s1 = agent.step("navigate to training")
@@ -358,7 +358,7 @@ class TestComputerUseAgent:
         assert s1["description"] == "navigate to training"
 
     def test_full_log(self):
-        from domains.agents.computer_use import ComputerUseAgent, DevToolsEntry
+        from domain.agents._internal.computer_use import ComputerUseAgent, DevToolsEntry
 
         agent = ComputerUseAgent()
         agent._devtools_log.append(
@@ -369,7 +369,7 @@ class TestComputerUseAgent:
         assert log[0]["kind"] == "console"
 
     def test_navigation_result(self):
-        from domains.agents.computer_use import NavigationResult
+        from domain.agents._internal.computer_use import NavigationResult
 
         nr = NavigationResult(
             url="http://test.com",
@@ -381,20 +381,20 @@ class TestComputerUseAgent:
         assert nr.errors == []
 
     def test_click_result(self):
-        from domains.agents.computer_use import ClickResult
+        from domain.agents._internal.computer_use import ClickResult
 
         cr = ClickResult(element="Train", found=True, duration_s=0.1)
         assert cr.found is True
         assert cr.error is None
 
     def test_fill_result(self):
-        from domains.agents.computer_use import FillResult
+        from domain.agents._internal.computer_use import FillResult
 
         fr = FillResult(element="epochs", value="5", success=True)
         assert fr.success is True
 
     def test_devtools_report_summary(self):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         agent = ComputerUseAgent()
         agent._console_messages = [{"type": "log"}] * 5
@@ -406,7 +406,7 @@ class TestComputerUseAgent:
         assert "Errors: 2" in report.summary
 
     def test_devtools_report_console_errors(self):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         agent = ComputerUseAgent()
         agent._console_messages = [
@@ -426,7 +426,7 @@ class TestDevToolsReport:
     """Unit tests for the DevToolsReport dataclass."""
 
     def test_report_creation(self):
-        from domains.agents.computer_use import DevToolsReport
+        from domain.agents._internal.computer_use import DevToolsReport
 
         report = DevToolsReport(
             console_messages=[],

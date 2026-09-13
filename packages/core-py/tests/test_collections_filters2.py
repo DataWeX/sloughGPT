@@ -1,6 +1,6 @@
-"""Tests for domains.collections.filters — all filter classes and FilterChain."""
+"""Tests for domain.collections._internal.filters — all filter classes and FilterChain."""
 
-from domains.collections.filters import (
+from domain.collections._internal.filters import (
     LengthFilter,
     DedupFilter,
     KeywordFilter,
@@ -13,7 +13,7 @@ from domains.collections.filters import (
     PrefixFilter,
     MetadataFilter,
 )
-from domains.collections.sources import Record
+from domain.collections._internal.sources import Record
 
 
 def _rec(content: str, metadata: dict | None = None) -> Record:
@@ -412,7 +412,7 @@ class TestMetadataFilter:
 
 class TestFilterProtocolCompliance:
     def test_all_filters_are_filter_protocol(self):
-        from domains.collections.filters import Filter
+        from domain.collections._internal.filters import Filter
         instances = [
             LengthFilter(),
             DedupFilter(),

@@ -1,4 +1,4 @@
-"""Tests for domains.models.provider — ProviderRouter, ModelCapabilities,
+"""Tests for domain.models._internal.provider — ProviderRouter, ModelCapabilities,
 provider registry, processors (VisionProcessor, KnowledgeProcessor,
 ToolUseProcessor, PersonalityProcessor, StyleProcessor).
 
@@ -19,7 +19,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.models.provider import (
+from domain.models._internal.provider import (
     ModelCapabilities,
     ProviderRouter,
     VisionProcessor,

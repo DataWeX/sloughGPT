@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domains.logging.base import (
+from domain.logging._internal.base import (
     LogLevel,
     LogRecord,
     Logger,
@@ -19,12 +19,12 @@ from domains.logging.base import (
     ErrorCode,
     LogTag,
 )
-from domains.logging.console_logger import ConsoleLogger
-from domains.logging.cli_logger import CLILogger
-from domains.logging.shell_logger import ShellLogger
-from domains.logging.web_logger import WebLogger
-from domains.logging.bridge import BridgeHandler, record_extra_context
-from domains.logging.config import (
+from domain.logging._internal.console_logger import ConsoleLogger
+from domain.logging._internal.cli_logger import CLILogger
+from domain.logging._internal.shell_logger import ShellLogger
+from domain.logging._internal.web_logger import WebLogger
+from domain.logging._internal.bridge import BridgeHandler, record_extra_context
+from domain.logging._internal.config import (
     LogFormatter,
     get_request_id,
     set_request_id,
@@ -517,7 +517,7 @@ class TestCLILogger:
         assert "-" in output
 
     def test_terminal_disabled(self):
-        import domains.logging.cli_logger as cli_mod
+        import domain.logging._internal.cli_logger as cli_mod
         original = cli_mod._TERMINAL_ENABLED
         try:
             cli_mod._TERMINAL_ENABLED = False

@@ -72,8 +72,10 @@ describe('DevQuickActionsCard', () => {
 
   it('shows method and endpoint for each action', () => {
     render(<DevQuickActionsCard />)
-    expect(screen.getByText('POST /system/restart')).toBeTruthy()
-    expect(screen.getByText('GET /health')).toBeTruthy()
-    expect(screen.getByText('GET /routes')).toBeTruthy()
+    expect(screen.getByText('/system/restart')).toBeTruthy()
+    expect(screen.getByText('/health')).toBeTruthy()
+    expect(screen.getByText('/routes')).toBeTruthy()
+    expect(screen.getAllByText('POST').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('GET').length).toBeGreaterThan(0)
   })
 })

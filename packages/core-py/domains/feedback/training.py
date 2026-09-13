@@ -50,7 +50,7 @@ class FeedbackTrainer:
         legacy = Path(db_path)
         if legacy.is_file():
             # Migrate a legacy SQLite feedback database into MogDB.
-            from domains.feedback.database import FeedbackDB
+            from domain.feedback._internal.database import FeedbackDB
 
             FeedbackDB(db_path=str(legacy))
         self._db = MogDB(db_path)

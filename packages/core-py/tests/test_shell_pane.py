@@ -1,7 +1,7 @@
-"""Tests for domains.shell.pane — Rect, Border, Pane, PaneLayout, split, vsplit."""
+"""Tests for domain.shell._internal.pane — Rect, Border, Pane, PaneLayout, split, vsplit."""
 
 import pytest
-from domains.shell.pane import Rect, Border, Pane, PaneLayout, split, vsplit
+from domain.shell._internal.pane import Rect, Border, Pane, PaneLayout, split, vsplit
 
 
 # ── Rect ──────────────────────────────────────────────────────────────

@@ -19,22 +19,6 @@ import { soulsController } from '@/lib/souls-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { logger } from '@/lib/dev-log'
-import ModelStatusCard from '@/components/models/ModelStatusCard'
-import ComposableLayersCard from '@/components/models/ComposableLayersCard'
-import PersonalitiesCard from '@/components/models/PersonalitiesCard'
-import PersonalityProfileCard from '@/components/models/PersonalityProfileCard'
-import ModelCatalogCard from '@/components/models/ModelCatalogCard'
-import { FineTunedModelsCard } from '@/components/training/FineTunedModelsCard'
-import ModelPlaygroundCard from '@/components/models/ModelPlaygroundCard'
-import ModelCacheCard from '@/components/models/ModelCacheCard'
-import ModelUsageCard from '@/components/models/ModelUsageCard'
-import QuantizationCard from '@/components/models/QuantizationCard'
-import DownloadsCard from '@/components/models/DownloadsCard'
-import EngineStatusCard from '@/components/models/EngineStatusCard'
-import ProviderDiagnosticsCard from '@/components/models/ProviderDiagnosticsCard'
-import ModelsCard from '@/components/compare/ModelsCard'
-import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
-import SummaryCard from '@/components/compare/SummaryCard'
 import dynamicNext from 'next/dynamic'
 import {
   useModels,
@@ -44,6 +28,27 @@ import {
   useSwitchSoul,
 } from '@/lib/query/api-hooks'
 
+// ── Primary: always visible, static imports ──────────────────────
+import ModelStatusCard from '@/components/models/ModelStatusCard'
+import PersonalitiesCard from '@/components/models/PersonalitiesCard'
+import ModelCatalogCard from '@/components/models/ModelCatalogCard'
+
+// ── Secondary: inside FoldSection, lazy-loaded ───────────────────
+const ComposableLayersCard = dynamicNext(() => import('@/components/models/ComposableLayersCard'), { ssr: false })
+const PersonalityProfileCard = dynamicNext(() => import('@/components/models/PersonalityProfileCard'), { ssr: false })
+const FineTunedModelsCard = dynamicNext(() => import('@/components/training/FineTunedModelsCard').then(m => ({ default: m.FineTunedModelsCard })), { ssr: false })
+const ModelPlaygroundCard = dynamicNext(() => import('@/components/models/ModelPlaygroundCard'), { ssr: false })
+const ModelCacheCard = dynamicNext(() => import('@/components/models/ModelCacheCard'), { ssr: false })
+const ModelUsageCard = dynamicNext(() => import('@/components/models/ModelUsageCard'), { ssr: false })
+const QuantizationCard = dynamicNext(() => import('@/components/models/QuantizationCard'), { ssr: false })
+const DownloadsCard = dynamicNext(() => import('@/components/models/DownloadsCard'), { ssr: false })
+const EngineStatusCard = dynamicNext(() => import('@/components/models/EngineStatusCard'), { ssr: false })
+const ProviderDiagnosticsCard = dynamicNext(() => import('@/components/models/ProviderDiagnosticsCard'), { ssr: false })
+
+// ── Comparison: always folded, lazy-loaded ───────────────────────
+const ModelsCard = dynamicNext(() => import('@/components/compare/ModelsCard'), { ssr: false })
+const ComparisonTableCard = dynamicNext(() => import('@/components/compare/ComparisonTableCard'), { ssr: false })
+const SummaryCard = dynamicNext(() => import('@/components/compare/SummaryCard'), { ssr: false })
 const OutputComparisonCard = dynamicNext<{ models: ModelEntry[] }>(() => import('@/components/compare/OutputComparisonCard'), { ssr: false })
 const VisualComparisonCard = dynamicNext(() => import('@/components/compare/VisualComparisonCard'), { ssr: false })
 

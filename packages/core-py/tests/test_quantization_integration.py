@@ -14,7 +14,7 @@ import pytest
 import time
 
 from domains.infrastructure.quantization import Quantine
-from domains.training.slonet import SloTransformer, SloTransformerBlock
+from domain.training._internal.slonet import SloTransformer, SloTransformerBlock
 
 
 def _walk_linear_layers(model):
@@ -458,7 +458,7 @@ class TestGenerateNumpyPackedInt4:
 
     def test_int4_fuse_builder_returns_packed(self, tiny_model):
         """_fuse_quant_weights_int4 returns a packed (N, K//2) matrix on int4."""
-        from domains.training.slonet import _fuse_quant_weights_int4
+        from domain.training._internal.slonet import _fuse_quant_weights_int4
 
         self._quantize(tiny_model, 4, "symmetric")
         block = self._first_block(tiny_model)
@@ -501,7 +501,7 @@ class TestGenerateNumpyPackedInt4:
 
     def test_int8_symmetric_fuse_still_active(self, tiny_model, sample_input):
         """Symmetric int8 still fuses (zero_point guard passes) and does not unpack."""
-        from domains.training.slonet import _fuse_quant_weights
+        from domain.training._internal.slonet import _fuse_quant_weights
 
         self._quantize(tiny_model, 8, "symmetric")
         block = self._first_block(tiny_model)
@@ -512,7 +512,7 @@ class TestGenerateNumpyPackedInt4:
 
     def test_asymmetric_int8_guard_falls_back(self, tiny_model, sample_input):
         """Asymmetric int8 is rejected by the fused builder (zero_point != 0)."""
-        from domains.training.slonet import _fuse_quant_weights
+        from domain.training._internal.slonet import _fuse_quant_weights
 
         self._quantize(tiny_model, 8, "asymmetric")
         block = self._first_block(tiny_model)

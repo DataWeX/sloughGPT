@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from domains.shared import find_repo_root
-from domains.training.executor import get_training_executor
+from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
@@ -73,7 +73,7 @@ async def start_distillation(
 
     # Pre-flight quality gate
     try:
-        from domains.training.quality_scorer import compute_data_quality
+        from domain.training._internal.quality_scorer import compute_data_quality
 
         quality = compute_data_quality(data_str[:200_000])
         avg_q = quality.get("avg_quality", 0)
@@ -253,7 +253,7 @@ async def start_distillation(
                 teacher_model, teacher_tokenizer, slonet=slonet_provider is not None
             )
 
-            from domains.training.distillation import DistillationConfig, DistillationTrainer
+            from domain.training._internal.distillation import DistillationConfig, DistillationTrainer
 
             distill_cfg = DistillationConfig(
                 temperature=request.temperature,
@@ -304,7 +304,7 @@ async def start_distillation(
             safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
             ckpt_path = output_dir / f"{safe_stem}_distilled.soul"
 
-            from domains.training.slonet import export_to_sou
+            from domain.training._internal.slonet import export_to_sou
 
             export_to_sou(
                 student,
@@ -362,7 +362,7 @@ async def start_distillation(
                 logger.debug("Training completion webhook failed: %s", e)
             # Push notification
             try:
-                from domains.mobile.notifications import get_notification_service
+                from domain.mobile._internal.notifications import get_notification_service
 
                 get_notification_service().send_notification_sync(
                     title="Distillation Complete",
@@ -391,7 +391,7 @@ async def start_distillation(
                 logger.debug("Training failure webhook failed: %s", exc)
             # Push notification
             try:
-                from domains.mobile.notifications import get_notification_service
+                from domain.mobile._internal.notifications import get_notification_service
 
                 get_notification_service().send_notification_sync(
                     title="Distillation Failed",

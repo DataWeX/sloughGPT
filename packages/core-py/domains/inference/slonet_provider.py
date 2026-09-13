@@ -42,7 +42,7 @@ _SloLayerNorm = None
 def _get_slo_layernorm():
     global _SloLayerNorm
     if _SloLayerNorm is None:
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
         _SloLayerNorm = SloLayerNorm
     return _SloLayerNorm
 
@@ -951,7 +951,7 @@ class SloNetChatProvider:
             and tokenizer_meta.get("type") == "token_tree"
             and isinstance(tokenizer_meta.get("tree"), dict)
         ):
-            from domains.training.token_tree import TokenTree
+            from domain.training._internal.token_tree import TokenTree
             instance._tokenizer = _TreeTokenizer(
                 TokenTree.from_dict(tokenizer_meta["tree"])
             )
@@ -1018,8 +1018,8 @@ class SloNetChatProvider:
             target_modules = ["W_q", "W_k", "W_v", "W_o"]
 
         # Apply LoRA layers
-        from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
-        from domains.training.hf_lora_finetune import load_lora_adapter
+        from domain.training._internal.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
+        from domain.training._internal.hf_lora_finetune import load_lora_adapter
 
         lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
         self._model = apply_lora_to_model(self._model, lora_config)
@@ -1043,7 +1043,7 @@ class SloNetChatProvider:
 
         # Optionally merge for faster inference
         if merge:
-            from domains.training.hf_lora_finetune import merge_lora_adapter
+            from domain.training._internal.hf_lora_finetune import merge_lora_adapter
             self._model = merge_lora_adapter(self._model)
             result["merged"] = True
             logger.info(
@@ -1141,7 +1141,7 @@ class SloNetChatProvider:
     @property
     def capabilities(self):
         """What this model supports."""
-        from domains.models.provider import ModelCapabilities
+        from domain.models._internal.provider import ModelCapabilities
         return ModelCapabilities(
             chat=True, streaming=True, embedding=False,
             vision=False, functions=False,

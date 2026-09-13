@@ -172,7 +172,7 @@ def test_temp_zero_with_top_p_is_deterministic_greedy():
     """temperature≈0 must be argmax even when the serving stack sets
     top_k/top_p defaults — top-k/nucleus filtering cannot change the argmax.
     Regression for stack-mode non-determinism (unseeded np.random.choice)."""
-    from domains.training.slonet import _sample_from_logits
+    from domain.training._internal.slonet import _sample_from_logits
 
     logits = np.array([[0.1, 0.9, 0.3, 0.2]], dtype=np.float64)
     a = _sample_from_logits(logits, temperature=0.0, top_k=50, top_p=0.9)
@@ -263,7 +263,7 @@ def test_quant_reuse_matches_float_reuse():
 
 def test_kv_state_memory_empty():
     """An empty state owns no buffers → 0 KiB."""
-    from domains.training.slonet import NumpyKVState
+    from domain.training._internal.slonet import NumpyKVState
     assert bk.kv_state_memory_kb(NumpyKVState()) == 0
 
 

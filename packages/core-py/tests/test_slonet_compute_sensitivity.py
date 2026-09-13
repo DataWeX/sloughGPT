@@ -5,7 +5,7 @@ sys.path.insert(0, "packages/core-py")
 
 import numpy as np
 import pytest
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, cross_entropy, SloLinear, SloSGD,
     compute_sensitivity,
     tensor, relu, sigmoid, tanh, gelu,
@@ -426,7 +426,7 @@ def test_sensitivity_mixed_activations():
 
 def test_sensitivity_no_grad_context():
     """compute_sensitivity inside no_grad still returns finite values."""
-    from domains.training.slonet import no_grad
+    from domain.training._internal.slonet import no_grad
     lin = SloLinear(4, 2)
     x = tensor([[1.0, 2.0, 3.0, 4.0]], requires_grad=True)
     with no_grad():
@@ -480,7 +480,7 @@ def test_sensitivity_default_seed():
 
 def test_sensitivity_silu_activation():
     """Silu activation produces finite sensitivity."""
-    from domains.training.slonet import silu
+    from domain.training._internal.slonet import silu
     lin = SloLinear(4, 2)
     x = tensor([[1.0, 2.0, 3.0, 4.0]], requires_grad=True)
     out = silu(lin.forward(x))
@@ -577,7 +577,7 @@ def test_sensitivity_mixed_requires_grad_in_group():
 
 def test_sensitivity_with_eye():
     """Eye matrix as input produces finite sensitivity."""
-    from domains.training.slonet import eye
+    from domain.training._internal.slonet import eye
     lin = SloLinear(4, 2)
     inp = eye(4)
     x = tensor(inp.data.copy(), requires_grad=True)

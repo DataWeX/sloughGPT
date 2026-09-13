@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from domains.core.soul import GenerationContext, SloEngine
+from domain.core._internal.soul import GenerationContext, SloEngine
 from domains.inference import SloProfile
 
 

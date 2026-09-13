@@ -1,5 +1,5 @@
 from domains.shell.cmds.status import _fmt_uptime
-from domains.cognitive.core import (
+from domain.cognitive._internal.core import (
     CognitiveCore, ThinkingMode, ReasoningType,
     ThoughtProcess, CreativeIdea, ReasoningChain,
 )

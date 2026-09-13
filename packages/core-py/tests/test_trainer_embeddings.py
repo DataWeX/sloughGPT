@@ -1,10 +1,10 @@
-"""Tests for domains.training.trainer_protocol — TrainResult; domains.inference.embeddings — InMemoryEmbedder, Embedder, BatchEmbedder, EmbeddingResult."""
+"""Tests for domain.training._internal.trainer_protocol — TrainResult; domain.inference._internal.embeddings — InMemoryEmbedder, Embedder, BatchEmbedder, EmbeddingResult."""
 
 import numpy as np
 import pytest
 
-from domains.training.trainer_protocol import TrainResult, TrainerProtocol
-from domains.inference.embeddings import (
+from domain.training._internal.trainer_protocol import TrainResult, TrainerProtocol
+from domain.inference._internal.embeddings import (
     EmbeddingProvider,
     EmbeddingResult,
     InMemoryEmbedder,

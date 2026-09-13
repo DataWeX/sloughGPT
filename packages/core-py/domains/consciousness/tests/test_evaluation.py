@@ -1,7 +1,7 @@
 """Tests for ConsciousnessEvaluator."""
 
 import pytest
-from domains.consciousness.evaluation import ConsciousnessEvaluator, EvaluationReport
+from domain.consciousness._internal.evaluation import ConsciousnessEvaluator, EvaluationReport
 
 
 class TestEvaluationReport:

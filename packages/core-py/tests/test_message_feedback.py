@@ -1,4 +1,4 @@
-"""Tests for domains.feedback.message_feedback — in-memory feedback store."""
+"""Tests for domain.feedback._internal.message_feedback — in-memory feedback store."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from domains.feedback.message_feedback import (
+from domain.feedback._internal.message_feedback import (
     MessageData,
     MessageFeedback,
     get_message_feedback,

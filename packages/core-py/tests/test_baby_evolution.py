@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from domains.collections.baby_evolution import (
+from domain.collections._internal.baby_evolution import (
     EvolutionConfig, Genome, FitnessTracker, SelectionOperator,
     EvolutionEngine,
 )

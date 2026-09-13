@@ -1,9 +1,9 @@
-"""Tests for domains.feedback.training — TrainingExample, DPOPair; domains.multimodal.engine — MultimodalOutput; domains.multimodal.speech — TranscriptionResult."""
+"""Tests for domain.feedback._internal.training — TrainingExample, DPOPair; domain.multimodal._internal.engine — MultimodalOutput; domain.multimodal._internal.speech — TranscriptionResult."""
 
 import pytest
-from domains.feedback.training import TrainingExample, DPOPair
-from domains.multimodal.engine import MultimodalOutput
-from domains.multimodal.speech import TranscriptionResult
+from domain.feedback._internal.training import TrainingExample, DPOPair
+from domain.multimodal._internal.engine import MultimodalOutput
+from domain.multimodal._internal.speech import TranscriptionResult
 
 
 # ── TrainingExample ──────────────────────────────────────────────────────

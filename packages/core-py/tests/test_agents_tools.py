@@ -1,4 +1,4 @@
-"""Tests for domains.agents.tools — ToolParam, ToolResult, ToolSpec, ToolRegistry; domains.agents.multi — TaskStatus, AgentTask."""
+"""Tests for domain.agents._internal.tools — ToolParam, ToolResult, ToolSpec, ToolRegistry; domain.agents._internal.multi — TaskStatus, AgentTask."""
 
 import pytest
 import re
@@ -6,8 +6,8 @@ import asyncio
 import time
 from dataclasses import FrozenInstanceError
 
-from domains.agents.tools import ToolParam, ToolResult, ToolSpec, ToolRegistry, get_tool_registry
-from domains.agents.multi import TaskStatus, AgentTask
+from domain.agents._internal.tools import ToolParam, ToolResult, ToolSpec, ToolRegistry, get_tool_registry
+from domain.agents._internal.multi import TaskStatus, AgentTask
 
 
 class TestToolParam:

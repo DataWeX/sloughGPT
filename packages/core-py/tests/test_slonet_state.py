@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 import pytest
-from domains.training.state import (
+from domain.training._internal.state import (
     TrainingState,
     get_state,
     get_turbo_state,

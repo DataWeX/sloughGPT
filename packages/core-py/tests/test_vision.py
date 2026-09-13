@@ -1,4 +1,4 @@
-"""Tests for domains.multimodal.vision — ImageCaption, VisualObject, VisionCNN.
+"""Tests for domain.multimodal._internal.vision — ImageCaption, VisualObject, VisionCNN.
 
 Covers: dataclass creation, model building, get_vision_model factory,
 preprocessing, embedding, captioning, detection, training, forward pass.
@@ -15,7 +15,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.multimodal.vision import (
+from domain.multimodal._internal.vision import (
     ImageCaption,
     VisualObject,
     VisionCNN,
@@ -229,7 +229,7 @@ class TestVisionCNN:
         assert embed.ndim == 1
 
     def test_forward_pass(self):
-        from domains.training.slonet import tensor as _tensor
+        from domain.training._internal.slonet import tensor as _tensor
         cnn = VisionCNN()
         cnn.build_model(embed_dim=64)
         x = _tensor(np.random.randn(1, 3, 32, 32).astype(np.float32), requires_grad=False)
@@ -371,7 +371,7 @@ class TestVisionCNNTraining:
             assert embed.ndim == 1
 
     def test_forward_output_shape(self):
-        from domains.training.slonet import tensor as _tensor
+        from domain.training._internal.slonet import tensor as _tensor
         cnn = VisionCNN()
         cnn.build_model(embed_dim=64)
         x = _tensor(np.random.randn(2, 3, 32, 32).astype(np.float32), requires_grad=False)

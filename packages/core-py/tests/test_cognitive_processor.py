@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, AsyncMock
 import pytest
 
 from domains import BaseComponent, ComponentException, Thought, ThoughtType
-from domains.cognitive.processor import CognitiveProcessor
+from domain.cognitive._internal.processor import CognitiveProcessor
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────

@@ -10,11 +10,14 @@ os.environ.setdefault("MAN_AUTOLOAD_MODEL", "")
 os.environ.setdefault("MAN_AUTO_WORKFLOW", "false")
 os.environ.setdefault("MAN_HEALTH_MONITOR", "false")
 os.environ.setdefault("MAN_WATCHDOG", "false")
+os.environ.setdefault("SLO_STARTUP_PROFILE", "quick")
 
 import json
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
+
+pytestmark = pytest.mark.slow
 
 
 class AsyncIteratorMock:

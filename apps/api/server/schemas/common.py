@@ -136,7 +136,7 @@ def raise_error(
 ) -> None:
     """Raise an AppError that the global exception handler converts to JSON.
 
-    Uses the unified ERROR_REGISTRY from domains.infrastructure.errors to
+    Uses the unified ERROR_REGISTRY from domain.infrastructure._internal.errors to
     resolve the correct AppError subclass and HTTP status for each code.
 
     Args:
@@ -148,7 +148,7 @@ def raise_error(
     Raises:
         AppError (or subclass) — never returns.
     """
-    from domains.infrastructure.errors import (
+    from domain.infrastructure._internal.errors import (
         ERROR_REGISTRY,
         AppError,
         ErrorCode,
@@ -164,7 +164,7 @@ def raise_error(
         default_status = status_code or 400
 
     # Import the correct class dynamically
-    import domains.infrastructure.errors as _err_mod
+    import domain.infrastructure._internal.errors as _err_mod
 
     exc_cls = getattr(_err_mod, class_name, AppError)
 
@@ -241,8 +241,8 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
     Raises:
         AppError (or subclass) — never returns.
     """
-    from domains.infrastructure.errors import AppError as _AppError
-    from domains.infrastructure.errors import classify_exception
+    from domain.infrastructure._internal.errors import AppError as _AppError
+    from domain.infrastructure._internal.errors import classify_exception
 
     try:
         err = classify_exception(e)

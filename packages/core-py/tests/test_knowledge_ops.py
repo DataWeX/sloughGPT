@@ -129,7 +129,7 @@ def test_file_index_extension_filter():
 
 def test_duplicate_detector_exact():
     from domain.knowledge._internal.knowledge_ops import DuplicateDetector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
     vec = simple_embed("neural networks learn from data")
@@ -144,7 +144,7 @@ def test_duplicate_detector_exact():
 
 def test_duplicate_detector_different():
     from domain.knowledge._internal.knowledge_ops import DuplicateDetector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
     vec = simple_embed("neural networks learn from data")
@@ -165,7 +165,7 @@ def test_duplicate_detector_empty_store():
 
 def test_duplicate_detector_clusters():
     from domain.knowledge._internal.knowledge_ops import DuplicateDetector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
     # Use texts with strong n-gram overlap for clustering
@@ -193,7 +193,7 @@ def test_find_clusters_store_without_entries():
 
 def test_find_clusters_single_entry():
     from domain.knowledge._internal.knowledge_ops import DuplicateDetector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
     store = InMemoryVectorStore(dimension=384)
     store.upsert_sync([VectorEntry(id="f1", vector=simple_embed("x"), text="x", metadata={})])
     dup = DuplicateDetector()
@@ -203,7 +203,7 @@ def test_find_clusters_single_entry():
 
 def test_find_clusters_skips_visited_inner():
     from domain.knowledge._internal.knowledge_ops import DuplicateDetector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry
     v0 = [1.0, 0.0] + [0.0] * 382
     v1 = [0.0, 1.0] + [0.0] * 382
     store = InMemoryVectorStore(dimension=384)
@@ -226,7 +226,7 @@ def test_find_clusters_skips_visited_inner():
 
 def test_auto_categorizer():
     from domain.knowledge._internal.knowledge_ops import AutoCategorizer
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
     # Use texts with strong lexical signal for each topic
@@ -275,7 +275,7 @@ def test_auto_categorizer_empty_topic_centroid():
 
 def test_auto_categorizer_low_score_returns_general():
     from domain.knowledge._internal.knowledge_ops import AutoCategorizer
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
     store = InMemoryVectorStore(dimension=384)
     store.upsert_sync([VectorEntry(id="f1", vector=simple_embed("python code"), text="python code", metadata={"topic": "code"})])
     cat = AutoCategorizer(min_score=0.99)
@@ -285,7 +285,7 @@ def test_auto_categorizer_low_score_returns_general():
 
 def test_auto_categorizer_suggest():
     from domain.knowledge._internal.knowledge_ops import AutoCategorizer
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
     entries = [
@@ -320,7 +320,7 @@ def test_suggest_topics_empty_topic_centroid():
 
 def test_gap_detector():
     from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
 
     store = InMemoryVectorStore(dimension=384)
     entries = [
@@ -362,7 +362,7 @@ def test_gap_detector_zero_total():
 
 def test_gap_detector_rare_and_adequate():
     from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
     store = InMemoryVectorStore(dimension=384)
     entries = [VectorEntry(id="r0", vector=simple_embed("rare"), text="rare", metadata={"topic": "rare"})]
     entries += [VectorEntry(id=f"c{i}", vector=simple_embed("common"), text="common", metadata={"topic": "common"}) for i in range(20)]
@@ -380,7 +380,7 @@ def test_gap_detector_rare_and_adequate():
 
 def test_find_sparse_regions():
     from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry
     store = InMemoryVectorStore(dimension=384)
     entries = []
     for i in range(10):
@@ -396,7 +396,7 @@ def test_find_sparse_regions():
 
 def test_find_sparse_regions_too_few():
     from domain.knowledge._internal.knowledge_ops import KnowledgeGapDetector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry
     store = InMemoryVectorStore(dimension=384)
     store.upsert_sync([VectorEntry(id="e", vector=[0.0] * 384, text="t", metadata={})])
     gap = KnowledgeGapDetector()
@@ -417,7 +417,7 @@ def test_find_sparse_regions_no_entries():
 
 def test_smart_context_injector():
     from domain.knowledge._internal.knowledge_ops import SmartContextInjector
-    from domains.inference.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import InMemoryVectorStore, VectorEntry, simple_embed
     from domain.knowledge._internal.knowledge import KnowledgeMemory
 
     # Use a fresh in-memory store to avoid persistence issues
@@ -507,7 +507,7 @@ def test_should_inject_no_results():
 
 def test_smart_context_should_inject():
     from domain.knowledge._internal.knowledge_ops import SmartContextInjector
-    from domains.inference.vector_store import InMemoryVectorStore
+    from domain.inference._internal.vector_store import InMemoryVectorStore
     from domain.knowledge._internal.knowledge import KnowledgeMemory, KnowledgeFact
     import threading
 
@@ -536,7 +536,7 @@ def test_smart_context_should_inject():
 def _fresh_memory():
     """Create a KnowledgeMemory with a fresh in-memory store (no disk persistence)."""
     from domain.knowledge._internal.knowledge import KnowledgeMemory
-    from domains.inference.vector_store import InMemoryVectorStore
+    from domain.inference._internal.vector_store import InMemoryVectorStore
     import threading
     mem = KnowledgeMemory.__new__(KnowledgeMemory)
     mem._lock = threading.Lock()

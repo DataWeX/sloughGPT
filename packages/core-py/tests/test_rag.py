@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from domains.cognitive.rag import (
+from domain.cognitive._internal.rag import (
     TextChunk,
     RetrievalResult,
     BM25Indexer,

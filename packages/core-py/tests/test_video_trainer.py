@@ -9,7 +9,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints, _causal_mask
+from domain.training._internal.video_trainer import VideoCaptionTrainer, list_video_checkpoints, _causal_mask
 
 
 # ============================================================================

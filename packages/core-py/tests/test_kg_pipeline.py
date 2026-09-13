@@ -8,8 +8,8 @@ from typing import List
 
 import pytest
 
-from domains.cognitive.knowledge_graph_v2 import Entity, Fact, KnowledgeGraph
-from domains.cognitive.rag_service import (
+from domain.cognitive._internal.knowledge_graph_v2 import Entity, Fact, KnowledgeGraph
+from domain.cognitive._internal.rag_service import (
     RAGService,
     KGTrainingPipeline,
     get_rag_service,

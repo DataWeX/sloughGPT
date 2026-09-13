@@ -1,8 +1,8 @@
-"""Tests for domains.shell.memory — Episode, EpisodicMemory, WorldEpisode, WorldMemory."""
+"""Tests for domain.shell._internal.memory — Episode, EpisodicMemory, WorldEpisode, WorldMemory."""
 
 import numpy as np
 import pytest
-from domains.shell.memory import Episode, EpisodicMemory, WorldEpisode, WorldMemory
+from domain.shell._internal.memory import Episode, EpisodicMemory, WorldEpisode, WorldMemory
 
 
 # ── Episode ───────────────────────────────────────────────────────────

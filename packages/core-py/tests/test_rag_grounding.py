@@ -1,11 +1,11 @@
-"""Tests for domains.cognitive.rag — TextChunk, RetrievalResult, BM25Indexer, HybridRetriever, CitationTracker, HallucinationDetector, ProductionRAG; domains.cognitive.grounding — Document, FisherInformation, KnowledgeNode, KnowledgeEdge, RAGGrounder, KnowledgeGrounding, CurriculumLearner, GroundingOrchestrator, HierarchicalContext."""
+"""Tests for domain.cognitive._internal.rag — TextChunk, RetrievalResult, BM25Indexer, HybridRetriever, CitationTracker, HallucinationDetector, ProductionRAG; domain.cognitive._internal.grounding — Document, FisherInformation, KnowledgeNode, KnowledgeEdge, RAGGrounder, KnowledgeGrounding, CurriculumLearner, GroundingOrchestrator, HierarchicalContext."""
 
 import numpy as np
-from domains.cognitive.rag import (
+from domain.cognitive._internal.rag import (
     TextChunk, RetrievalResult, BM25Indexer, HybridRetriever,
     CitationTracker, HallucinationDetector, ProductionRAG,
 )
-from domains.cognitive.grounding import (
+from domain.cognitive._internal.grounding import (
     Document, FisherInformation, KnowledgeNode, KnowledgeEdge,
     RAGGrounder, KnowledgeGrounding, CurriculumLearner,
     GroundingOrchestrator, HierarchicalContext,

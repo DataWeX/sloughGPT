@@ -13,8 +13,8 @@ from domains.consciousness import (
     get_consciousness,
     reset_consciousness,
 )
-from domains.consciousness.personality import PersonalityManager, PersonalityProfile
-from domains.consciousness.evaluation import ConsciousnessEvaluator
+from domain.consciousness._internal.personality import PersonalityManager, PersonalityProfile
+from domain.consciousness._internal.evaluation import ConsciousnessEvaluator
 
 
 @pytest.fixture

@@ -320,8 +320,8 @@ class _TuiSession:
             winsz = struct.pack("HHHH", self.rows, self.cols, 0, 0)
             fcntl.ioctl(1, termios.TIOCSWINSZ, winsz)
 
-            from domains.shell.repl import ShellREPL
-            from domains.shell.runtime import DaitRuntime
+            from domain.shell._internal.repl import ShellREPL
+            from domain.shell._internal.runtime import DaitRuntime
 
             rt = DaitRuntime()
             rt._api = _FakeAPI()

@@ -1,11 +1,11 @@
-"""Coverage tests for ShellIO (domains.shell.io)."""
+"""Coverage tests for ShellIO (domain.shell._internal.io)."""
 
 import builtins
 import types
 
 import pytest
 
-from domains.shell.io import ConsoleIO, MemoryIO, capture_cmd, capture_output
+from domain.shell._internal.io import ConsoleIO, MemoryIO, capture_cmd, capture_output
 
 
 class _FakeTty:

@@ -12,7 +12,7 @@ Supports any OpenAI-compatible API endpoint:
 - Together.ai, Groq, etc.
 
 Usage:
-    from domains.inference.api_provider import ApiProvider
+    from domain.inference._internal.api_provider import ApiProvider
 
     provider = ApiProvider(
         api_key="sk-...",
@@ -34,7 +34,7 @@ from typing import Any, AsyncIterator, Dict, List
 
 import httpx
 
-from domains.models.provider import ModelCapabilities
+from domain.models._internal.provider import ModelCapabilities
 
 logger = logging.getLogger("slo.api_provider")
 

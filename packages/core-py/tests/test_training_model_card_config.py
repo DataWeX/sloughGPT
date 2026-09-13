@@ -28,7 +28,7 @@ class TestModelCard:
     """Tests for model card generation."""
 
     def test_model_card_creation(self):
-        from domains.training.model_card import ModelCard
+        from domain.training._internal.model_card import ModelCard
 
         card = ModelCard(
             model_name="test_model",
@@ -39,7 +39,7 @@ class TestModelCard:
         assert card.model_type == "slnet"
 
     def test_model_card_to_markdown(self):
-        from domains.training.model_card import ModelCard
+        from domain.training._internal.model_card import ModelCard
 
         card = ModelCard(
             model_name="test_model",
@@ -51,7 +51,7 @@ class TestModelCard:
         assert "test_model" in md
 
     def test_generate_model_card(self):
-        from domains.training.model_card import generate_model_card
+        from domain.training._internal.model_card import generate_model_card
 
         card = generate_model_card(
             name="test_model",
@@ -65,8 +65,8 @@ class TestModelCard:
         assert card.epochs == 3
 
     def test_model_card_from_outcome(self):
-        from domains.training.model_card import generate_model_card_from_outcome
-        from domains.training.outcome_tracker import TrainingOutcome
+        from domain.training._internal.model_card import generate_model_card_from_outcome
+        from domain.training._internal.outcome_tracker import TrainingOutcome
 
         outcome = TrainingOutcome(
             run_id="test_run",
@@ -81,7 +81,7 @@ class TestModelCard:
         assert card.model_name is not None
 
     def test_model_card_to_dict(self):
-        from domains.training.model_card import ModelCard
+        from domain.training._internal.model_card import ModelCard
 
         card = ModelCard(
             model_name="test_model",
@@ -97,7 +97,7 @@ class TestAutoConfig:
     """Tests for auto-configuration system."""
 
     def test_analyse_dataset(self):
-        from domains.training.auto_config import analyse_dataset
+        from domain.training._internal.auto_config import analyse_dataset
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -108,7 +108,7 @@ class TestAutoConfig:
             assert analysis.word_count > 0
 
     def test_auto_configure(self):
-        from domains.training.auto_config import auto_configure
+        from domain.training._internal.auto_config import auto_configure
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -121,7 +121,7 @@ class TestAutoConfig:
             assert config.dataset == "test_dataset"
 
     def test_dataset_analysis_format(self):
-        from domains.training.auto_config import analyse_dataset
+        from domain.training._internal.auto_config import analyse_dataset
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -130,7 +130,7 @@ class TestAutoConfig:
             assert analysis.format == "text"
 
     def test_dataset_analysis_size_category(self):
-        from domains.training.auto_config import analyse_dataset
+        from domain.training._internal.auto_config import analyse_dataset
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -139,14 +139,14 @@ class TestAutoConfig:
             assert analysis.size_category in ("tiny", "small", "medium", "large")
 
     def test_plain_language_verdict(self):
-        from domains.training.auto_config import plain_language_verdict
+        from domain.training._internal.auto_config import plain_language_verdict
 
         verdict = plain_language_verdict({"verdict": "improved", "perplexity_improvement_pct": 10})
         assert isinstance(verdict, str)
         assert len(verdict) > 0
 
     def test_plain_language_verdict_degraded(self):
-        from domains.training.auto_config import plain_language_verdict
+        from domain.training._internal.auto_config import plain_language_verdict
 
         verdict = plain_language_verdict({"verdict": "degraded", "perplexity_improvement_pct": -5})
         assert isinstance(verdict, str)
@@ -157,14 +157,14 @@ class TestDatasetManifest:
     """Tests for dataset manifest handling."""
 
     def test_load_manifest_nonexistent(self):
-        from domains.training.dataset_manifest import load_manifest
+        from domain.training._internal.dataset_manifest import load_manifest
         import pytest
 
         with pytest.raises(Exception):
             load_manifest("/nonexistent/manifest.json")
 
     def test_manifest_error_is_valueerror(self):
-        from domains.training.dataset_manifest import ManifestError
+        from domain.training._internal.dataset_manifest import ManifestError
 
         assert issubclass(ManifestError, ValueError)
 
@@ -173,7 +173,7 @@ class TestModelCardExtended:
     """Extended tests for model card."""
 
     def test_model_card_with_training_info(self):
-        from domains.training.model_card import generate_model_card
+        from domain.training._internal.model_card import generate_model_card
 
         card = generate_model_card(
             name="test_model",
@@ -189,7 +189,7 @@ class TestModelCardExtended:
         assert card.batch_size == 8
 
     def test_model_card_serializable(self):
-        from domains.training.model_card import generate_model_card
+        from domain.training._internal.model_card import generate_model_card
 
         card = generate_model_card(
             name="test_model",
@@ -202,7 +202,7 @@ class TestModelCardExtended:
         assert "model_name" in d
 
     def test_model_card_from_dict(self):
-        from domains.training.model_card import ModelCard
+        from domain.training._internal.model_card import ModelCard
 
         d = {
             "model_name": "test_model",
@@ -218,7 +218,7 @@ class TestComprehensiveTrainerWithAutoConfig:
     """Tests for ComprehensiveTrainer with auto-config."""
 
     def test_trainer_with_explicit_config(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -228,7 +228,7 @@ class TestComprehensiveTrainerWithAutoConfig:
             assert result.success
 
     def test_trainer_multiple_runs(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)

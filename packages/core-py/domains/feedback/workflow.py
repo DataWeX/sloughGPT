@@ -146,7 +146,7 @@ class FeedbackWorkflowManager:
 
         # ── Trait weight update (context manager config) ──
         try:
-            from domains.context.managers import get_trait_config
+            from domain.context._internal.managers import get_trait_config
             config = get_trait_config()
             config.update_from_feedback(
                 rating=rating,
@@ -202,7 +202,7 @@ class FeedbackWorkflowManager:
         """Evaluate perplexity across multiple benchmark phrases."""
         try:
             import numpy as np
-            from domains.training.slonet import tensor, SloLSTM
+            from domain.training._internal.slonet import tensor, SloLSTM
 
             benchmarks = [
                 "the quick brown fox jumps over the lazy dog",
@@ -284,7 +284,7 @@ class FeedbackWorkflowManager:
 
         try:
             from .training import FeedbackTrainer
-            from domains.training.slonet import SloAdam, cross_entropy, tensor, create_scheduler
+            from domain.training._internal.slonet import SloAdam, cross_entropy, tensor, create_scheduler
             from .model_health import get_health_monitor
 
             if not hasattr(tok, 'encode'):
@@ -399,7 +399,7 @@ class FeedbackWorkflowManager:
 
         try:
             from .training import FeedbackTrainer
-            from domains.training.slonet import SloAdam, cross_entropy, tensor, create_scheduler
+            from domain.training._internal.slonet import SloAdam, cross_entropy, tensor, create_scheduler
 
             trainer = FeedbackTrainer()
             pairs = trainer.prepare_dpo_pairs()
@@ -524,7 +524,7 @@ class FeedbackWorkflowManager:
 
         try:
             from .training import FeedbackTrainer
-            from domains.training.slonet import SloAdam, cross_entropy, tensor, SloLSTM, SloAdapterLayer
+            from domain.training._internal.slonet import SloAdam, cross_entropy, tensor, SloLSTM, SloAdapterLayer
 
             trainer = FeedbackTrainer()
             sft_data = trainer.prepare_sft_data(min_quality=0.3)

@@ -10,11 +10,11 @@ import time
 import numpy as np
 import pytest
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloTransformer, SloTransformerBlock, SloLinear, SloEmbedding,
     SloLayerNorm, NumpyKVState,
 )
-from domains.inference.slonet_provider import SloNetChatProvider
+from domain.inference._internal.slonet_provider import SloNetChatProvider
 
 
 @pytest.fixture

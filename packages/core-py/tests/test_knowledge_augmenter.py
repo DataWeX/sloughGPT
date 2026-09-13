@@ -1,7 +1,7 @@
 """Meaningful tests for knowledge_augmenter — small talk detection, web search need, content tokens, topical relatedness."""
 
 import pytest
-from domains.learner.knowledge_augmenter import (
+from domain.learner._internal.knowledge_augmenter import (
     _is_casual_small_talk, _needs_web_search, _content_tokens,
     _topically_related, MIN_RELEVANCE_SCORE, _QUERY_SIGNALS,
     _CASUAL_GREETINGS, _CASUAL_PATTERNS,

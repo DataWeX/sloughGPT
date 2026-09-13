@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor,
     GenerationMetrics,
     GenerateResult,
@@ -97,14 +97,14 @@ class TestGenerateResult:
 class TestNoGrad:
 
     def test_context_manager(self):
-        import domains.training.slonet as mod
+        import domain.training._internal.slonet as mod
         old = mod._NO_GRAD
         with no_grad():
             assert mod._NO_GRAD is True
         assert mod._NO_GRAD is old
 
     def test_decorator(self):
-        import domains.training.slonet as mod
+        import domain.training._internal.slonet as mod
         old = mod._NO_GRAD
 
         @no_grad()
@@ -115,7 +115,7 @@ class TestNoGrad:
         assert mod._NO_GRAD is old
 
     def test_nested(self):
-        import domains.training.slonet as mod
+        import domain.training._internal.slonet as mod
         old = mod._NO_GRAD
         with no_grad():
             assert mod._NO_GRAD is True
@@ -196,7 +196,7 @@ class TestTensor:
         assert t.requires_grad is True
 
     def test_no_grad_mode(self):
-        import domains.training.slonet as mod
+        import domain.training._internal.slonet as mod
         old = mod._NO_GRAD
         mod._NO_GRAD = True
         try:
@@ -324,17 +324,17 @@ class TestTensor:
 class TestMetaTensor:
 
     def test_init(self):
-        from domains.training.slonet import _MetaTensor
+        from domain.training._internal.slonet import _MetaTensor
         mt = _MetaTensor(shape=(2, 3))
         assert mt.shape == (2, 3)
         assert mt.requires_grad is False
 
     def test_repr(self):
-        from domains.training.slonet import _MetaTensor
+        from domain.training._internal.slonet import _MetaTensor
         mt = _MetaTensor()
         assert "MetaTensor" in repr(mt)
 
     def test_numpy(self):
-        from domains.training.slonet import _MetaTensor
+        from domain.training._internal.slonet import _MetaTensor
         mt = _MetaTensor()
         assert isinstance(mt.numpy(), np.ndarray)

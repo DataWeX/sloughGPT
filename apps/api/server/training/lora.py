@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from domains.shared import find_repo_root
-from domains.training.executor import get_training_executor
+from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
@@ -176,7 +176,7 @@ async def start_lora_finetune(
 
     def run_lora_finetune(job_id_: str = job_id):
         try:
-            from domains.training.hf_lora_finetune import HFLoraConfig, HFLoraTrainer
+            from domain.training._internal.hf_lora_finetune import HFLoraConfig, HFLoraTrainer
 
             start_time = time.time()
 
@@ -335,7 +335,7 @@ async def load_adapter(request: LoadAdapterRequest):
         raise_error("No model loaded — load a model first", "E_BAD_REQUEST", status_code=400)
 
     try:
-        from domains.training.lora import load_lora_adapter
+        from domain.training._internal.lora import load_lora_adapter
 
         load_lora_adapter(provider, str(adapter_path), merge=request.merge)
     except Exception as e:
@@ -359,7 +359,7 @@ async def unload_adapter():
         raise_error("No model loaded", "E_BAD_REQUEST", status_code=400)
 
     try:
-        from domains.training.lora import unload_lora_adapter
+        from domain.training._internal.lora import unload_lora_adapter
 
         unload_lora_adapter(provider)
     except Exception as e:

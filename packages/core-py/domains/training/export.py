@@ -26,12 +26,12 @@ Examples
 
 Export to GGUF::
 
-    from domains.training.export import export_to_gguf
+    from domain.training._internal.export import export_to_gguf
     export_to_gguf(model, "model.gguf", quantization="Q4_K_M")
 
 Export to Soul::
 
-    from domains.training.export import export_to_sou
+    from domain.training._internal.export import export_to_sou
     export_to_sou(model, "model.soul")
 
 Model export supports tagging for model registry and metadata:
@@ -48,7 +48,7 @@ See Also
 
 - :class:`ExportConfig`: Configuration dataclass
 - :func:`list_export_formats`: List all supported formats
-- :mod:`domains.training.gguf_export`: GGUF-specific export
+- :mod:`domain.training._internal.gguf_export`: GGUF-specific export
 
 """
 
@@ -555,11 +555,11 @@ def export_to_gguf(
         - Example: 1M params + 2048 ctx ≈ 5MB
 
     See Also:
-        :mod:`domains.training.gguf_export`: Advanced GGUF options
+        :mod:`domain.training._internal.gguf_export`: Advanced GGUF options
         https://github.com/mybigday/llama.rn
         https://github.com/ggerganov/llama.cpp
     """
-    from domains.training.gguf_export import export_to_gguf as gguf_export, GGUFExportConfig
+    from domain.training._internal.gguf_export import export_to_gguf as gguf_export, GGUFExportConfig
 
     config = GGUFExportConfig(quantization=quantization)
 
@@ -598,7 +598,7 @@ def export_to_gguf_fp16(
     See Also:
         llama.cpp quantize tool: https://github.com/ggerganov/llama.cpp
     """
-    from domains.training.gguf_export import export_to_gguf_fp16 as gguf_fp16_export
+    from domain.training._internal.gguf_export import export_to_gguf_fp16 as gguf_fp16_export
     result = gguf_fp16_export(model, output_path, tokenizer)
     logger.info("Exported GGUF FP16: %s", output_path,
         extra={"tag": "TRAIN"},)
@@ -627,7 +627,7 @@ def export_to_gguf_q4_k_m(
         good model quality while significantly reducing model size and
         memory requirements.
     """
-    from domains.training.gguf_export import export_to_gguf_q4_k_m as gguf_q4_k_m_export
+    from domain.training._internal.gguf_export import export_to_gguf_q4_k_m as gguf_q4_k_m_export
     result = gguf_q4_k_m_export(model, output_path, tokenizer)
     logger.info("Exported GGUF Q4_K_M: %s", output_path,
         extra={"tag": "TRAIN"},)

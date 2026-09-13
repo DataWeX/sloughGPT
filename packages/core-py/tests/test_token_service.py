@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from domains.billing.token_service import (
+from domain.billing._internal.token_service import (
     TokenBillingService,
     TokenAccount,
     UsageRecord,

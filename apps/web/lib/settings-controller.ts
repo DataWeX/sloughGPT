@@ -212,30 +212,6 @@ export const settingsController = {
     return apiPost(`/settings/training/runs/bulk/bookmark?run_ids=${encodeURIComponent(ids)}&bookmarked=${bookmarked}`)
   },
 
-  async exportPresets(): Promise<{ built_in: Record<string, unknown>; custom: Record<string, unknown> }> {
-    return apiGet('/settings/training/presets/export')
-  },
-
-  async importPresets(data: Record<string, unknown>, overwrite: boolean = false): Promise<{ imported: number }> {
-    return apiPost(`/settings/training/presets/import?overwrite=${overwrite}`, data)
-  },
-
-  async savePreset(preset: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return apiPost('/settings/training/presets/save', preset)
-  },
-
-  async deletePreset(presetName: string): Promise<{ deleted: string }> {
-    return apiDelete(`/settings/training/presets/${encodeURIComponent(presetName)}`)
-  },
-
-  async backupSettings(): Promise<Record<string, unknown>> {
-    return apiGet('/settings/backup')
-  },
-
-  async restoreSettings(data: Record<string, unknown>): Promise<{ restored_fields: number }> {
-    return apiPost('/settings/restore', data)
-  },
-
   async getAutoTrainSettingsStatus(): Promise<Record<string, unknown>> {
     return apiGet('/settings/training/auto-train/status')
   },

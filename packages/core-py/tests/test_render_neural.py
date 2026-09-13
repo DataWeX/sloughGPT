@@ -1,10 +1,10 @@
-"""Tests for domains.shell.render_neural — RenderNeuralDevice neural processor."""
+"""Tests for domain.shell._internal.render_neural — RenderNeuralDevice neural processor."""
 
 import numpy as np
 import pytest
-from domains.shell.render_neural import RenderNeuralDevice, _softmax
-from domains.shell.cycles_device import CyclesDevice
-from domains.shell.vm import DeviceFault
+from domain.shell._internal.render_neural import RenderNeuralDevice, _softmax
+from domain.shell._internal.cycles_device import CyclesDevice
+from domain.shell._internal.vm import DeviceFault
 
 
 class TestSoftmax:

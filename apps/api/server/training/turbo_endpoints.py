@@ -1,6 +1,6 @@
 """Unified turbo and from-sessions endpoints.
 
-Delegates to domains.training.service for state and logic.
+Delegates to domain.training._internal.service for state and logic.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ router = APIRouter(tags=["training-turbo"])
 
 @router.get("/training/turbo/status")
 async def get_turbo_status():
-    from domains.training.service import get_turbo_status
+    from domain.training._internal.service import get_turbo_status
 
     return get_turbo_status()
 
@@ -30,7 +30,7 @@ async def get_turbo_status():
 async def start_from_sessions_unified(req: FromSessionsRequest):
     """Start from-sessions training."""
     try:
-        from domains.training.service import _state, start_from_sessions_training
+        from domain.training._internal.service import _state, start_from_sessions_training
 
         # Pre-flight validation
         if req.epochs < 1:
@@ -85,7 +85,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
     """Start turbo training."""
     try:
         from domains.shared import find_repo_root
-        from domains.training.service import run_turbo_worker, start_turbo_training
+        from domain.training._internal.service import run_turbo_worker, start_turbo_training
 
         # Pre-flight validation
         if req.source_text and len(req.source_text.strip()) < 200:
@@ -143,7 +143,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
             logger.warning("CancelManager registration failed for turbo %s: %s", job_info["job_id"], exc)
 
         # Run via executor pool for proper tracking
-        from domains.training.executor import get_training_executor
+        from domain.training._internal.executor import get_training_executor
         executor = get_training_executor()
 
         def _run():

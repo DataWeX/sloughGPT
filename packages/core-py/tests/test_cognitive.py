@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from domains.cognitive.core import CognitiveCore, ThinkingMode, ReasoningType
-from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph, RelationType
+from domain.cognitive._internal.core import CognitiveCore, ThinkingMode, ReasoningType
+from domain.cognitive._internal.knowledge_graph_v2 import KnowledgeGraph, RelationType
 from domains.cognitive.reasoning.deep import (
     WorkingMemory,
     FormalLogicEngine,

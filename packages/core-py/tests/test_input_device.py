@@ -6,8 +6,8 @@ from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
 
-from domains.shell.input_device import InputDevice
-from domains.shell.kernel_syscall import SyscallResult
+from domain.shell._internal.input_device import InputDevice
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 
 @pytest.fixture

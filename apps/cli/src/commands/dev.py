@@ -338,7 +338,7 @@ def cmd_dev(args):
     watch_web = getattr(args, "watch_web", False)
 
     # ── In-place status block during startup ──────────────
-    from domains.logging.cli_logger import _c as ansi_c, _A
+    from domain.logging._internal.cli_logger import _c as ansi_c, _A
     status_block = StatusBlock(log)
     api_status = "starting"
     web_status = "starting"
@@ -590,7 +590,7 @@ def _cmd_api_only(args):
         api_port = _find_free_port(api_port + 1)
 
     # ── In-place status block ───────────────────────────────────
-    from domains.logging.cli_logger import _c as ansi_c, _A
+    from domain.logging._internal.cli_logger import _c as ansi_c, _A
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
 
@@ -731,7 +731,7 @@ def _cmd_api_and_mobile(args):
         api_port = _find_free_port(api_port + 1)
 
     # ── In-place status block ───────────────────────────────────
-    from domains.logging.cli_logger import _c as ansi_c, _A
+    from domain.logging._internal.cli_logger import _c as ansi_c, _A
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
     mobile_status = "starting"
@@ -944,7 +944,7 @@ def _cmd_api_and_web(args):
         web_port = _find_free_port(web_port + 1)
 
     # ── In-place status block ───────────────────────────────────
-    from domains.logging.cli_logger import _c as ansi_c, _A
+    from domain.logging._internal.cli_logger import _c as ansi_c, _A
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
     web_status = "ok (reusing)" if web_reused else "starting"

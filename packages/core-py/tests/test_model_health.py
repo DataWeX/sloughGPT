@@ -4,7 +4,7 @@ import json
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
-from domains.feedback.model_health import ModelHealthMonitor, HealthSnapshot
+from domain.feedback._internal.model_health import ModelHealthMonitor, HealthSnapshot
 
 
 class TestModelHealthMonitor:

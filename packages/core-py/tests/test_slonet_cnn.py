@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, _conv2d, _batchnorm2d, _maxpool2d, _im2col, flatten,
     SloConv2D, SloBatchNorm2D, SloMaxPool2D, SloCrossAttention,
 )

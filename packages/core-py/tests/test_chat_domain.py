@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
-from domains.chat.domain import (
+from domain.chat._internal.domain import (
     ChatDomain,
     ChatRequest,
     ChatResponse,

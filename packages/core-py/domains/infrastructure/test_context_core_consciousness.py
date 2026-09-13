@@ -28,7 +28,7 @@ class TestContextCoreConsciousness:
         assert core._consciousness is mgr
 
     def test_apply_managers_includes_consciousness(self):
-        from domains.context.managers import ConsciousnessManager
+        from domain.context._internal.managers import ConsciousnessManager
         from domains.infrastructure.context_core import ContextCore
 
         engine = MagicMock()
@@ -61,7 +61,7 @@ class TestContextCoreConsciousness:
         assert "[CONSCIOUSNESS]" not in mods["system_extra"]
 
     def test_consciousness_receives_input_text(self):
-        from domains.context.managers import ConsciousnessManager
+        from domain.context._internal.managers import ConsciousnessManager
         from domains.infrastructure.context_core import ContextCore
 
         engine = MagicMock()

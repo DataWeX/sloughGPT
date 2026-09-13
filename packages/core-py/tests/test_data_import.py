@@ -1,4 +1,4 @@
-"""Tests for domains/training/data_import.py (repo/URL/HF/ISBN/local importers)."""
+"""Tests for domain.training._internal.data_import.py (repo/URL/HF/ISBN/local importers)."""
 
 import json
 import os
@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from domains.training.data_import import (
+from domain.training._internal.data_import import (
     DEFAULT_IGNORES,
     BooksSearch,
     DataImporter,
@@ -943,7 +943,7 @@ class TestImportData:
 
 class TestRetry:
     def test_succeeds_first_try(self):
-        from domains.training.data_import import _retry
+        from domain.training._internal.data_import import _retry
         counter = {"n": 0}
 
         def fn():
@@ -955,7 +955,7 @@ class TestRetry:
         assert counter["n"] == 1
 
     def test_retries_on_transient_error(self):
-        from domains.training.data_import import _retry
+        from domain.training._internal.data_import import _retry
         counter = {"n": 0}
 
         def fn():
@@ -969,7 +969,7 @@ class TestRetry:
         assert counter["n"] == 3
 
     def test_raises_after_all_retries_exhausted(self):
-        from domains.training.data_import import _retry
+        from domain.training._internal.data_import import _retry
 
         def fn():
             raise ConnectionError("always fail")
@@ -978,7 +978,7 @@ class TestRetry:
             _retry(fn, retries=2, delay=0.01, exceptions=(ConnectionError,))
 
     def test_does_not_catch_unlisted_exceptions(self):
-        from domains.training.data_import import _retry
+        from domain.training._internal.data_import import _retry
 
         def fn():
             raise ValueError("wrong type")
@@ -987,7 +987,7 @@ class TestRetry:
             _retry(fn, retries=3, delay=0.01, exceptions=(ConnectionError,))
 
     def test_zero_retries(self):
-        from domains.training.data_import import _retry
+        from domain.training._internal.data_import import _retry
         counter = {"n": 0}
 
         def fn():
@@ -999,7 +999,7 @@ class TestRetry:
         assert counter["n"] == 1
 
     def test_default_exceptions_tuple(self):
-        from domains.training.data_import import _retry
+        from domain.training._internal.data_import import _retry
         import urllib.error
 
         counter = {"n": 0}

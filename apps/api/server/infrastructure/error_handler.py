@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from domains.infrastructure.errors import (
+from domain.infrastructure._internal.errors import (
     AppError,
     AuthError,
     ConfigError,

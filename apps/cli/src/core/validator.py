@@ -149,7 +149,7 @@ class Doctor:
     def _check_accelerator(self):
         """Check SloNet accelerator availability."""
         try:
-            from domains.training.slonet import _get_accelerator
+            from domain.training._internal.slonet import _get_accelerator
             acc = _get_accelerator()
             if acc is not None:
                 self.result.add_pass("Accelerator", f"{acc.name}")
@@ -162,6 +162,14 @@ class Doctor:
         """Check if API server is reachable."""
         try:
             import requests
+        except ImportError:
+            self.result.add_warn(
+                "API Server",
+                "requests not installed",
+                "pip install requests",
+            )
+            return
+        try:
             r = requests.get("http://localhost:8000/health", timeout=2)
             if r.status_code == 200:
                 self.result.add_pass("API Server", "Running on :8000")

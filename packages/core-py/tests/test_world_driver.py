@@ -3,13 +3,13 @@
 import numpy as np
 import pytest
 
-from domains.shell.world_driver import (
+from domain.shell._internal.world_driver import (
     WorldDriver,
     _material_name,
     _parse_grid,
     main,
 )
-from domains.shell.simulation import (
+from domain.shell._internal.simulation import (
     NUM_MATERIALS,
     MATERIAL_AIR,
     MATERIAL_EMBER,

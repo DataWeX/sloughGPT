@@ -221,14 +221,14 @@ class SettingsRouter:
     @endpoint("settings.get_all")
     async def get_settings(self) -> dict:
         """Get all user settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         ps = _get()
         return success_response(data=ps.to_dict())
 
     @endpoint("settings.get_generation")
     async def get_generation(self) -> dict:
         """Get generation settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         s = _get().settings.generation
         from dataclasses import asdict
         return success_response(data=asdict(s))
@@ -238,7 +238,7 @@ class SettingsRouter:
         self, req: GenerationSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update generation settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
             return success_response(data={"message": "No changes"})
@@ -251,7 +251,7 @@ class SettingsRouter:
     @endpoint("settings.get_training")
     async def get_training(self) -> dict:
         """Get training settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         s = _get().settings.training
         from dataclasses import asdict
         return success_response(data=asdict(s))
@@ -261,7 +261,7 @@ class SettingsRouter:
         self, req: TrainingSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update training settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
             return success_response(data={"message": "No changes"})
@@ -274,7 +274,7 @@ class SettingsRouter:
     @endpoint("settings.get_adaptive")
     async def get_adaptive(self) -> dict:
         """Get adaptive settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         s = _get().settings.adaptive
         from dataclasses import asdict
         return success_response(data=asdict(s))
@@ -284,7 +284,7 @@ class SettingsRouter:
         self, req: AdaptiveSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update adaptive settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
             return success_response(data={"message": "No changes"})
@@ -297,7 +297,7 @@ class SettingsRouter:
     @endpoint("settings.get_voice")
     async def get_voice(self) -> dict:
         """Get voice settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         s = _get().settings.voice
         from dataclasses import asdict
         return success_response(data=asdict(s))
@@ -307,7 +307,7 @@ class SettingsRouter:
         self, req: VoiceSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update voice settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
             return success_response(data={"message": "No changes"})
@@ -320,7 +320,7 @@ class SettingsRouter:
     @endpoint("settings.get_ui")
     async def get_ui(self) -> dict:
         """Get UI settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         s = _get().settings.ui
         from dataclasses import asdict
         return success_response(data=asdict(s))
@@ -330,7 +330,7 @@ class SettingsRouter:
         self, req: UISettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update UI settings."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
             return success_response(data={"message": "No changes"})
@@ -345,7 +345,7 @@ class SettingsRouter:
         self, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Reset all settings to defaults."""
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         ps = _get()
         ps.reset()
         safe_audit_log("settings.reset", resource="all")
@@ -354,8 +354,8 @@ class SettingsRouter:
     @endpoint("settings.adaptive_insights")
     async def get_adaptive_insights(self) -> dict:
         """Get adaptive training insights from history."""
-        from domains.training.adaptive_config import AdaptiveConfigEngine
-        from domains.settings.persistent import get_settings as _get
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
+        from domain.settings._internal.persistent import get_settings as _get
         ps = _get()
         model = ps.settings.training.preferred_model or "gpt2"
         engine = AdaptiveConfigEngine()
@@ -404,7 +404,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Export training history as JSON or CSV."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         if format == "csv":
             csv_data = tracker.export_csv(limit=limit)
@@ -430,7 +430,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Generate a model card from training metadata."""
-        from domains.training.model_card import generate_model_card as _generate
+        from domain.training._internal.model_card import generate_model_card as _generate
         card = _generate(
             name=name,
             base_model=base_model,
@@ -456,7 +456,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Compare two training runs side by side."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         result = tracker.compare(run_a, run_b)
         if result is None:
@@ -466,13 +466,13 @@ class SettingsRouter:
     @endpoint("settings.list_training_presets")
     async def list_training_presets(self) -> dict:
         """List all available training presets."""
-        from domains.training.presets import list_presets
+        from domain.training._internal.presets import list_presets
         return success_response(data={"presets": list_presets()})
 
     @endpoint("settings.get_training_preset")
     async def get_training_preset(self, preset_name: str) -> dict:
         """Get a specific training preset."""
-        from domains.training.presets import get_preset
+        from domain.training._internal.presets import get_preset
         preset = get_preset(preset_name)
         if not preset:
             return success_response(data={"error": f"Preset '{preset_name}' not found"})
@@ -485,11 +485,11 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Apply a training preset to current settings."""
-        from domains.training.presets import apply_preset
+        from domain.training._internal.presets import apply_preset
         config = apply_preset(preset_name)
         if not config:
             return success_response(data={"error": f"Preset '{preset_name}' not found"})
-        from domains.settings.persistent import get_settings as _get
+        from domain.settings._internal.persistent import get_settings as _get
         ps = _get()
         ps.update("training", **config)
         safe_audit_log("settings.apply_preset", resource="training", detail=preset_name)
@@ -499,7 +499,7 @@ class SettingsRouter:
     @endpoint("settings.get_training_run")
     async def get_training_run(self, run_id: str) -> dict:
         """Get a single training run by ID."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         outcomes = tracker.load_outcomes()
         run = next((o for o in outcomes if o.run_id == run_id), None)
@@ -514,7 +514,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Delete a specific training run by ID."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         import json
         tracker = TrainingOutcomeTracker()
         outcomes = tracker.load_outcomes()
@@ -539,7 +539,7 @@ class SettingsRouter:
         limit: int = 50,
     ) -> dict:
         """Filter training runs by model, method, convergence, or quality."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         outcomes = tracker.load_outcomes()
         if model:
@@ -562,7 +562,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Clear all training history."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         count = tracker.clear()
         safe_audit_log("settings.clear_history", resource="training", detail=f"{count} runs removed")
@@ -576,7 +576,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Add a tag to a training run."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         run = tracker.add_tag(run_id, tag)
         if not run:
@@ -592,7 +592,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Remove a tag from a training run."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         run = tracker.remove_tag(run_id, tag)
         if not run:
@@ -608,7 +608,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Set notes on a training run."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         run = tracker.set_notes(run_id, notes)
         if not run:
@@ -619,7 +619,7 @@ class SettingsRouter:
     @endpoint("settings.get_all_tags")
     async def get_all_tags(self) -> dict:
         """Get all unique tags across all training runs."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         tags = tracker.get_all_tags()
         return success_response(data={"tags": tags})
@@ -627,7 +627,7 @@ class SettingsRouter:
     @endpoint("settings.get_runs_by_tag")
     async def get_runs_by_tag(self, tag: str) -> dict:
         """Get all training runs with a specific tag."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         runs = tracker.get_outcomes_by_tag(tag)
         return success_response(data={
@@ -639,7 +639,7 @@ class SettingsRouter:
     @endpoint("settings.export_training_run")
     async def export_training_run(self, run_id: str, format: str = "json") -> dict:
         """Export a single training run as JSON or YAML."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         outcomes = tracker.load_outcomes()
         run = next((o for o in outcomes if o.run_id == run_id), None)
@@ -664,7 +664,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Toggle bookmark status on a training run."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         run = tracker.toggle_bookmark(run_id)
         if not run:
@@ -675,7 +675,7 @@ class SettingsRouter:
     @endpoint("settings.get_bookmarked_runs")
     async def get_bookmarked_runs(self) -> dict:
         """Get all bookmarked training runs."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         runs = tracker.get_bookmarked()
         return success_response(data={
@@ -691,7 +691,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Duplicate a training run with a new ID."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         new_run = tracker.duplicate_run(run_id, new_run_id)
         if not new_run:
@@ -706,7 +706,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Delete multiple training runs. run_ids is a comma-separated list."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         ids = [x.strip() for x in run_ids.split(",") if x.strip()]
         count = tracker.bulk_delete(ids)
@@ -721,7 +721,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Add a tag to multiple training runs. run_ids is a comma-separated list."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         ids = [x.strip() for x in run_ids.split(",") if x.strip()]
         count = tracker.bulk_add_tag(ids, tag)
@@ -736,7 +736,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Set bookmark status on multiple training runs."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         ids = [x.strip() for x in run_ids.split(",") if x.strip()]
         count = tracker.bulk_bookmark(ids, bookmarked)
@@ -748,7 +748,7 @@ class SettingsRouter:
     @endpoint("settings.auto_train_status")
     async def auto_train_status(self) -> dict:
         """Get auto-trainer status and configuration."""
-        from domains.training.auto_trainer import get_auto_trainer
+        from domain.training._internal.auto_trainer import get_auto_trainer
         trainer = get_auto_trainer()
         return success_response(data=trainer.status())
 
@@ -760,7 +760,7 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Update auto-trainer configuration at runtime."""
-        from domains.training.auto_trainer import get_auto_trainer
+        from domain.training._internal.auto_trainer import get_auto_trainer
         trainer = get_auto_trainer()
         if threshold is not None:
             trainer.threshold = threshold
@@ -775,7 +775,7 @@ class SettingsRouter:
     @endpoint("settings.training_analytics")
     async def get_training_analytics(self) -> dict:
         """Get aggregated training analytics for charts and summaries."""
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
         tracker = TrainingOutcomeTracker()
         outcomes = tracker.load_outcomes()
 

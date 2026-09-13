@@ -13,7 +13,7 @@ vi.mock('@/lib/files-controller', () => ({
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: () => ({ addToast: mockAddToast }),
+  useToastStore: (selector: any) => selector({ addToast: mockAddToast }),
 }))
 
 vi.mock('@sloughgpt/strui', () => ({

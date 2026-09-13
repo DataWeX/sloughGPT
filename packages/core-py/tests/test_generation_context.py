@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from domains.core.soul import GenerationContext
+from domain.core._internal.soul import GenerationContext
 
 
 class TestGenerationContextDefaults:

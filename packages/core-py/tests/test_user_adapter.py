@@ -1,8 +1,8 @@
-"""Tests for domains.feedback.per_user_lora — UserAdapter."""
+"""Tests for domain.feedback._internal.per_user_lora — UserAdapter."""
 
 import numpy as np
 import pytest
-from domains.feedback.per_user_lora import UserAdapter
+from domain.feedback._internal.per_user_lora import UserAdapter
 
 
 class TestUserAdapter:

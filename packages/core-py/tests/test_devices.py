@@ -8,7 +8,7 @@ import types
 from unittest.mock import patch
 
 import pytest
-from domains.shell.devices import (
+from domain.shell._internal.devices import (
     AIDevice, NullDevice, RandomDevice, LLMDevice, EmbeddingDevice,
     KnowledgeDevice, VisionDevice, ProcDevice, DeviceManager,
     create_default_devices,

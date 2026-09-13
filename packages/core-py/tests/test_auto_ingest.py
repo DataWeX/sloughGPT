@@ -321,7 +321,7 @@ class TestAutoIngester:
         shared = {}
 
         async def fake_get_store():
-            from domains.inference.vector_store import create_vector_store
+            from domain.inference._internal.vector_store import create_vector_store
             if shared.get("store") is None:
                 shared["store"] = await create_vector_store(provider="in_memory", dimension=384)
             return shared["store"]

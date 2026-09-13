@@ -4,9 +4,9 @@ import math
 import numpy as np
 import pytest
 
-from domains.shell.runtime import DaitRuntime
-from domains.shell.kernel import Kernel
-from domains.shell.kernel_neural import (
+from domain.shell._internal.runtime import DaitRuntime
+from domain.shell._internal.kernel import Kernel
+from domain.shell._internal.kernel_neural import (
     NeuralKernel, NeuralProcess, NeuralProcessType,
     NeuralKVCache, NeuralEngineDevice,
     NeuralSyscall, NeuralState, NeuralOp, NeuralMemoryType,
@@ -15,7 +15,7 @@ from domains.shell.kernel_neural import (
     MultiHeadAttentionDevice, NeuralInterrupt,
     GradientAccumulator, BatchRequest, BatchResult, BatchProcessor,
 )
-from domains.shell.kernel_process import ProcessState
+from domain.shell._internal.kernel_process import ProcessState
 
 
 # ---------------------------------------------------------------------------

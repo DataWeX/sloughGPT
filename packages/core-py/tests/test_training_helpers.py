@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domains.training.helpers import (
+from domain.training._internal.helpers import (
     _finite_payload,
     log_experiment_metric,
     log_experiment_param,
@@ -24,7 +24,7 @@ from domains.training.helpers import (
     describe_checkpoint,
     cross_entropy_loss,
 )
-from domains.training.state import SOU_MAGIC
+from domain.training._internal.state import SOU_MAGIC
 
 
 # ── _finite_payload ───────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ class TestFinitePayload:
 class TestLogExperimentMetric:
 
     def test_writes_metric_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("domains.training.helpers.REPO_ROOT", tmp_path)
+        monkeypatch.setattr("domain.training._internal.helpers.REPO_ROOT", tmp_path)
         log_experiment_metric("exp1", "loss", 0.5, step=10)
         metrics_file = tmp_path / "data" / "experiments" / "exp1_metrics.jsonl"
         assert metrics_file.exists()
@@ -95,7 +95,7 @@ class TestLogExperimentMetric:
 class TestLogExperimentParam:
 
     def test_writes_param_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("domains.training.helpers.REPO_ROOT", tmp_path)
+        monkeypatch.setattr("domain.training._internal.helpers.REPO_ROOT", tmp_path)
         log_experiment_param("exp1", "lr", 0.001)
         params_file = tmp_path / "data" / "experiments" / "exp1_params.jsonl"
         assert params_file.exists()

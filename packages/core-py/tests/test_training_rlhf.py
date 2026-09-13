@@ -1,12 +1,12 @@
 """Tests for RLHF config and metrics."""
 from __future__ import annotations
 
-from domains.training.rlhf import RLHFConfig, RLHFMetric
+from domain.training._internal.rlhf import RLHFConfig, RLHFMetric
 
 
 class TestRLHFMetric:
     def test_all_metrics(self):
-        assert len(RLHFMetric) == 6
+        assert len(RLHFMetric) == 7
         assert RLHFMetric.REWARD.value == "reward"
         assert RLHFMetric.KL_DIVERGENCE.value == "kl_divergence"
 

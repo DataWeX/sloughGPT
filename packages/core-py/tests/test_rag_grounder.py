@@ -1,7 +1,7 @@
 """Meaningful tests for RAGGrounder — document storage, chunking, retrieval, grounding."""
 
 import pytest
-from domains.cognitive.grounding import (
+from domain.cognitive._internal.grounding import (
     RAGGrounder, Document, KnowledgeGrounding, KnowledgeNode,
     KnowledgeEdge, HierarchicalContext, CurriculumLearner,
 )

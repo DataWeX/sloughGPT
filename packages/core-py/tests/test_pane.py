@@ -1,9 +1,9 @@
-"""Tests for domains.shell.pane — Rect, Border, Pane, PaneLayout, split, vsplit."""
+"""Tests for domain.shell._internal.pane — Rect, Border, Pane, PaneLayout, split, vsplit."""
 
 from __future__ import annotations
 
 import pytest
-from domains.shell.pane import (
+from domain.shell._internal.pane import (
     Rect,
     Border,
     Pane,

@@ -135,7 +135,7 @@ class SystemRouter:
     async def get_lifecycle_status(self) -> dict:
         """Get the current lifecycle manager state."""
         try:
-            from domains.infrastructure.lifecycle import get_lifecycle_manager
+            from domain.infrastructure._internal.lifecycle import get_lifecycle_manager
 
             mgr = get_lifecycle_manager()
             return success_response(data=mgr.get_results())
@@ -189,7 +189,7 @@ class SystemRouter:
     @endpoint("system.get_executor_status")
     async def get_executor_status(self) -> dict:
         """Get TrainingExecutor pool status and job list."""
-        from domains.training.executor import _instance
+        from domain.training._internal.executor import _instance
 
         if _instance is None:
             return success_response(
@@ -213,7 +213,7 @@ class SystemRouter:
     @endpoint("system.get_executor_job")
     async def get_executor_job(self, job_id: str) -> dict:
         """Get metadata for a single training job by ID."""
-        from domains.training.executor import _instance
+        from domain.training._internal.executor import _instance
 
         if _instance is None:
             raise_error("executor not initialized", "E_INFRA_STARTUP")
@@ -224,7 +224,7 @@ class SystemRouter:
     @endpoint("system.get_executor_job_result")
     async def get_executor_job_result(self, job_id: str) -> dict:
         """Get shape/dtype summary for a completed job's trained weights."""
-        from domains.training.executor import _instance
+        from domain.training._internal.executor import _instance
 
         if _instance is None:
             raise_error("executor not initialized", "E_INFRA_STARTUP")
@@ -243,7 +243,7 @@ class SystemRouter:
     ) -> dict:
         """Remove completed/failed/cancelled jobs older than max_age_s."""
         try:
-            from domains.training.executor import _instance
+            from domain.training._internal.executor import _instance
 
             if _instance is None:
                 return success_response(data={"purged": 0})
@@ -263,7 +263,7 @@ class SystemRouter:
     ) -> dict:
         """Request cancellation for a training job."""
         try:
-            from domains.training.executor import _instance
+            from domain.training._internal.executor import _instance
 
             if _instance is None:
                 return success_response(

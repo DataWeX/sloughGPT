@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from domains.models.provider import (
+from domain.models._internal.provider import (
     ChatMessage,
     ModelCapabilities,
     ModelProvider,
@@ -35,7 +35,7 @@ from domains.models.provider import (
 @pytest.fixture(autouse=True)
 def _clean_registries():
     """Clear provider/processor registries before each test."""
-    import domains.models.provider as mod
+    import domain.models._internal.provider as mod
     mod._providers.clear()
     mod._processors.clear()
     yield
@@ -618,7 +618,7 @@ class TestUpdatePersonalityTraits:
         assert style._directness == 0.5
 
     def test_noop_when_no_default_router(self):
-        import domains.models.provider as prov
+        import domain.models._internal.provider as prov
         old = prov._providers.pop("default", None)
         try:
             update_personality_traits({"warmth": 0.5})

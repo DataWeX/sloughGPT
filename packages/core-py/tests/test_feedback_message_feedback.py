@@ -1,7 +1,7 @@
 """Tests for MessageFeedback — in-memory feedback and session context."""
 from __future__ import annotations
 
-from domains.feedback.message_feedback import MessageData, MessageFeedback, get_message_feedback
+from domain.feedback._internal.message_feedback import MessageData, MessageFeedback, get_message_feedback
 
 
 class TestMessageData:

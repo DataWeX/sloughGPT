@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from domains.training.tracking import (
+from domain.training._internal.tracking import (
     TrackerBackend,
     TrackingConfig,
     ExperimentTracker,

@@ -134,7 +134,7 @@ def start_turbo_training(config: dict) -> dict:
         "error": None,
         "experiment_id": experiment_id,
     }
-    from domains.training.runtime_protocol import get_training_runtime
+    from domain.training._internal.runtime_protocol import get_training_runtime
     get_training_runtime().register(job_id, runtime_job, cancel_event, config)
 
     return {
@@ -149,7 +149,7 @@ def start_turbo_training(config: dict) -> dict:
 
 
 def run_turbo_worker(config: dict) -> None:
-    from domains.training.train_pipeline import SloughGPTTrainer
+    from domain.training._internal.train_pipeline import SloughGPTTrainer
 
     job_id = _turbo_state.get("job_id", "")
     data_path = config.get("data_path", "")

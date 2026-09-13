@@ -1,5 +1,5 @@
 """
-Coverage-completion tests for the VM device layer (domains/shell/vm.py).
+Coverage-completion tests for the VM device layer (domain.shell._internal.vm.py).
 
 Instantiates Memory, Device, and each device driver directly and exercises the
 specific branches/error paths that were previously uncovered.  Fast — no CPU
@@ -8,7 +8,7 @@ instruction loops.
 
 import pytest
 
-from domains.shell.vm import (
+from domain.shell._internal.vm import (
     Memory, InsFault, Device, DeviceFault,
     ConsoleDevice, FileDevice, IRQDevice,
     VGADevice, PS2KeyboardDevice, BlockDevice, SerialDevice,
@@ -478,7 +478,7 @@ class TestDeviceBus:
 
 class TestVirtualSystem:
     def test_reset(self):
-        from domains.shell.vm import VirtualSystem
+        from domain.shell._internal.vm import VirtualSystem
         vs = VirtualSystem()
         vs.load_program("NOP\nHALT")
         vs.run()

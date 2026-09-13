@@ -1,7 +1,7 @@
 """Tests for cloud training providers."""
 
 import pytest
-from domains.training.cloud import (
+from domain.training._internal.cloud import (
     CloudTrainingConfig,
     CloudTrainingStatus,
     LocalTrainingProvider,

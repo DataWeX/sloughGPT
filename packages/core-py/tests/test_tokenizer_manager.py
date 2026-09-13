@@ -1,11 +1,11 @@
-"""Tests for domains/training/tokenizer_manager.py TokenizerManager."""
+"""Tests for domain.training._internal.tokenizer_manager.py TokenizerManager."""
 
 import json
 from types import SimpleNamespace
 
 import pytest
 
-from domains.training.tokenizer_manager import (
+from domain.training._internal.tokenizer_manager import (
     _TOKENIZER_ALGO_KEY,
     TokenizerManager,
     get_tokenizer_manager,
@@ -43,7 +43,7 @@ class TestSingleton:
 class TestLifecycle:
     def test_get_tokenizer_creates_bpe(self):
         mgr = TokenizerManager()
-        from domains.training.tokenizer import SloBPE
+        from domain.training._internal.tokenizer import SloBPE
         assert isinstance(mgr.get_tokenizer(), SloBPE)
 
     def test_train_bpe(self):
@@ -98,7 +98,7 @@ class TestLifecycle:
         mgr.reset()
         assert mgr.tokenizer_type == "bpe"
         assert mgr.is_trained() is False
-        from domains.training.tokenizer import SloBPE
+        from domain.training._internal.tokenizer import SloBPE
         assert isinstance(mgr._tokenizer, SloBPE)
 
 
@@ -253,22 +253,22 @@ class TestIntegration:
         import types as _types
         import sys
         fake_tok = SimpleNamespace(vocab_size=100)
-        fake_mod = _types.ModuleType("routers.auto_train")
-        fake_mod.state = SimpleNamespace(student_tokenizer=fake_tok)
-        monkeypatch.setitem(sys.modules, "routers", _types.ModuleType("routers"))
-        monkeypatch.setitem(sys.modules, "routers.auto_train", fake_mod)
+        fake_service = _types.ModuleType("domains.training.service")
+        fake_service.get_state = lambda: SimpleNamespace(student_tokenizer=fake_tok)
+        monkeypatch.setitem(sys.modules, "domains.training.service", fake_service)
         mgr = TokenizerManager()
+        mgr._tokenizer = None
         assert mgr.borrow_from_autotrain() is True
         assert mgr._tokenizer is fake_tok
 
     def test_borrow_from_autotrain_ignores_small(self, monkeypatch):
         import types as _types
         import sys
-        fake_mod = _types.ModuleType("routers.auto_train")
-        fake_mod.state = SimpleNamespace(student_tokenizer=SimpleNamespace(vocab_size=3))
-        monkeypatch.setitem(sys.modules, "routers", _types.ModuleType("routers"))
-        monkeypatch.setitem(sys.modules, "routers.auto_train", fake_mod)
+        fake_service = _types.ModuleType("domains.training.service")
+        fake_service.get_state = lambda: SimpleNamespace(student_tokenizer=SimpleNamespace(vocab_size=3))
+        monkeypatch.setitem(sys.modules, "domains.training.service", fake_service)
         mgr = TokenizerManager()
+        mgr._tokenizer = None
         assert mgr.borrow_from_autotrain() is False
 
     def test_adopt_valid_tokenizer(self):

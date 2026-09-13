@@ -7,7 +7,7 @@ import numpy as np
 from unittest.mock import MagicMock, patch, AsyncMock
 from dataclasses import dataclass
 
-from domains.multimodal.manager import (
+from domain.multimodal._internal.manager import (
     MultimodalCapabilities,
     MultimodalManager,
     get_multimodal_manager,
@@ -46,8 +46,8 @@ class TestMultimodalManager:
         assert m._learning_count == 0
         assert m._caption_history == []
 
-    @patch("domains.multimodal.manager.get_speech_recognizer")
-    @patch("domains.multimodal.manager.get_multimodal_engine")
+    @patch("domain.multimodal._internal.manager.get_speech_recognizer")
+    @patch("domain.multimodal._internal.manager.get_multimodal_engine")
     @patch("os.path.exists", return_value=False)
     def test_initialize(self, mock_exists, mock_engine, mock_speech):
         m = MultimodalManager()
@@ -55,8 +55,8 @@ class TestMultimodalManager:
         assert m._initialized is True
         mock_speech.assert_called_once_with(use_server=False)
 
-    @patch("domains.multimodal.manager.get_speech_recognizer")
-    @patch("domains.multimodal.manager.get_multimodal_engine")
+    @patch("domain.multimodal._internal.manager.get_speech_recognizer")
+    @patch("domain.multimodal._internal.manager.get_multimodal_engine")
     @patch("os.path.exists", return_value=False)
     def test_initialize_with_server(self, mock_exists, mock_engine, mock_speech):
         m = MultimodalManager()
@@ -160,7 +160,7 @@ class TestRecognizeSpeech:
         m.recognize_speech(audio, "en")
         mock_recognizer.recognize.assert_called_once()
 
-    @patch("domains.multimodal.manager.get_speech_recognizer")
+    @patch("domain.multimodal._internal.manager.get_speech_recognizer")
     def test_recognize_speech_no_recognizer(self, mock_get):
         m = MultimodalManager()
         mock_rec = MagicMock()
@@ -194,7 +194,7 @@ class TestRecognizeSpeech:
         m = MultimodalManager()
         mock_recognizer = MagicMock()
         m._speech_recognizer = mock_recognizer
-        from domains.multimodal.audio_filter import AudioFilterConfig, FilterMode
+        from domain.multimodal._internal.audio_filter import AudioFilterConfig, FilterMode
         m._audio_filter_config = AudioFilterConfig(mode=FilterMode.NONE)
         audio = np.zeros(160, dtype=np.int16).tobytes()
         m.recognize_speech(audio, "en")
@@ -217,8 +217,8 @@ class TestCaptionImage:
         from PIL import Image
         img = Image.new("RGB", (64, 64), (128, 128, 128))
 
-        with patch("domains.multimodal.manager.get_multimodal_engine", return_value=engine_mock):
-            with patch("domains.multimodal.manager.contrastive_step", return_value=0.1):
+        with patch("domain.multimodal._internal.manager.get_multimodal_engine", return_value=engine_mock):
+            with patch("domain.multimodal._internal.manager.contrastive_step", return_value=0.1):
                 result = m.caption_image(img, generate_only=True)
                 assert result.text == "generated caption"
                 assert result.tags == ["vision", "generated"]
@@ -265,7 +265,7 @@ class TestDetectObjects:
 
         from PIL import Image
         img = Image.new("RGB", (64, 64))
-        with patch("domains.multimodal.manager.contrastive_step", return_value=0.1):
+        with patch("domain.multimodal._internal.manager.contrastive_step", return_value=0.1):
             objs = m.detect_objects(img)
             assert len(objs) == 1
             assert objs[0].label == "a red circle"
@@ -298,7 +298,7 @@ class TestAskQuestion:
         from PIL import Image
         img = Image.new("RGB", (64, 64))
 
-        with patch("domains.multimodal.manager.get_multimodal_engine") as mock_get:
+        with patch("domain.multimodal._internal.manager.get_multimodal_engine") as mock_get:
             mock_engine = MagicMock()
             mock_engine.generate_vqa.return_value = MagicMock(text="blue")
             mock_get.return_value = mock_engine
@@ -350,7 +350,7 @@ class TestBrowserSpeechConfig:
 
     def test_get_config_no_recognizer(self):
         m = MultimodalManager()
-        with patch("domains.multimodal.manager.get_speech_recognizer") as mock_get:
+        with patch("domain.multimodal._internal.manager.get_speech_recognizer") as mock_get:
             mock_rec = MagicMock()
             mock_rec.get_config.return_value = {"language": "en-US"}
             mock_get.return_value = mock_rec
@@ -370,14 +370,14 @@ class TestBrowserSpeechConfig:
 class TestSingleton:
 
     def test_get_multimodal_manager(self):
-        import domains.multimodal.manager as mod
+        import domain.multimodal._internal.manager as mod
         mod._multimodal_manager = None
         m = get_multimodal_manager()
         assert isinstance(m, MultimodalManager)
         assert get_multimodal_manager() is m
 
     def test_initialize_multimodal(self):
-        import domains.multimodal.manager as mod
+        import domain.multimodal._internal.manager as mod
         mod._multimodal_manager = None
         with patch.object(MultimodalManager, "initialize"):
             initialize_multimodal(speech_server=False, vision_model="slonet")

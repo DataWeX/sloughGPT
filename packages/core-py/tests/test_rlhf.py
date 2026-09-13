@@ -1,10 +1,10 @@
-"""Tests for domains/training/rlhf.py (RLHFConfig, RLHFMetric, RewardModel, PPOTrainer, _as_array, create_rlhf_trainer)."""
+"""Tests for domain.training._internal.rlhf.py (RLHFConfig, RLHFMetric, RewardModel, PPOTrainer, _as_array, create_rlhf_trainer)."""
 
 import numpy as np
 import pytest
 
-from domains.training.slonet import SloLinear, Tensor
-from domains.training.rlhf import (
+from domain.training._internal.slonet import SloLinear, Tensor
+from domain.training._internal.rlhf import (
     RLHFConfig,
     RLHFMetric,
     RewardModel,

@@ -8,7 +8,7 @@ function. Metal/CUDA backend tests require actual hardware.
 import numpy as np
 import pytest
 
-from domains.slolib.gpu import _Accelerator, get_accelerator, set_accelerator_precision, reset_accelerator
+from domain.slolib._internal.gpu import _Accelerator, get_accelerator, set_accelerator_precision, reset_accelerator
 
 
 class TestBaseAcceleratorPrecision:

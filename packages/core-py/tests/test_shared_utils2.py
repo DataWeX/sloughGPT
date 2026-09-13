@@ -1,7 +1,7 @@
-"""Tests for domains.shared.utils — utility functions and Timer."""
+"""Tests for domain.shared._internal.utils — utility functions and Timer."""
 
 import time
-from domains.shared.utils import (
+from domain.shared._internal.utils import (
     generate_id, hash_string, format_size, format_time,
     merge_dicts, clamp, Timer,
 )

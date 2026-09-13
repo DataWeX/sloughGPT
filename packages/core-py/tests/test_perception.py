@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
-from domains.collections.perception import (
+from domain.collections._internal.perception import (
     PerceptionConfig, PerceptionEvent, RecordToMaterial,
     WorldPerception, PerceptionFeed, PerceptionScheduler,
 )
-from domains.collections.sources import Record, GeneratorSource
-from domains.collections.stores import MemoryStore
-from domains.shell.simulation import WorldGrid
+from domain.collections._internal.sources import Record, GeneratorSource
+from domain.collections._internal.stores import MemoryStore
+from domain.shell._internal.simulation import WorldGrid
 
 
 class TestRecordToMaterial:

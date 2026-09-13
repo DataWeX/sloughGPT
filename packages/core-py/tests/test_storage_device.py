@@ -7,8 +7,8 @@ import tempfile
 
 import pytest
 
-from domains.shell.storage_device import StorageDevice
-from domains.shell.kernel_syscall import SyscallResult
+from domain.shell._internal.storage_device import StorageDevice
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 
 @pytest.fixture

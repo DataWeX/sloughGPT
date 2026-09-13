@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pytest
 import numpy as np
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloSGD,
     SloAdam,
     SloAdamW,

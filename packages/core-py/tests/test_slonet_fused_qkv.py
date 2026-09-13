@@ -1,7 +1,7 @@
 """Tests for fused QKV projection optimization."""
 import numpy as np
 import pytest
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloMultiHeadAttention, SloTransformer, SloAdamW, cross_entropy,
     mse_loss, topk, SloLinear, SloEmbedding, SloRMSNorm, SloLayerNorm,
     SloTransformerBlock, SloDropout, SloLayer,

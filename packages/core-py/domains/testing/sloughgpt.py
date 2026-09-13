@@ -4,7 +4,7 @@ sloughGPT-specific UI Journey Test Configuration.
 Provides pre-configured site config and pages for sloughGPT.
 
 Usage:
-    from domains.testing.sloughgpt import SLOUGHPGPT_SITE, SloughGPTJourney
+    from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE, SloughGPTJourney
 
     journey = SloughGPTJourney()
     result = journey.run([journey.goto("/training"), journey.check_body("train")])

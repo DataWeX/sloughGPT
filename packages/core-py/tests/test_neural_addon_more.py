@@ -29,10 +29,10 @@ from domains.shell.addons.neural import (
     NeuralKVCache,
     TokenizerDevice,
 )
-from domains.shell.kernel import Kernel
-from domains.shell.kernel_devices import DeviceType
-from domains.shell.kernel_interrupts import InterruptType
-from domains.shell.kernel_process import Process, ProcessState
+from domain.shell._internal.kernel import Kernel
+from domain.shell._internal.kernel_devices import DeviceType
+from domain.shell._internal.kernel_interrupts import InterruptType
+from domain.shell._internal.kernel_process import Process, ProcessState
 
 
 def _make_proc(pid: int = 7, name: str = "neural-worker") -> Process:
@@ -687,7 +687,7 @@ class TestBatchProcessor:
 
 class TestNeuralKernelReExport:
     def test_module_getattr_neural_kernel(self):
-        from domains.shell.kernel import NeuralKernel as NK
+        from domain.shell._internal.kernel import NeuralKernel as NK
         assert neural.NeuralKernel is NK
 
     def test_module_getattr_unknown(self):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from domains.auth.models import Role, Tenant, User, UserRole
+from domain.auth._internal.models import Role, Tenant, User, UserRole
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled

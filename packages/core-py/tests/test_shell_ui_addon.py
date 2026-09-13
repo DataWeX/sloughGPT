@@ -5,7 +5,7 @@ VM process syscall handling, and run_program device wiring.
 
 import types
 
-from domains.shell.kernel import Kernel
+from domain.shell._internal.kernel import Kernel
 from domains.shell.addons import shell_ui
 
 SYS_SRC = "\n".join([
@@ -167,7 +167,7 @@ class TestKernelShell:
     def test_filesystem_commands(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("hello.txt", b"hello world")
@@ -256,7 +256,7 @@ class TestKernelShell:
     def test_cat_no_args(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -267,7 +267,7 @@ class TestKernelShell:
     def test_write_no_args(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -278,7 +278,7 @@ class TestKernelShell:
     def test_ls_empty_filesystem(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -307,7 +307,7 @@ class TestKernelShell:
     def test_cat_file_content(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("data.txt", b"some data here")
@@ -319,7 +319,7 @@ class TestKernelShell:
     def test_write_and_cat_roundtrip(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -388,7 +388,7 @@ class TestSpawnVMProcess:
         assert proc.name == "myprog"
 
     def test_vm_process_priority(self):
-        from domains.shell.kernel_process import Priority
+        from domain.shell._internal.kernel_process import Priority
         k = Kernel()
         k.boot()
         proc = k.spawn_vm_process("test", "HALT", priority=Priority.HIGH)
@@ -548,7 +548,7 @@ class TestKernelShellExtended:
     def test_multiple_files_ls(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("a.txt", b"aaa")
@@ -565,7 +565,7 @@ class TestKernelShellExtended:
     def test_write_multiple_words(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -582,7 +582,7 @@ class TestKernelShellExtended:
     def test_run_multiple_programs(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("p1.asm", b"HALT")
@@ -596,7 +596,7 @@ class TestKernelShellExtended:
     def test_cat_nonexistent_file(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block
@@ -704,7 +704,7 @@ class TestSpawnVMProcessExtended:
         k = Kernel()
         k.boot()
         proc = k.spawn_vm_process("test", "HALT")
-        from domains.shell.kernel_process import Priority
+        from domain.shell._internal.kernel_process import Priority
         assert proc.priority == Priority.NORMAL
 
     def test_vm_exit_syscall(self):
@@ -838,7 +838,7 @@ class TestKernelShellAdditional:
     def test_run_program_from_fs(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("prog.asm", "LOAD_CONST R0, 55\nHALT")
@@ -852,7 +852,7 @@ class TestKernelShellAdditional:
     def test_cat_multiple_files(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         fs.write("a.txt", b"aaa")
@@ -867,7 +867,7 @@ class TestKernelShellAdditional:
     def test_write_and_run_roundtrip(self):
         k = Kernel()
         k.boot()
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         block = BlockDevice()
         fs = FlatFS(block)
         k._block_device = block

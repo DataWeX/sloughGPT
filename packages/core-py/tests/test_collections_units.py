@@ -1,12 +1,12 @@
-from domains.collections.sources import Record
-from domains.collections.filters import (
+from domain.collections._internal.sources import Record
+from domain.collections._internal.filters import (
     LengthFilter, DedupFilter, KeywordFilter, RegexFilter,
     LanguageFilter, FilterChain, SamplerFilter, TransformFilter,
     TruncateFilter, PrefixFilter, MetadataFilter,
 )
-from domains.collections.stores import MemoryStore, FileStore
-from domains.collections.pipeline import CollectionPipeline
-from domains.collections.registry import CollectionRegistry, get_registry
+from domain.collections._internal.stores import MemoryStore, FileStore
+from domain.collections._internal.pipeline import CollectionPipeline
+from domain.collections._internal.registry import CollectionRegistry, get_registry
 
 
 # ── Record ─────────────────────────────────────────────────────────

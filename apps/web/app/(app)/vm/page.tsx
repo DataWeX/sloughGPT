@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge, Spinner } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge, Spinner, Tabs, TabsList, TabsTrigger, TabsContent } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
@@ -10,6 +10,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { chatDB } from '@/lib/db'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
+import { V86TerminalPanel } from '@/components/shell/V86TerminalPanel'
 
 const DEFAULT_MAX_STEPS = 5000
 const MAX_STEPS_LIMIT = 1_000_000
@@ -516,6 +517,7 @@ HLT`,
 }
 
 export default function VMPage() {
+  const [vmMode, setVmMode] = useState<'assembly' | 'browser'>('assembly')
   const [source, setSource] = useState(DEFAULT_PROGRAMS.hello)
   const [result, setResult] = useState<VMRunResult | null>(null)
   const [running, setRunning] = useState(false)
@@ -729,7 +731,17 @@ export default function VMPage() {
   )
 
   return (
-    <PageContainer title="VM Console" subtitle="x86-32 assembly sandbox — write, run, inspect" maxWidth="max-w-6xl">
+    <PageContainer title="VM Console" subtitle="x86-32 assembly sandbox + browser Linux" maxWidth="max-w-6xl">
+      <Tabs value={vmMode} onValueChange={(v) => setVmMode(v as 'assembly' | 'browser')}>
+        <TabsList
+          aria-label="VM mode"
+          className="rounded-xl border border-white/[0.06] bg-[#111111] p-1 h-auto mb-4"
+        >
+          <TabsTrigger value="assembly" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">Assembly Sandbox</TabsTrigger>
+          <TabsTrigger value="browser" className="rounded-lg px-3.5 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#1c1c1e] data-[state=active]:text-[#c7c7cc] data-[state=active]:shadow-sm data-[state=active]:shadow-black/20 data-[state=inactive]:text-[#636366] data-[state=inactive]:hover:text-[#8e8e93]">Browser VM</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="assembly">
         {/* Top bar: program selector + run */}
         <Card>
           <CardContent className="p-3">
@@ -1398,6 +1410,23 @@ export default function VMPage() {
             </CardContent>
           </Card>
         )}
+        </TabsContent>
+
+        <TabsContent value="browser">
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-3">
+                <div className="flex items-center gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Real Linux running in your browser via v86. Boot into a Buildroot image with BusyBox, Python, and the Dait shell.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+            <V86TerminalPanel className="h-[calc(100vh-12rem)]" />
+          </div>
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   )
 }

@@ -154,7 +154,7 @@ class ModelsController:
             "Loading %s into SloTransformer (pure NumPy)...", model_id, extra={"tag": "MODEL"}
         )
         try:
-            from domains.models.provider import setup_providers
+            from domain.models._internal.provider import setup_providers
 
             from config import ServerConfig
 
@@ -180,7 +180,7 @@ class ModelsController:
                     raise RuntimeError(
                         f"Lazy load requested for {model_id} but ProcessGuard could not be started"
                     )
-                from domains.inference.slonet_provider import SloNetChatProvider
+                from domain.inference._internal.slonet_provider import SloNetChatProvider
 
                 lazy_provider = SloNetChatProvider.lazy_from_slnc(
                     str(_slnc),
@@ -233,7 +233,7 @@ class ModelsController:
 
             # Auto-select precision on GPU (fp16 benchmark)
             try:
-                from domains.slolib.gpu import set_accelerator_precision
+                from domain.slolib._internal.gpu import set_accelerator_precision
 
                 active = set_accelerator_precision("auto")
                 if active == "fp16":
@@ -253,7 +253,7 @@ class ModelsController:
         # readiness guards (``state.model is not None``) accept the loaded
         # model. state.py delegates to ServerState so only one write needed.
         try:
-            from domains.models.provider import get_provider
+            from domain.models._internal.provider import get_provider
 
             slonet_provider = get_provider("slonet-native") or get_provider("slonet")
             # setup_providers() logs-and-continues when the requested model fails
@@ -316,7 +316,7 @@ class ModelsController:
         try:
             from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
             from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
-            from domains.models.provider import attach_process_guard_to_provider
+            from domain.models._internal.provider import attach_process_guard_to_provider
 
             from config import ServerConfig
 
@@ -478,7 +478,7 @@ class ModelsController:
         self._stop_process_guard()
         self._process_guard = guard
         try:
-            from domains.models.provider import attach_process_guard_to_provider
+            from domain.models._internal.provider import attach_process_guard_to_provider
 
             attach_process_guard_to_provider(guard)
         except Exception as e:
@@ -648,7 +648,7 @@ class ModelsController:
 
             process_guard = self._build_process_guard_for_path(slnc_path, model_id)
 
-            from domains.models.provider import setup_providers
+            from domain.models._internal.provider import setup_providers
 
             setup_providers(
                 slonet_hf_id=tokenizer_model_id,
@@ -795,7 +795,7 @@ class ModelsController:
 
         # Drop cross-turn KV states — keys/values from the unloaded model are invalid
         try:
-            from domains.models.provider import get_provider
+            from domain.models._internal.provider import get_provider
 
             provider = get_provider("slonet-native")
             if provider is None:
@@ -807,7 +807,7 @@ class ModelsController:
 
         # Clear all providers so chat/generation fail fast until a model reloads
         try:
-            from domains.models.provider import clear_providers
+            from domain.models._internal.provider import clear_providers
 
             clear_providers()
         except Exception as e:
@@ -844,7 +844,7 @@ class ModelsController:
             self._tokenizer = None
 
         try:
-            from domains.training.slonet import _get_accelerator
+            from domain.training._internal.slonet import _get_accelerator
 
             acc = _get_accelerator()
             if acc is not None and hasattr(acc, "empty_cache"):

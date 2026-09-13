@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.training.auto_trainer import AutoTrainer
+from domain.training._internal.auto_trainer import AutoTrainer
 
 
 class TestAutoTrainer:
@@ -66,14 +66,14 @@ class TestAutoTrainer:
         assert t.status()["enabled"] is True
         t.stop()
 
-    @patch("domains.training.auto_trainer.AutoTrainer._do_train")
+    @patch("domain.training._internal.auto_trainer.AutoTrainer._do_train")
     def test_check_no_new_data(self, mock_train):
         """No training when no new files detected."""
         t = AutoTrainer()
         t._check_and_train()
         mock_train.assert_not_called()
 
-    @patch("domains.training.auto_trainer.AutoTrainer._do_train")
+    @patch("domain.training._internal.auto_trainer.AutoTrainer._do_train")
     def test_check_below_threshold(self, mock_train):
         """No training when conversations below threshold."""
         t = AutoTrainer(threshold=10)
@@ -84,7 +84,7 @@ class TestAutoTrainer:
         mock_train.assert_not_called()
         assert t._conversation_count == 1
 
-    @patch("domains.training.auto_trainer.AutoTrainer._do_train", return_value=True)
+    @patch("domain.training._internal.auto_trainer.AutoTrainer._do_train", return_value=True)
     def test_check_at_threshold(self, mock_train):
         """Training triggered at threshold."""
         t = AutoTrainer(threshold=3, interval_s=0)
@@ -99,7 +99,7 @@ class TestAutoTrainer:
                 t._check_and_train()
         mock_train.assert_called()
 
-    @patch("domains.training.auto_trainer.AutoTrainer._do_train", return_value=True)
+    @patch("domain.training._internal.auto_trainer.AutoTrainer._do_train", return_value=True)
     def test_check_interval_respected(self, mock_train):
         """Training not triggered if interval hasn't elapsed."""
         t = AutoTrainer(threshold=1, interval_s=9999)
@@ -164,7 +164,7 @@ class TestAutoTrainer:
                 stdout='{"success": true, "loss": 2.5, "steps": 10}\n',
                 stderr="",
             )
-            with patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+            with patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path):
                 result = t._do_train()
 
         assert result is True
@@ -185,7 +185,7 @@ class TestAutoTrainer:
 
     def test_do_train_venv_missing(self, tmp_path, monkeypatch):
         """Training skipped when .venv Python doesn't exist."""
-        monkeypatch.setattr("domains.training.auto_trainer._REPO_ROOT", tmp_path)
+        monkeypatch.setattr("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path)
         t = AutoTrainer()
         t._conversation_count = 5
 
@@ -242,7 +242,7 @@ class TestAutoTrainer:
                 stdout='{"success": true, "loss": 1.5, "steps": 5}\n',
                 stderr="",
             )
-            with patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+            with patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path):
                 result = t._do_train()
         assert result is True
         assert t._total_trains == 1
@@ -266,7 +266,7 @@ class TestAutoTrainer:
         t._conversation_count = 5
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="train failed")
-            with patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+            with patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path):
                 result = t._do_train()
         assert result is False
         assert t._total_trains == 0
@@ -292,7 +292,7 @@ class TestAutoTrainer:
                 stdout='{"success": true, "loss": 1.5, "steps": 5}\n',
                 stderr="",
             )
-            with patch("domains.training.auto_trainer._REPO_ROOT", tmp_path), \
+            with patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path), \
                     patch("domains.training.quality_scorer.score_batch", side_effect=RuntimeError("db down")):
                 result = t._do_train()
         assert result is True
@@ -319,7 +319,7 @@ class TestAutoTrainer:
                 stdout='{"success": false, "error": "loss diverged"}\n',
                 stderr="",
             )
-            with patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+            with patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path):
                 result = t._do_train()
         assert result is False
         assert t._total_trains == 0
@@ -340,7 +340,7 @@ class TestAutoTrainer:
         t = AutoTrainer(threshold=5, interval_s=0)
         t._conversation_count = 5
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("hf_train.py", 300)), \
-                patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+                patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path):
             result = t._do_train()
         assert result is False
 
@@ -360,7 +360,7 @@ class TestAutoTrainer:
         t = AutoTrainer(threshold=5, interval_s=0)
         t._conversation_count = 5
         with patch("subprocess.run", side_effect=OSError("no python")), \
-                patch("domains.training.auto_trainer._REPO_ROOT", tmp_path):
+                patch("domain.training._internal.auto_trainer._REPO_ROOT", tmp_path):
             result = t._do_train()
         assert result is False
 
@@ -368,7 +368,7 @@ class TestAutoTrainer:
 class TestAutoTrainerSingleton:
     def test_get_auto_trainer_creates_singleton(self, monkeypatch):
         """get_auto_trainer creates a singleton with env-driven config."""
-        import domains.training.auto_trainer as at
+        import domain.training._internal.auto_trainer as at
         monkeypatch.setattr(at, "_auto_trainer", None)
         monkeypatch.setenv("SLO_AUTO_TRAIN_THRESHOLD", "7")
         monkeypatch.setenv("SLO_AUTO_TRAIN_INTERVAL", "120")
@@ -379,14 +379,14 @@ class TestAutoTrainerSingleton:
 
     def test_start_auto_trainer_if_disabled(self, monkeypatch):
         """start_auto_trainer_if_enabled returns None when disabled."""
-        import domains.training.auto_trainer as at
+        import domain.training._internal.auto_trainer as at
         monkeypatch.setattr(at, "_auto_trainer", None)
         monkeypatch.setenv("SLO_AUTO_TRAIN", "0")
         assert at.start_auto_trainer_if_enabled() is None
 
     def test_start_auto_trainer_if_enabled(self, monkeypatch):
         """start_auto_trainer_if_enabled starts the trainer when enabled."""
-        import domains.training.auto_trainer as at
+        import domain.training._internal.auto_trainer as at
         t = AutoTrainer(interval_s=9999)
         monkeypatch.setattr(at, "_auto_trainer", t)
         monkeypatch.setenv("SLO_AUTO_TRAIN", "1")
@@ -400,7 +400,7 @@ class TestAutoTrainerSingleton:
 
     def test_stop_auto_trainer_stops_global(self, monkeypatch):
         """stop_auto_trainer stops the global trainer."""
-        import domains.training.auto_trainer as at
+        import domain.training._internal.auto_trainer as at
         t = AutoTrainer(interval_s=9999)
         monkeypatch.setattr(at, "_auto_trainer", t)
         t.start()

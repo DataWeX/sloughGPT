@@ -2,12 +2,12 @@
 
 import pytest
 
-from domains.training.token_tree_manager import (
+from domain.training._internal.token_tree_manager import (
     DEFAULT_CORPUS,
     TokenTreeManager,
     get_token_tree_manager,
 )
-import domains.training.token_tree_manager as token_tree_manager_module
+import domain.training._internal.token_tree_manager as token_tree_manager_module
 
 
 @pytest.fixture(autouse=True)
@@ -62,7 +62,7 @@ class TestExplicitTrain:
 
 class TestAdopt:
     def test_adopt_replaces_current_tree(self):
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
         mgr = TokenTreeManager.get_instance()
         before = mgr.get_tree(vocab_size=32)
         external = TokenTree().train(["zzz zzz qux qux"], vocab_size=16, min_frequency=1)
@@ -72,8 +72,8 @@ class TestAdopt:
         assert mgr.get_tree() is not before
 
     def test_adopt_tree_saves_and_queries(self, tmp_path, monkeypatch):
-        from domains.training.token_tree import TokenTree
-        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
+        from domain.training._internal.token_tree import TokenTree
+        monkeypatch.setattr("domain.training._internal.token_tree_manager._SAVE_DIR", tmp_path)
         mgr = TokenTreeManager.get_instance()
         external = TokenTree().train(["the quick brown fox"], vocab_size=32, min_frequency=1)
         mgr.adopt(external)

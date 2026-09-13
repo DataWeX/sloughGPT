@@ -1,11 +1,11 @@
-"""Tests for domains/inference/embeddings.py."""
+"""Tests for domain.inference._internal.embeddings.py."""
 
 import sys
 
 import numpy as np
 import pytest
 
-from domains.inference.embeddings import (
+from domain.inference._internal.embeddings import (
     BatchEmbedder,
     Embedder,
     EmbeddingProvider,
@@ -245,7 +245,7 @@ class TestBatchEmbedder:
 
 class TestCreateEmbedder:
     def test_returns_base_impl(self):
-        from domains.inference.embeddings import BaseEmbedder
+        from domain.inference._internal.embeddings import BaseEmbedder
 
         embedder = create_embedder(provider="in_memory", dimension=16)
         assert isinstance(embedder, BaseEmbedder)

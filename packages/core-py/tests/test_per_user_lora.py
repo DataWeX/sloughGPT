@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from domains.feedback.per_user_lora import (
+from domain.feedback._internal.per_user_lora import (
     PerUserLoRAStore,
     UserAdapter,
 )

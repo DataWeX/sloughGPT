@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.training.pair_extractor import (
+from domain.training._internal.pair_extractor import (
     extract_pairs_from_sessions,
     extract_pairs_from_logs,
     extract_pairs_from_corpus,
@@ -48,7 +48,7 @@ def _write_corpus(d: Path, entries: list) -> Path:
 class TestExtractPairsFromSessions:
     def test_basic_extraction(self, tmp_path, monkeypatch):
         """Extracts user→assistant pairs from session files."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         _write_session(tmp_path, "s1", [
             {"role": "user", "content": "Hello there"},
             {"role": "assistant", "content": "Hi! How can I help?"},
@@ -63,7 +63,7 @@ class TestExtractPairsFromSessions:
 
     def test_min_length_filter(self, tmp_path, monkeypatch):
         """Short messages are filtered out."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         _write_session(tmp_path, "s1", [
             {"role": "user", "content": "Hi"},
             {"role": "assistant", "content": "Hey"},
@@ -76,7 +76,7 @@ class TestExtractPairsFromSessions:
 
     def test_deduplication(self, tmp_path, monkeypatch):
         """Duplicate pairs are deduplicated by content hash."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         msgs = [
             {"role": "user", "content": "Hello there"},
             {"role": "assistant", "content": "Hi! How can I help?"},
@@ -88,7 +88,7 @@ class TestExtractPairsFromSessions:
 
     def test_limit(self, tmp_path, monkeypatch):
         """Respects limit parameter."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         for i in range(5):
             _write_session(tmp_path, f"s{i}", [
                 {"role": "user", "content": f"Question {i} about something interesting"},
@@ -99,7 +99,7 @@ class TestExtractPairsFromSessions:
 
     def test_session_ids_filter(self, tmp_path, monkeypatch):
         """Only extracts from specified session IDs."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         _write_session(tmp_path, "s1", [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi there friend"},
@@ -114,13 +114,13 @@ class TestExtractPairsFromSessions:
 
     def test_empty_sessions_dir(self, tmp_path, monkeypatch):
         """Returns empty list when directory doesn't exist."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path / "nonexistent")
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path / "nonexistent")
         pairs = extract_pairs_from_sessions(limit=10, min_length=3)
         assert pairs == []
 
     def test_skip_non_user_assistant(self, tmp_path, monkeypatch):
         """Only counts user→assistant consecutive pairs."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         _write_session(tmp_path, "s1", [
             {"role": "system", "content": "You are helpful"},
             {"role": "user", "content": "Hello there friend"},
@@ -132,7 +132,7 @@ class TestExtractPairsFromSessions:
 
     def test_malformed_json_skipped(self, tmp_path, monkeypatch):
         """Malformed JSON files are skipped without error."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         (tmp_path / "bad.json").write_text("not json {{{")
         _write_session(tmp_path, "s1", [
             {"role": "user", "content": "Hello there"},
@@ -143,7 +143,7 @@ class TestExtractPairsFromSessions:
 
     def test_newest_first(self, tmp_path, monkeypatch):
         """Newest sessions appear first."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         _write_session(tmp_path, "old", [
             {"role": "user", "content": "Old question about something"},
             {"role": "assistant", "content": "Old answer with enough text"},
@@ -158,7 +158,7 @@ class TestExtractPairsFromSessions:
 
     def test_skip_short_session(self, tmp_path, monkeypatch):
         """Sessions with fewer than two messages are skipped."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         _write_session(tmp_path, "s1", [{"role": "user", "content": "Only one message"}])
         _write_session(tmp_path, "s2", [
             {"role": "user", "content": "Hello there"},
@@ -169,7 +169,7 @@ class TestExtractPairsFromSessions:
 
     def test_inner_limit_break(self, tmp_path, monkeypatch):
         """Stops scanning a session once the limit is reached."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         _write_session(tmp_path, "s1", [
             {"role": "user", "content": "Question one about something"},
             {"role": "assistant", "content": "Answer one with detail"},
@@ -183,7 +183,7 @@ class TestExtractPairsFromSessions:
 class TestExtractPairsFromLogs:
     def test_basic_extraction(self, tmp_path, monkeypatch):
         """Extracts pairs from JSONL response logs."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         _write_log(tmp_path, [
             {"user_message": "Hello", "assistant_response": "Hi there!", "model": "gpt2", "session_id": "s1"},
             {"user_message": "Bye", "assistant_response": "Goodbye!", "model": "gpt2", "session_id": "s1"},
@@ -195,7 +195,7 @@ class TestExtractPairsFromLogs:
 
     def test_model_filter(self, tmp_path, monkeypatch):
         """Filters by model name."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         _write_log(tmp_path, [
             {"user_message": "Hello", "assistant_response": "Hi there!", "model": "gpt2", "session_id": "s1"},
             {"user_message": "Hello", "assistant_response": "Hey!", "model": "qwen", "session_id": "s2"},
@@ -206,7 +206,7 @@ class TestExtractPairsFromLogs:
 
     def test_deduplication(self, tmp_path, monkeypatch):
         """Duplicate entries are deduplicated."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         _write_log(tmp_path, [
             {"user_message": "Hello", "assistant_response": "Hi there!", "model": "gpt2", "session_id": "s1"},
             {"user_message": "Hello", "assistant_response": "Hi there!", "model": "gpt2", "session_id": "s1"},
@@ -216,13 +216,13 @@ class TestExtractPairsFromLogs:
 
     def test_empty_logs_dir(self, tmp_path, monkeypatch):
         """Returns empty list when directory doesn't exist."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path / "nonexistent")
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path / "nonexistent")
         pairs = extract_pairs_from_logs(limit=10, min_length=3)
         assert pairs == []
 
     def test_malformed_lines_skipped(self, tmp_path, monkeypatch):
         """Malformed JSON lines are skipped."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         ts = time.strftime("%Y%m%d")
         p = tmp_path / f"responses_{ts}.jsonl"
         p.write_text("not json\n{\"user_message\": \"Hello there\", \"assistant_response\": \"Hey there!\", \"model\": \"gpt2\", \"session_id\": \"s1\"}\n")
@@ -231,7 +231,7 @@ class TestExtractPairsFromLogs:
 
     def test_limit_per_file(self, tmp_path, monkeypatch):
         """Limit applies across files."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         for day in range(3):
             ts = f"202607{10 + day:02d}"
             p = tmp_path / f"responses_{ts}.jsonl"
@@ -242,7 +242,7 @@ class TestExtractPairsFromLogs:
 
     def test_log_inner_limit_break(self, tmp_path, monkeypatch):
         """Stops reading a file once the limit is reached."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         _write_log(tmp_path, [
             {"user_message": "Hello there", "assistant_response": "Hi there!", "model": "gpt2"},
             {"user_message": "Bye now", "assistant_response": "Goodbye!", "model": "gpt2"},
@@ -252,7 +252,7 @@ class TestExtractPairsFromLogs:
 
     def test_blank_lines_skipped(self, tmp_path, monkeypatch):
         """Blank lines in a JSONL log are ignored."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         ts = time.strftime("%Y%m%d")
         p = tmp_path / f"responses_{ts}.jsonl"
         p.write_text(
@@ -265,7 +265,7 @@ class TestExtractPairsFromLogs:
 
     def test_log_min_length_filter(self, tmp_path, monkeypatch):
         """Short messages in logs are filtered out."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         _write_log(tmp_path, [
             {"user_message": "Hi", "assistant_response": "Hey", "model": "gpt2"},
             {"user_message": "Hello there", "assistant_response": "Hi there friend!", "model": "gpt2"},
@@ -276,7 +276,7 @@ class TestExtractPairsFromLogs:
 
     def test_unreadable_log_skipped(self, tmp_path, monkeypatch):
         """Unreadable log files (e.g. directories) are skipped."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         ts = time.strftime("%Y%m%d")
         (tmp_path / f"zz_{ts}.jsonl").mkdir(parents=True)
         _write_log(tmp_path, [
@@ -289,7 +289,7 @@ class TestExtractPairsFromLogs:
 class TestExtractPairsFromCorpus:
     def test_basic_extraction(self, tmp_path, monkeypatch):
         """Extracts user→assistant pairs from captured corpus JSONL."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         _write_corpus(tmp_path, [
             {"messages": [{"role": "user", "content": "Hello there"}, {"role": "assistant", "content": "Hi! How can I help?"}], "meta": {"model": "qwen", "session_id": "s1"}},
         ])
@@ -302,7 +302,7 @@ class TestExtractPairsFromCorpus:
 
     def test_model_filter(self, tmp_path, monkeypatch):
         """Filters corpus entries by meta.model."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         _write_corpus(tmp_path, [
             {"messages": [{"role": "user", "content": "Hello there"}, {"role": "assistant", "content": "Hi there!"}], "meta": {"model": "qwen"}},
             {"messages": [{"role": "user", "content": "Good day"}, {"role": "assistant", "content": "And to you!"}], "meta": {"model": "gpt2"}},
@@ -313,7 +313,7 @@ class TestExtractPairsFromCorpus:
 
     def test_deduplication(self, tmp_path, monkeypatch):
         """Duplicate corpus entries are deduplicated by content hash."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         row = {"messages": [{"role": "user", "content": "Hello there"}, {"role": "assistant", "content": "Hi there friend!"}]}
         _write_corpus(tmp_path, [row, row])
         pairs = extract_pairs_from_corpus(limit=10, min_length=3)
@@ -321,7 +321,7 @@ class TestExtractPairsFromCorpus:
 
     def test_limit(self, tmp_path, monkeypatch):
         """Respects the limit parameter."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         _write_corpus(tmp_path, [
             {"messages": [{"role": "user", "content": f"Question {i} about things"}, {"role": "assistant", "content": f"Answer {i} with detail"}]}
             for i in range(5)
@@ -331,7 +331,7 @@ class TestExtractPairsFromCorpus:
 
     def test_min_length_filter(self, tmp_path, monkeypatch):
         """Short messages are filtered out."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         _write_corpus(tmp_path, [
             {"messages": [{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hey"}]},
             {"messages": [{"role": "user", "content": "What is machine learning today?"}, {"role": "assistant", "content": "It is a broad and deep field."}]},
@@ -342,13 +342,13 @@ class TestExtractPairsFromCorpus:
 
     def test_missing_corpus(self, tmp_path, monkeypatch):
         """Returns empty list when corpus file doesn't exist."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path / "nonexistent")
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path / "nonexistent")
         pairs = extract_pairs_from_corpus(limit=10, min_length=3)
         assert pairs == []
 
     def test_malformed_lines_skipped(self, tmp_path, monkeypatch):
         """Malformed JSON lines are skipped."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         tmp_path.mkdir(parents=True, exist_ok=True)
         (tmp_path / "corpus.jsonl").write_text(
             "not json\n"
@@ -359,7 +359,7 @@ class TestExtractPairsFromCorpus:
 
     def test_blank_lines_skipped(self, tmp_path, monkeypatch):
         """Blank lines in the corpus are ignored."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         tmp_path.mkdir(parents=True, exist_ok=True)
         (tmp_path / "corpus.jsonl").write_text(
             "\n\n"
@@ -371,7 +371,7 @@ class TestExtractPairsFromCorpus:
 
     def test_unreadable_corpus_returns_empty(self, tmp_path, monkeypatch):
         """An OSError reading the corpus yields an empty result."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         tmp_path.mkdir(parents=True, exist_ok=True)
         (tmp_path / "corpus.jsonl").mkdir()
         pairs = extract_pairs_from_corpus(limit=10, min_length=3)
@@ -408,7 +408,7 @@ class TestWriteTrainingText:
 class TestCountPairs:
     def test_count_in_sessions(self, tmp_path, monkeypatch):
         """Counts total pairs across session files."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         _write_session(tmp_path, "s1", [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi"},
@@ -423,7 +423,7 @@ class TestCountPairs:
 
     def test_count_in_logs(self, tmp_path, monkeypatch):
         """Counts total entries in log files."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         _write_log(tmp_path, [
             {"user_message": "a", "assistant_response": "b"},
             {"user_message": "c", "assistant_response": "d"},
@@ -432,12 +432,12 @@ class TestCountPairs:
 
     def test_count_empty_dir(self, tmp_path, monkeypatch):
         """Returns 0 for nonexistent directory."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path / "nope")
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path / "nope")
         assert count_pairs_in_sessions() == 0
 
     def test_count_sessions_skips_malformed(self, tmp_path, monkeypatch):
         """Malformed session files are skipped while counting."""
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", tmp_path)
         (tmp_path / "bad.json").write_text("not json {{{")
         _write_session(tmp_path, "s1", [
             {"role": "user", "content": "Hello"},
@@ -447,12 +447,12 @@ class TestCountPairs:
 
     def test_count_logs_missing_dir(self, tmp_path, monkeypatch):
         """Returns 0 when the logs directory doesn't exist."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path / "nope")
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path / "nope")
         assert count_pairs_in_logs() == 0
 
     def test_count_logs_skips_unreadable(self, tmp_path, monkeypatch):
         """Unreadable log files are skipped while counting."""
-        monkeypatch.setattr("domains.training.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._RESPONSE_LOGS_DIR", tmp_path)
         ts = time.strftime("%Y%m%d")
         (tmp_path / f"zz_{ts}.jsonl").mkdir(parents=True)
         _write_log(tmp_path, [
@@ -463,7 +463,7 @@ class TestCountPairs:
 
     def test_count_in_corpus(self, tmp_path, monkeypatch):
         """Counts total exchanges in the captured corpus."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         _write_corpus(tmp_path, [
             {"messages": [{"role": "user", "content": "a"}, {"role": "assistant", "content": "b"}]},
             {"messages": [{"role": "user", "content": "c"}, {"role": "assistant", "content": "d"}]},
@@ -472,12 +472,12 @@ class TestCountPairs:
 
     def test_count_corpus_missing(self, tmp_path, monkeypatch):
         """Returns 0 when corpus file doesn't exist."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path / "nope")
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path / "nope")
         assert count_pairs_in_corpus() == 0
 
     def test_count_corpus_skips_blank(self, tmp_path, monkeypatch):
         """Blank lines are not counted."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         tmp_path.mkdir(parents=True, exist_ok=True)
         (tmp_path / "corpus.jsonl").write_text(
             "\n"
@@ -488,7 +488,7 @@ class TestCountPairs:
 
     def test_count_corpus_unreadable_returns_zero(self, tmp_path, monkeypatch):
         """An OSError counting the corpus yields zero."""
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", tmp_path)
         tmp_path.mkdir(parents=True, exist_ok=True)
         (tmp_path / "corpus.jsonl").mkdir()
         assert count_pairs_in_corpus() == 0

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from domains.collections.baby_economy import (
+from domain.collections._internal.baby_economy import (
     ResourceType, TradeStatus, EconomyConfig, Resource, TradeOffer,
     BabyEconomy, MarketSystem,
 )

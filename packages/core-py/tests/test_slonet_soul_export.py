@@ -8,7 +8,7 @@ import struct
 import tempfile
 import pytest
 import numpy as np
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloNet,
     SloTransformer,
     SloLinear,

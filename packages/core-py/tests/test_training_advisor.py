@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domains.training.training_advisor import (
+from domain.training._internal.training_advisor import (
     TrainingRecommendation, recommend_training_config, get_training_tips,
 )
 

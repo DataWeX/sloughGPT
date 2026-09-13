@@ -143,7 +143,7 @@ class ChatDomain:
             chat_messages = [{"role": "system", "content": system_prompt}] + chat_messages
 
         try:
-            from domains.models.provider import get_provider
+            from domain.models._internal.provider import get_provider
             provider = get_provider("default")
             if provider is None:
                 return "[Error: No provider available]"
@@ -208,7 +208,7 @@ class ChatDomain:
     ) -> None:
         """Log response via ResponseTracker (MogDB + JSONL)."""
         try:
-            from domains.feedback.response_tracker import get_response_tracker
+            from domain.feedback._internal.response_tracker import get_response_tracker
             get_response_tracker().log(
                 user_message=user_message[:500],
                 assistant_response=assistant_response[:1000],
@@ -225,7 +225,7 @@ class ChatDomain:
     def get_recent_responses(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get recent logged responses from MogDB."""
         try:
-            from domains.feedback.response_tracker import get_response_tracker
+            from domain.feedback._internal.response_tracker import get_response_tracker
             responses = get_response_tracker().get_responses(limit=limit)
             return [
                 {

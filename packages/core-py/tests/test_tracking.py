@@ -1,10 +1,10 @@
-"""Tests for domains/training/tracking.py."""
+"""Tests for domain.training._internal.tracking.py."""
 
 import sys
 
 import pytest
 
-from domains.training.tracking import (
+from domain.training._internal.tracking import (
     ExperimentTracker,
     TrackingConfig,
     TrackerBackend,
@@ -35,7 +35,7 @@ def fake_config(monkeypatch):
         "domains.infrastructure.config.get_config", lambda: cfg
     )
     monkeypatch.setattr(
-        "domains.training.tracking.get_config", lambda: cfg
+        "domain.training._internal.tracking.get_config", lambda: cfg
     )
 
 

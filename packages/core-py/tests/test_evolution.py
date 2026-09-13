@@ -1,16 +1,16 @@
-"""Tests for packages/core-py/domains/shell/evolution.py — pure logic only."""
+"""Tests for packages/core-py/domain.shell._internal.evolution.py — pure logic only."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from domains.shell.evolution import (
+from domain.shell._internal.evolution import (
     Genome,
     EvolutionEngine,
     benchmark_emergence,
 )
-from domains.shell.simulation import (
+from domain.shell._internal.simulation import (
     Perceptron,
     SimBaby,
     WorldParams,

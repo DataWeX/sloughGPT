@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domains.logging.base import (
+from domain.logging._internal.base import (
     LogLevel, ErrorCode, LogTag, LogRecord, Logger,
     TaggedLogger, ChildLogger, CompositeLogger,
 )

@@ -8,10 +8,10 @@ import math
 import numpy as np
 import pytest
 
-from domains.shell.kernel_process import Process, ProcessState
-from domains.shell.kernel_devices import DeviceDriver, DeviceType
-from domains.shell.kernel_interrupts import Interrupt, InterruptType
-from domains.shell.kernel_syscall import SyscallResult
+from domain.shell._internal.kernel_process import Process, ProcessState
+from domain.shell._internal.kernel_devices import DeviceDriver, DeviceType
+from domain.shell._internal.kernel_interrupts import Interrupt, InterruptType
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 from domains.shell.addons.neural import (
     NeuralOp,

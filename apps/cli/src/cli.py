@@ -21,7 +21,7 @@ for _sys_path in [_CLI_DIR, str(_CORE_PY_DIR)]:
         sys.path.insert(0, str(_sys_path))
 
 # ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
-from domains.logging.config import setup_logging  # noqa: E402
+from domain.logging._internal.config import setup_logging  # noqa: E402
 from domains.logging import CLILogger, BridgeHandler, set_global  # noqa: E402
 
 setup_logging(enable_console=False, enable_output_buffer=False)
@@ -304,7 +304,7 @@ def shell(ctx, command, tui, line):
     """Launch the SloughGPT interactive shell REPL."""
     from utils.helpers import ensure_server
     actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
-    from domains.shell.repl import ShellREPL
+    from domain.shell._internal.repl import ShellREPL
     from domains.shell import DaitRuntime
 
     os = DaitRuntime(api_url=actual_url)
@@ -620,7 +620,7 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
 
     # ── Self-test mode ──
     if do_self_test:
-        from domains.shell.vm import self_test
+        from domain.shell._internal.vm import self_test
         _p(f"{_c('Running VM self-test...', _BOLD)}\n")
         results = self_test()
         for line in results:
@@ -630,7 +630,7 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
 
     # ── Run assembly mode ──
     if asm_source:
-        from domains.shell.vm import VMRunner
+        from domain.shell._internal.vm import VMRunner
         _p(f"{_c('Running VM assembly...', _BOLD)}\n")
         runner = VMRunner()
         t0 = time.perf_counter()
@@ -658,7 +658,7 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
 
     # ── Boot ──
     t0 = time.perf_counter()
-    from domains.shell.kernel import Kernel
+    from domain.shell._internal.kernel import Kernel
     k = Kernel()
     boot_msg = k.boot()
     t_boot = time.perf_counter() - t0
@@ -692,7 +692,7 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
             mock = MockModel()
             k.engine.load_model(model, mock)
         else:
-            from domains.shell.kernel_npu import NPUDevice
+            from domain.shell._internal.kernel_npu import NPUDevice
             npu = NPUDevice(name="npu")
             npu.open()
             result = npu.load_model(model, f"huggingface:{model}")
@@ -730,7 +730,7 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
         _p(f"  {_c('ok', _GREEN)} Tokenized '{prompt[:40]}...' -> {len(tokens)} tokens in {t_tok*1000:.2f}ms")
 
         # ── Create inference process ──
-        from domains.shell.kernel_neural import NeuralProcessType
+        from domain.shell._internal.kernel_neural import NeuralProcessType
         proc = k.create_neural_process("sim-infer", NeuralProcessType.INFERENCE, model_name=model)
 
         # ── Warmup ──
@@ -877,16 +877,6 @@ _register_build(cli)
 from groups.voice import register as _register_voice
 _register_voice(cli)
 
-# ═══════════════════════════════════════════════════════════════════════
-# security — audit logs and API key management
-# ═══════════════════════════════════════════════════════════════════════
-
-from groups.security import register as _register_security
-_register_security(cli)
-
-# ═══════════════════════════════════════════════════════════════════════
-# docstore — server-side document store
-# ═══════════════════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════════════════
 # security — audit logs and API key management
 # ═══════════════════════════════════════════════════════════════════════

@@ -14,7 +14,7 @@ import math
 
 logger = logging.getLogger("slo.multimodal.diffusion")
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloConv2D, SloLinear, SloCrossAttention,
     SloAdam, silu as _silu,
     tensor as _tensor,

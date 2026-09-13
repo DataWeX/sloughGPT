@@ -1,7 +1,7 @@
-"""Tests for domains.shell.vm_permissions — Role, Permission, X86RBAC."""
+"""Tests for domain.shell._internal.vm_permissions — Role, Permission, X86RBAC."""
 
 import pytest
-from domains.shell.vm_permissions import Role, Permission, X86RBAC, _ROLE_PERMISSIONS
+from domain.shell._internal.vm_permissions import Role, Permission, X86RBAC, _ROLE_PERMISSIONS
 
 
 class TestRole:

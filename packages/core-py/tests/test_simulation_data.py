@@ -1,8 +1,8 @@
-"""Tests for domains.shell.simulation — EntityType, WorldParams, Perception, CellWrite, BabyAction, Perceptron, WorldCell, WorldGrid, Entity, Nest."""
+"""Tests for domain.shell._internal.simulation — EntityType, WorldParams, Perception, CellWrite, BabyAction, Perceptron, WorldCell, WorldGrid, Entity, Nest."""
 
 import numpy as np
 import pytest
-from domains.shell.simulation import (
+from domain.shell._internal.simulation import (
     EntityType, WorldParams, Perception, CellWrite, BabyAction, Perceptron,
     WorldCell, WorldGrid, Entity, Nest, MATERIAL_AIR, MATERIAL_WATER,
     MATERIAL_STONE, MATERIAL_ORGANIC, MATERIAL_METAL, MATERIAL_EMBER,

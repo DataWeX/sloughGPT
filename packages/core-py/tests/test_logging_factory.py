@@ -11,11 +11,11 @@ from domains.logging import (
     ConsoleLogger, CLILogger, ShellLogger, WebLogger,
     LogLevel,
 )
-from domains.logging.base import (
+from domain.logging._internal.base import (
     Logger, LogRecord, ChildLogger, TaggedLogger, CompositeLogger,
     ErrorCode, LogTag,
 )
-from domains.logging.config import (
+from domain.logging._internal.config import (
     get_request_id, set_request_id, get_log_context, set_log_context, clear_log_context,
 )
 
@@ -1452,7 +1452,7 @@ class TestConfigContextExtended:
         assert get_log_context()["a"] == 2
 
     def test_request_id_in_context(self):
-        from domains.logging.base import Logger, LogLevel, LogRecord
+        from domain.logging._internal.base import Logger, LogLevel, LogRecord
 
         class _TestLogger(Logger):
             def __init__(self, **kw):
@@ -1468,7 +1468,7 @@ class TestConfigContextExtended:
         set_request_id(None)
 
     def test_log_context_in_record(self):
-        from domains.logging.base import Logger, LogLevel, LogRecord
+        from domain.logging._internal.base import Logger, LogLevel, LogRecord
 
         class _TestLogger(Logger):
             def __init__(self, **kw):

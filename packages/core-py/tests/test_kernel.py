@@ -3,13 +3,13 @@
 import pytest
 import time
 import numpy as np
-from domains.shell.kernel_process import Process, ProcessState, Priority, TensorRef
-from domains.shell.kernel_memory import TensorMemory, MemoryBlock
-from domains.shell.kernel_scheduler import Scheduler
-from domains.shell.kernel_interrupts import InterruptManager, InterruptVector, InterruptType, Interrupt
-from domains.shell.kernel_devices import DeviceDriver, DeviceManager, DeviceType, DeviceState
-from domains.shell.kernel_syscall import SyscallTable, SyscallNumber, SyscallResult, SYSCALLS
-from domains.shell.kernel import Kernel, get_kernel, reset_kernel
+from domain.shell._internal.kernel_process import Process, ProcessState, Priority, TensorRef
+from domain.shell._internal.kernel_memory import TensorMemory, MemoryBlock
+from domain.shell._internal.kernel_scheduler import Scheduler
+from domain.shell._internal.kernel_interrupts import InterruptManager, InterruptVector, InterruptType, Interrupt
+from domain.shell._internal.kernel_devices import DeviceDriver, DeviceManager, DeviceType, DeviceState
+from domain.shell._internal.kernel_syscall import SyscallTable, SyscallNumber, SyscallResult, SYSCALLS
+from domain.shell._internal.kernel import Kernel, get_kernel, reset_kernel
 
 
 # ── Process tests ────────────────────────────────────────────────────────────
@@ -426,7 +426,7 @@ class TestKernel:
     def test_syscall_tensor_alloc(self):
         k = Kernel()
         k.boot()
-        from domains.shell.kernel_syscall import SyscallNumber
+        from domain.shell._internal.kernel_syscall import SyscallNumber
         result = k.syscall(SyscallNumber.TENSOR_ALLOC, (5, 5), "float64")
         assert result.success
         assert result.value["size_bytes"] == 200

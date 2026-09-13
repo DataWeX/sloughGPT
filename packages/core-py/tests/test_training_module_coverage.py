@@ -13,23 +13,23 @@ DATA_TEXT = "The quick brown fox jumps over the lazy dog. " * 50
 
 
 class TestExportModule:
-    """Tests for domains/training/export.py."""
+    """Tests for domain.training._internal.export.py."""
 
     def test_export_config_creation(self):
-        from domains.training.export import ExportConfig
+        from domain.training._internal.export import ExportConfig
 
         config = ExportConfig(format="gguf")
         assert config.format == "gguf"
 
     def test_list_export_formats(self):
-        from domains.training.export import list_export_formats
+        from domain.training._internal.export import list_export_formats
 
         formats = list_export_formats()
         assert isinstance(formats, dict)
         assert len(formats) > 0
 
     def test_model_metadata_creation(self):
-        from domains.training.export import ModelMetadata
+        from domain.training._internal.export import ModelMetadata
 
         meta = ModelMetadata(name="test_model", version="1.0")
         assert meta.name == "test_model"
@@ -37,23 +37,23 @@ class TestExportModule:
 
 
 class TestPresetsModule:
-    """Tests for domains/training/presets.py."""
+    """Tests for domain.training._internal.presets.py."""
 
     def test_presets_exist(self):
-        from domains.training.presets import PRESETS
+        from domain.training._internal.presets import PRESETS
 
         assert isinstance(PRESETS, dict)
         assert len(PRESETS) > 0
 
     def test_list_presets(self):
-        from domains.training.presets import list_presets
+        from domain.training._internal.presets import list_presets
 
         presets = list_presets()
         assert isinstance(presets, list)
         assert len(presets) > 0
 
     def test_apply_preset(self):
-        from domains.training.presets import apply_preset, PRESETS
+        from domain.training._internal.presets import apply_preset, PRESETS
 
         preset_names = list(PRESETS.keys())
         if preset_names:
@@ -62,10 +62,10 @@ class TestPresetsModule:
 
 
 class TestOutcomeTrackerModule:
-    """Tests for domains/training/outcome_tracker.py."""
+    """Tests for domain.training._internal.outcome_tracker.py."""
 
     def test_outcome_creation(self):
-        from domains.training.outcome_tracker import TrainingOutcome
+        from domain.training._internal.outcome_tracker import TrainingOutcome
 
         outcome = TrainingOutcome(
             run_id="test_run",
@@ -79,7 +79,7 @@ class TestOutcomeTrackerModule:
         assert outcome.final_loss == 0.5
 
     def test_outcome_to_dict(self):
-        from domains.training.outcome_tracker import TrainingOutcome
+        from domain.training._internal.outcome_tracker import TrainingOutcome
 
         outcome = TrainingOutcome(
             run_id="test_run",
@@ -95,17 +95,17 @@ class TestOutcomeTrackerModule:
 
 
 class TestQualityScorerModule:
-    """Tests for domains/training/quality_scorer.py."""
+    """Tests for domain.training._internal.quality_scorer.py."""
 
     def test_score_pair(self):
-        from domains.training.quality_scorer import score_pair
+        from domain.training._internal.quality_scorer import score_pair
 
         score = score_pair("Hello world", "This is a test")
         assert isinstance(score, float)
         assert score >= 0
 
     def test_score_text_chunk(self):
-        from domains.training.quality_scorer import score_text_chunk
+        from domain.training._internal.quality_scorer import score_text_chunk
 
         score = score_text_chunk("This is a test paragraph with some content.")
         assert isinstance(score, float)
@@ -113,30 +113,30 @@ class TestQualityScorerModule:
 
 
 class TestAdaptiveConfigModule:
-    """Tests for domains/training/adaptive_config.py."""
+    """Tests for domain.training._internal.adaptive_config.py."""
 
     def test_adaptive_config_engine_exists(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         assert engine is not None
 
 
 class TestCheckpointsModule:
-    """Tests for domains/training/checkpoints.py."""
+    """Tests for domain.training._internal.checkpoints.py."""
 
     def test_find_checkpoint_nonexistent(self):
-        from domains.training.checkpoints import find_checkpoint
+        from domain.training._internal.checkpoints import find_checkpoint
 
         result = find_checkpoint("nonexistent_model")
         assert result is None
 
 
 class TestDatasetModule:
-    """Tests for domains/training/dataset.py."""
+    """Tests for domain.training._internal.dataset.py."""
 
     def test_dataset_creation(self):
-        from domains.training.dataset import TrainingDataset
+        from domain.training._internal.dataset import TrainingDataset
 
         dataset = TrainingDataset(source_text=DATA_TEXT)
         assert dataset is not None
@@ -144,30 +144,30 @@ class TestDatasetModule:
 
 
 class TestPairExtractorModule:
-    """Tests for domains/training/pair_extractor.py."""
+    """Tests for domain.training._internal.pair_extractor.py."""
 
     def test_extract_pairs_from_sessions(self):
-        from domains.training.pair_extractor import extract_pairs_from_sessions
+        from domain.training._internal.pair_extractor import extract_pairs_from_sessions
 
         pairs = extract_pairs_from_sessions([])
         assert isinstance(pairs, list)
 
 
 class TestPerformanceModule:
-    """Tests for domains/training/performance.py."""
+    """Tests for domain.training._internal.performance.py."""
 
     def test_performance_monitor_exists(self):
-        from domains.training.performance import PerformanceMonitor
+        from domain.training._internal.performance import PerformanceMonitor
 
         monitor = PerformanceMonitor()
         assert monitor is not None
 
 
 class TestLRSchedulersModule:
-    """Tests for domains/training/lr_schedulers.py."""
+    """Tests for domain.training._internal.lr_schedulers.py."""
 
     def test_scheduler_classes_importable(self):
-        from domains.training.lr_schedulers import (
+        from domain.training._internal.lr_schedulers import (
             SchedulerConfig,
             WarmupCosineScheduler,
             PolynomialDecayScheduler,
@@ -181,10 +181,10 @@ class TestLRSchedulersModule:
 
 
 class TestEWCModule:
-    """Tests for domains/training/ewc.py."""
+    """Tests for domain.training._internal.ewc.py."""
 
     def test_ewc_classes_importable(self):
-        from domains.training.ewc import (
+        from domain.training._internal.ewc import (
             EWCParameters,
             TaskSnapshot,
             DiagonalFisherEstimator,
@@ -201,7 +201,7 @@ class TestComprehensiveTrainerExtended:
     """Extended tests for ComprehensiveTrainer."""
 
     def test_trainer_phases(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -225,7 +225,7 @@ class TestComprehensiveTrainerExtended:
             assert result.total_duration_s > 0
 
     def test_trainer_result_has_phases(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)

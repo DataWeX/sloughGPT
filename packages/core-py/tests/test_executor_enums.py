@@ -1,9 +1,9 @@
-"""Tests for domains.training.executor — JobStatus, JobInfo."""
+"""Tests for domain.training._internal.executor — JobStatus, JobInfo."""
 
 import time
 import numpy as np
 import pytest
-from domains.training.executor import JobStatus, JobInfo, TrainingExecutor
+from domain.training._internal.executor import JobStatus, JobInfo, TrainingExecutor
 
 
 class TestJobStatus:

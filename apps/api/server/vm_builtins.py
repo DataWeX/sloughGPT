@@ -8,7 +8,7 @@ Syscall numbers (X86SyscallHandler):
     SYS_TRAIN_START=28, SYS_TRAIN_STATUS=29, SYS_TRAIN_GET_RESULT=30
 
 Queries are resolved programmatically from syscall-5 constants in
-``domains.shell.vm`` at import time, so the registry never hardcodes a
+``domain.shell._internal.vm`` at import time, so the registry never hardcodes a
 number the VM does not itself define.
 """
 
@@ -23,7 +23,7 @@ _CORE_DIR = str(find_repo_root(Path(__file__).resolve()) / "packages" / "core-py
 if _CORE_DIR not in sys.path:
     sys.path.insert(0, _CORE_DIR)
 
-from domains.shell.vm import (  # noqa: E402
+from domain.shell._internal.vm import (  # noqa: E402
     X86SyscallHandler,
 )
 

@@ -1,7 +1,7 @@
-"""Tests for domains.shell.kernel_interrupts and domains.shell.vm_engine."""
+"""Tests for domain.shell._internal.kernel_interrupts and domain.shell._internal.vm_engine."""
 
-from domains.shell.kernel_interrupts import InterruptType, Interrupt, InterruptVector
-from domains.shell.vm_engine import (
+from domain.shell._internal.kernel_interrupts import InterruptType, Interrupt, InterruptVector
+from domain.shell._internal.vm_engine import (
     Breakpoint, StepEvent, ExecutionTrace, SyscallEvent, FaultEvent, BreakpointEvent,
 )
 

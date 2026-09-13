@@ -16,8 +16,8 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from domains.shell.repl import ShellREPL, _CaptureOutput
-from domains.shell.runtime import DaitRuntime
+from domain.shell._internal.repl import ShellREPL, _CaptureOutput
+from domain.shell._internal.runtime import DaitRuntime
 
 
 _API_AVAILABLE: bool | None = None
@@ -174,7 +174,7 @@ def test_subprocess_shell_launches():
     import os
     env = {**os.environ, "PYTHONPATH": pkgs}
     result = subprocess.run(
-        [sys.executable, "-c", "from domains.shell.repl import ShellREPL; print('ok')"],
+        [sys.executable, "-c", "from domain.shell._internal.repl import ShellREPL; print('ok')"],
         capture_output=True, text=True, timeout=10, env=env,
     )
     assert "ok" in result.stdout, result.stderr
@@ -186,9 +186,9 @@ def test_subprocess_shell_cmd():
     pkgs = repr(str(Path(__file__).resolve().parents[1]))
     code = """import sys; sys.path.insert(0, {pkgs})
 from pathlib import Path
-from domains.shell.repl import ShellREPL, _CaptureOutput
-from domains.shell.runtime import DaitRuntime
-from domains.shell.state import set_shell_state_db
+from domain.shell._internal.repl import ShellREPL, _CaptureOutput
+from domain.shell._internal.runtime import DaitRuntime
+from domain.shell._internal.state import set_shell_state_db
 import tempfile, os
 tmp = tempfile.mkdtemp()
 set_shell_state_db(tmp + "/mogdb")

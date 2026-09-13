@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from domains.infrastructure.config import get_config
+from domain.infrastructure._internal.config import get_config
 
 logger = logging.getLogger("slo.tracking")
 
@@ -96,7 +96,7 @@ class ExperimentTracker:
         try:
             import wandb
 
-            from domains.training.wandb_helpers import default_wandb_project
+            from domain.training._internal.wandb_helpers import default_wandb_project
 
             kwargs: Dict[str, Any] = {
                 "project": self.config.project or default_wandb_project(),

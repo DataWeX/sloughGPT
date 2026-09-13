@@ -2,15 +2,15 @@
 
 import pytest
 import numpy as np
-from domains.shell.kernel import Kernel, reset_kernel
-from domains.shell.kernel_process import Process, ProcessState, Priority
-from domains.shell.kernel_neural import (
+from domain.shell._internal.kernel import Kernel, reset_kernel
+from domain.shell._internal.kernel_process import Process, ProcessState, Priority
+from domain.shell._internal.kernel_neural import (
     NeuralKernel, NeuralProcess, NeuralProcessType,
     NeuralKVCache, NeuralEmbeddingStore, NeuralMemoryType,
     NeuralEngineDevice, TokenizerDevice, EmbeddingStoreDevice,
     NeuralInterrupt, NeuralSyscall,
 )
-from domains.shell.kernel_syscall import SyscallNumber
+from domain.shell._internal.kernel_syscall import SyscallNumber
 
 
 # ── Neural Process tests ─────────────────────────────────────────────────────

@@ -11,13 +11,13 @@ class TestDebugger:
     """Test the VM debugger."""
 
     def test_debugger_creation(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         assert debugger.engine is not None
         assert debugger.symbols is not None
 
     def test_symbol_table(self):
-        from domains.shell.vm_debugger import SymbolTable
+        from domain.shell._internal.vm_debugger import SymbolTable
         st = SymbolTable()
         st.add("main", 0x1000)
         st.add("loop", 0x1010)
@@ -26,17 +26,17 @@ class TestDebugger:
         assert st.name_for(0x1000) == "main"
 
     def test_symbol_resolve_hex(self):
-        from domains.shell.vm_debugger import SymbolTable
+        from domain.shell._internal.vm_debugger import SymbolTable
         st = SymbolTable()
         assert st.resolve("0x1000") == 0x1000
 
     def test_symbol_resolve_decimal(self):
-        from domains.shell.vm_debugger import SymbolTable
+        from domain.shell._internal.vm_debugger import SymbolTable
         st = SymbolTable()
         assert st.resolve("4096") == 4096
 
     def test_breakpoint_set(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         # Set breakpoint at an address
         bp_id = debugger.bp_set("0x1000", "test_bp")
@@ -46,7 +46,7 @@ class TestDebugger:
         assert bps[0]["address"] == 0x1000
 
     def test_breakpoint_list_with_symbol(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.symbols.add("main", 0x1000)
         bp_id = debugger.bp_set("main")
@@ -54,7 +54,7 @@ class TestDebugger:
         assert bps[0]["symbol"] == "main"
 
     def test_breakpoint_remove(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         bp_id = debugger.bp_set("0x1000")
         debugger.bp_remove(bp_id)
@@ -62,7 +62,7 @@ class TestDebugger:
         assert len(bps) == 0
 
     def test_breakpoint_clear(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.bp_set("0x1000")
         debugger.bp_set("0x2000")
@@ -71,7 +71,7 @@ class TestDebugger:
         assert len(bps) == 0
 
     def test_watchpoint_set(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         wp_id = debugger.wp_set("0x2000", 4, "data")
         assert wp_id >= 0
@@ -79,7 +79,7 @@ class TestDebugger:
         assert len(wps) == 1
 
     def test_watchpoint_remove(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         wp_id = debugger.wp_set("0x2000")
         debugger.wp_remove(wp_id)
@@ -87,7 +87,7 @@ class TestDebugger:
         assert len(wps) == 0
 
     def test_stepi(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         # Load a simple program
@@ -97,7 +97,7 @@ class TestDebugger:
         assert result is True
 
     def test_dump_regs(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("mov eax, 0x42")
@@ -107,7 +107,7 @@ class TestDebugger:
         assert "eax" in regs
 
     def test_dump_memory(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("mov eax, 0xDEADBEEF\nmov [0x1000], eax")
@@ -116,7 +116,7 @@ class TestDebugger:
         assert "de" in hex_dump.lower() or "DE" in hex_dump
 
     def test_analyze_trace(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         engine = debugger.engine
         engine.load_source("mov eax, 1\nmov ebx, 2\nhlt")
@@ -126,7 +126,7 @@ class TestDebugger:
         assert "exit_reason" in analysis
 
     def test_list_symbols(self):
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
         debugger = Debugger()
         debugger.symbols.add("main", 0x1000, kind="function")
         syms = debugger.list_symbols()
@@ -426,7 +426,7 @@ class TestVMCLICommands:
     def test_vm_command_has_debugger_import(self):
         vm_cmd = Path(__file__).resolve().parents[3] / "apps" / "cli" / "src" / "commands" / "vm.py"
         content = vm_cmd.read_text()
-        assert "from domains.shell.vm_debugger import Debugger" in content
+        assert "from domain.shell._internal.vm_debugger import Debugger" in content
 
     def test_build_command_exists(self):
         build_cmd = Path(__file__).resolve().parents[3] / "apps" / "cli" / "src" / "commands" / "build.py"

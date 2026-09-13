@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from domains.training.trainer_protocol import TrainResult
+from domain.training._internal.trainer_protocol import TrainResult
 
 logger = logging.getLogger("slo.consciousness.training")
 
@@ -216,7 +216,7 @@ class ConsciousnessTrainer:
 
     def _train_with_lora(self, data_path: str) -> TrainResult:
         """Train using the existing HFLoraTrainer."""
-        from domains.training.hf_lora_finetune import HFLoraConfig, HFLoraTrainer
+        from domain.training._internal.hf_lora_finetune import HFLoraConfig, HFLoraTrainer
 
         adapter_dir = Path(self.config.adapter_dir)
         adapter_dir.mkdir(parents=True, exist_ok=True)

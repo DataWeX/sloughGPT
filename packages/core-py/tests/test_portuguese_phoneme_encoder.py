@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from domains.multimodal.portuguese_phoneme_encoder import (
+from domain.multimodal._internal.portuguese_phoneme_encoder import (
     PortuguesePhonemeEncoder, portuguese_text_to_phonemes,
     PORTUGUESE_ID_TO_PHONEME, BOS, EOS, PAD, SPACE, NUM_PORTUGUESE_PHONEMES,
 )

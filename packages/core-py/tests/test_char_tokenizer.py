@@ -1,4 +1,4 @@
-"""Tests for domains.multimodal.char_tokenizer — CharTokenizer.
+"""Tests for domain.multimodal._internal.char_tokenizer — CharTokenizer.
 
 Covers: vocab building, encode/decode round-trip, special tokens, save/load,
 pad_to, unknown character handling, vocab_size property.
@@ -15,7 +15,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.multimodal.char_tokenizer import CharTokenizer
+from domain.multimodal._internal.char_tokenizer import CharTokenizer
 
 
 # ---------------------------------------------------------------------------

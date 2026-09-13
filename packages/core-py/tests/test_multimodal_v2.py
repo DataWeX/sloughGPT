@@ -10,13 +10,13 @@ import sys
 # Add core-py to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from domains.training.slonet import Tensor, SloCrossAttention, SloLinear, SloLayerNorm, SloEmbedding
-from domains.multimodal.engine import (
+from domain.training._internal.slonet import Tensor, SloCrossAttention, SloLinear, SloLayerNorm, SloEmbedding
+from domain.multimodal._internal.engine import (
     VisionEncoder, AudioEncoder, MultimodalEngine, TextDecoder,
     SloTransformerDecoder, SloTransformerDecoderBlock,
 )
-from domains.training.slonet import cross_entropy as _cross_entropy_slo
-from domains.multimodal.char_tokenizer import CharTokenizer
+from domain.training._internal.slonet import cross_entropy as _cross_entropy_slo
+from domain.multimodal._internal.char_tokenizer import CharTokenizer
 
 
 class TestSloCrossAttention:
@@ -578,7 +578,7 @@ class TestKVCache:
 
     def test_kv_cache_is_deterministic(self):
         """KV-cached generation must be deterministic given fixed seed."""
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
         _slonet_mod._ACCELERATOR = "none"
 
         engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
@@ -596,7 +596,7 @@ class TestKVCache:
     def test_kv_cache_is_faster_for_long_sequences(self):
         """KV cache should be faster than full-length forward for each step."""
         import time
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
         _slonet_mod._ACCELERATOR = "none"
 
         engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
@@ -614,7 +614,7 @@ class TestKVCache:
         kv_time = t1 - t0
 
         # No-KV path: build full sequence each step
-        from domains.training.slonet import tensor as _tensor
+        from domain.training._internal.slonet import tensor as _tensor
         embed, patches, _ = engine._concat_modalities(img, None, None)
         # Use the same image, re-embed
         tokens = [0]
@@ -635,7 +635,7 @@ class TestKVCache:
     def test_kv_cache_is_faster_for_long_sequences(self):
         """KV cache should reduce wall time for long greedy generations."""
         import time
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
         _slonet_mod._ACCELERATOR = "none"
 
         engine = MultimodalEngine(embed_dim=32, hidden_dim=64, n_vit_layers=1, n_heads=2,
@@ -655,7 +655,7 @@ class TestKVCache:
             engine.generate(img, max_len=50, temperature=0.0)
             kv_times.append(time.perf_counter() - t0)
 
-            from domains.training.slonet import tensor as _tensor
+            from domain.training._internal.slonet import tensor as _tensor
             embed, patches, _ = engine._concat_modalities(img, None, None)
             tokens = [0]
             t0 = time.perf_counter()
@@ -788,7 +788,7 @@ class TestZeroPatchGradientRegression:
         # Input: all but last token; targets: all but first token (teacher forcing)
         logits_no, _, _ = dec_no.forward(img_embed, token_ids[:, :-1])
         targets = Tensor(np.array([2, 4, 6, 8, 10, 12]), requires_grad=False)
-        from domains.training.slonet import cross_entropy as _cross_entropy
+        from domain.training._internal.slonet import cross_entropy as _cross_entropy
         loss_no = _cross_entropy(logits_no, targets)
 
         # Forward with cross-attention (zero patches)

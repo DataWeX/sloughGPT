@@ -1,5 +1,5 @@
 """
-Tests for the live realm view (``domains/shell/realm_view.py``).
+Tests for the live realm view (``domain.shell._internal.realm_view.py``).
 
 Covers scene construction, frame rendering (materials, babies, skyline sun),
 the live stepping loop, and determinism of the seeded viewer.
@@ -13,14 +13,14 @@ import re
 import numpy as np
 import pytest
 
-from domains.shell.realm_view import (
+from domain.shell._internal.realm_view import (
     _season_of,
     _year_envelope_bar,
     live_view,
     make_live_scene,
     render_frame,
 )
-from domains.shell.simulation import (
+from domain.shell._internal.simulation import (
     MATERIAL_STONE,
     MATERIAL_ORGANIC,
     SimBaby,
@@ -28,7 +28,7 @@ from domains.shell.simulation import (
     Simulation,
     WorldParams,
 )
-from domains.shell.evolution import Genome
+from domain.shell._internal.evolution import Genome
 
 
 def _strip_ansi(text: str) -> str:

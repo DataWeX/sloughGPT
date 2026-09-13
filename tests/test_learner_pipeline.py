@@ -24,8 +24,8 @@ from domains.learner.knowledge import (
     KnowledgeMemory,
     KnowledgeFact,
     KnowledgeIngestor,
-    _extract_topics,
 )
+from domain.knowledge._internal.knowledge import _extract_topics
 from domains.learner.knowledge_augmenter import enrich_with_knowledge
 from domains.learner.continual import ContinualLearner, _tokenize
 from domains.learner.data_filter import DataFilter

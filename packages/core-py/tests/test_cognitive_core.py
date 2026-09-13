@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from domains.cognitive.core import (
+from domain.cognitive._internal.core import (
     CognitiveCore,
     ThinkingMode,
     ReasoningType,

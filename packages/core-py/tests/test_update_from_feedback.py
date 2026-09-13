@@ -2,7 +2,7 @@
 
 import pytest
 import os
-from domains.context.managers import (
+from domain.context._internal.managers import (
     TraitWeightsConfig, PersonalityManager, MemoryManager,
     StyleManager, TaskManager,
 )

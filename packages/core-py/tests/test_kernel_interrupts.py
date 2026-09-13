@@ -1,8 +1,8 @@
-"""Coverage tests for domains/shell/kernel_interrupts.py."""
+"""Coverage tests for domain.shell._internal.kernel_interrupts.py."""
 
 import pytest
 
-from domains.shell.kernel_interrupts import (
+from domain.shell._internal.kernel_interrupts import (
     Interrupt,
     InterruptManager,
     InterruptType,

@@ -4,7 +4,7 @@ import time
 import pytest
 import numpy as np
 from unittest.mock import patch
-from domains.feedback.online_train import (
+from domain.feedback._internal.online_train import (
     LoRAConfig, OnlineLoRAUpdater, get_online_lora_updater,
     _online_lora,
 )
@@ -214,7 +214,7 @@ class TestOnlineLoRAUpdater:
 class TestGetOnlineLoRAUpdater:
 
     def test_returns_singleton(self):
-        import domains.feedback.online_train as mod
+        import domain.feedback._internal.online_train as mod
         original = mod._online_lora
         mod._online_lora = None
         try:

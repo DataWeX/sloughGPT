@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import domains.ops.wandb_server as ws
-from domains.infrastructure.config import get_config
+from domain.infrastructure._internal.config import get_config
 
 
 async def _wait_until_logged(log_payload, timeout=2.0):

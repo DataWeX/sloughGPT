@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pytest
 import numpy as np
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor,
     SloNet,
     SloTransformer,
@@ -108,7 +108,7 @@ class TestSloNet:
         assert net._active_user_id == "user1"
 
     def test_fit(self):
-        from domains.training.slonet import SloAdam
+        from domain.training._internal.slonet import SloAdam
         net = SloNet(layers=[SloLinear(2, 3)])
         X = Tensor(np.random.randn(20, 2).astype(np.float32))
         y = Tensor(np.random.randint(0, 3, (20,)))

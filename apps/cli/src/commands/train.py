@@ -252,8 +252,8 @@ def cmd_train(args):
         tracker = None
         if config.tracking.enabled:
             from dataclasses import asdict
-            from domains.training.tracking import ExperimentTracker, TrackerBackend, TrackingConfig
-            from domains.training.wandb_helpers import flatten_for_wandb_config
+            from domain.training._internal.tracking import ExperimentTracker, TrackerBackend, TrackingConfig
+            from domain.training._internal.wandb_helpers import flatten_for_wandb_config
 
             backend = (
                 TrackerBackend.WANDB
@@ -275,7 +275,7 @@ def cmd_train(args):
             tracker.log_params(flatten_for_wandb_config(asdict(config)))
             log.success(f"Tracking enabled: {config.tracking.backend}")
 
-        from domains.training.train_pipeline import SloughGPTTrainer
+        from domain.training._internal.train_pipeline import SloughGPTTrainer
 
         if getattr(args, "save_stem", None):
             save_stem = train_export_stem_slug(args.save_stem, "export")
@@ -439,8 +439,8 @@ def cmd_quick(args):
     """Quick smoke test: train a toy model and generate."""
     sys.path.insert(0, ".")
 
-    from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
-    from domains.training.performance import get_optimal_device
+    from domain.training._internal.train_pipeline import SloughGPTTrainer, TrainerConfig
+    from domain.training._internal.performance import get_optimal_device
 
     log.header("SloughGPT Quick Start")
 
@@ -555,8 +555,8 @@ def cmd_train_native(args):
     """
     sys.path.insert(0, ".")
 
-    from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
-    from domains.training.performance import get_optimal_device
+    from domain.training._internal.train_pipeline import SloughGPTTrainer, TrainerConfig
+    from domain.training._internal.performance import get_optimal_device
 
     checkpoint_dir = getattr(args, "checkpoint_dir", None) or "models/slonet-native"
 
@@ -610,7 +610,7 @@ def cmd_train_native(args):
     tokenizer = None
     tokenizer_kind = getattr(args, "tokenizer", "char") or "char"
     if tokenizer_kind == "token-tree":
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
 
         corpus_text = Path(dataset).read_text(encoding="utf-8")
         token_vocab_size = getattr(args, "token_vocab_size", 512) or 512
@@ -711,7 +711,7 @@ def cmd_eval(args):
     data_path = getattr(args, "data", None) or "datasets/shakespeare/input.txt"
 
     try:
-        from domains.training.lm_eval_char import evaluate_soul_char_lm
+        from domain.training._internal.lm_eval_char import evaluate_soul_char_lm
 
         if not Path(data_path).is_file():
             log.warning(f"Data file not found: {data_path}")
@@ -999,7 +999,7 @@ def _cmd_feedback_export(args):
 def _cmd_checkpoint_info(args):
     """Inspect a .soul checkpoint — show metadata, weight summary, training info."""
     from pathlib import Path
-    from domains.training.slonet import import_from_sou
+    from domain.training._internal.slonet import import_from_sou
 
     log.header("Checkpoint Info")
 
@@ -1065,9 +1065,9 @@ def cmd_demo(args):
 
     log.header("SloughGPT Demo")
 
-    from domains.cognitive.rag import ProductionRAG
-    from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph
-    from domains.training.ewc import EwcContinualLearner
+    from domain.cognitive._internal.rag import ProductionRAG
+    from domain.cognitive._internal.knowledge_graph_v2 import KnowledgeGraph
+    from domain.training._internal.ewc import EwcContinualLearner
 
     if args.component in ("all", "rag"):
         log.section("RAG - Document Retrieval")
@@ -1106,7 +1106,7 @@ def cmd_rlhf(args):
     sys.path.insert(0, ".")
 
     log.header("RLHF Demo")
-    from domains.training.rlhf import RLHFConfig
+    from domain.training._internal.rlhf import RLHFConfig
     from domains.models import SloughGPTModel
 
     device = "cpu"
@@ -1145,8 +1145,8 @@ def cmd_cloud_setup(args):
     sys.path.insert(0, ".")
 
     log.header("Cloud Setup")
-    from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
-    from domains.inference.vector_store import VectorEntry, simple_embed
+    from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
+    from domain.inference._internal.vector_store import VectorEntry, simple_embed
 
     api_key = args.api_key or os.getenv("PINECONE_API_KEY")
     if not api_key:
@@ -1386,7 +1386,7 @@ def cmd_train_embed(args):
     # ── Test mode: retrieve against the collected corpus ─────────────
     test_query = getattr(args, "test", None)
     if test_query:
-        from domains.inference.slo_embedder import SloTextEmbedder
+        from domain.inference._internal.slo_embedder import SloTextEmbedder
         embedder = SloTextEmbedder.load()
         if embedder is None:
             log.error("No trained embedder found. Run training first: sloughgpt train embed")
@@ -1397,7 +1397,7 @@ def cmd_train_embed(args):
         return
 
     # ── Train ─────────────────────────────────────────────────────────
-    from domains.inference.slo_embedder import train_embedder
+    from domain.inference._internal.slo_embedder import train_embedder
 
     total_epochs = getattr(args, "epochs", 20)
     from utils.training_progress import TrainingProgressBar
@@ -1435,7 +1435,7 @@ def cmd_train_embed(args):
     log.info("No sentence-transformers download needed.")
 
     # ── Retrieval sanity check: prove the saved artifact works ───────
-    from domains.inference.slo_embedder import SloTextEmbedder
+    from domain.inference._internal.slo_embedder import SloTextEmbedder
     embedder = SloTextEmbedder.load(result["save_path"])
     if embedder is None:
         log.warning("Trained embedder could not be reloaded — verify --output path.")
@@ -1588,7 +1588,7 @@ def cmd_distill(args):
         log.info("  huggingface-cli download gpt2 --include '*.safetensors' --include tokenizer.json")
         return
 
-    from domains.training.distill_gpt2 import DistillConfig, distill_gpt2_to_slo
+    from domain.training._internal.distill_gpt2 import DistillConfig, distill_gpt2_to_slo
 
     resume_path = getattr(args, "resume", None)
     if resume_path:

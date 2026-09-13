@@ -2,7 +2,7 @@
 Exception handlers extracted from main.py.
 
 Provides FastAPI exception handlers for:
-- AppError (unified error taxonomy from domains.infrastructure.errors)
+- AppError (unified error taxonomy from domain.infrastructure._internal.errors)
 - SloughGPTDomainError (legacy domain errors, now extends AppError)
 - ValidationError (Pydantic)
 - RequestValidationError (FastAPI)
@@ -151,7 +151,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
 
     # Classify into the error taxonomy
     try:
-        from domains.infrastructure.errors import classify_exception, emit_error_event
+        from domain.infrastructure._internal.errors import classify_exception, emit_error_event
 
         classified = classify_exception(exc)
         classified.source = f"{request.method} {request.url.path}"
@@ -191,12 +191,12 @@ def register_app_error_handler(app: FastAPI):
     test assertions against ``resp.json()["detail"]`` remain valid.
     """
     try:
-        from domains.infrastructure.errors import AppError
+        from domain.infrastructure._internal.errors import AppError
 
         async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
             # SINGLE EventBus emission point for all AppErrors
             try:
-                from domains.infrastructure.errors import emit_error_event
+                from domain.infrastructure._internal.errors import emit_error_event
 
                 emit_error_event(exc, source=f"{request.method} {request.url.path}")
             except Exception as e:
@@ -228,13 +228,13 @@ def register_all_handlers(app: FastAPI):
     """
     # AppError — the PRIMARY handler. Emits EventBus event ONCE.
     try:
-        from domains.infrastructure.errors import AppError
+        from domain.infrastructure._internal.errors import AppError
 
         async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
             cid = _corr_id(request)
             # SINGLE EventBus emission — classify_and_raise() does NOT emit
             try:
-                from domains.infrastructure.errors import emit_error_event
+                from domain.infrastructure._internal.errors import emit_error_event
 
                 emit_error_event(exc, source=f"{request.method} {request.url.path}")
             except Exception as e:

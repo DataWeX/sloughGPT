@@ -1,7 +1,7 @@
 """Tests for TrainResult and TrainerProtocol."""
 from __future__ import annotations
 
-from domains.training.trainer_protocol import TrainResult, TrainerProtocol
+from domain.training._internal.trainer_protocol import TrainResult, TrainerProtocol
 
 
 class TestTrainResult:

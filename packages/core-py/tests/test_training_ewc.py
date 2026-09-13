@@ -1,9 +1,9 @@
-"""Tests for domains/training/ewc.py — EWC continual learning."""
+"""Tests for domain.training._internal.ewc.py — EWC continual learning."""
 
 import numpy as np
 import pytest
 
-from domains.training.ewc import (
+from domain.training._internal.ewc import (
     _as_array,
     _scalar,
     _batch_size,
@@ -13,7 +13,7 @@ from domains.training.ewc import (
     DiagonalFisherEstimator,
     EwcContinualLearner,
 )
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor,
     tensor,
     SloLinear,

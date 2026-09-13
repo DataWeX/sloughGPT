@@ -11,10 +11,10 @@ from domains.logging import get_global
 
 log = get_global()
 
-from domains.memory.consolidation import plan_consolidation
-from domains.memory.memory_config import MemoryConfig
-from domains.memory.memory_service import get_memory_service
-from domains.memory.task_memory import (
+from domain.memory._internal.consolidation import plan_consolidation
+from domain.memory._internal.config import MemoryConfig
+from domain.memory._internal.service import get_memory_service
+from domain.memory._internal.task_memory import (
     TASK_CONSOLIDATE,
     TASK_REMEMBER,
     TASK_STORE,
@@ -243,7 +243,7 @@ def cmd_memory_archive(args) -> None:
         - With ``prune_days`` set, rewrites ``facts.jsonl`` keeping only
           records inside the retention window.
     """
-    from domains.memory.task_memory import archive_stats, list_archive, prune_archive
+    from domain.memory._internal.task_memory import archive_stats, list_archive, prune_archive
     prune_days = getattr(args, "prune_days", None)
     if prune_days is not None:
         import click

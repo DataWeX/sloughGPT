@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from domains.shell.widgets import (
+from domain.shell._internal.widgets import (
     App, Widget, Container, Panel, Text, Button, Input,
     List, Menu, Tabs, Dialog, Separator, ProgressBar,
     Spinner, Box, EventBus, KeyEvent, ResizeEvent, FocusEvent,

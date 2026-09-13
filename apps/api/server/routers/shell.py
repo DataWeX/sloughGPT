@@ -1,7 +1,7 @@
 """
 Shell Router — Dait shell command execution endpoints.
 
-Thin HTTP wrapper over ``domains.shell.repl.ShellREPL``.  Runs commands
+Thin HTTP wrapper over ``domain.shell._internal.repl.ShellREPL``.  Runs commands
 in an isolated ``MemoryIO`` instance and returns captured output.
 """
 
@@ -13,9 +13,9 @@ import logging
 import threading
 import time as _time
 
-from domains.shell.io import MemoryIO
-from domains.shell.repl import ShellREPL
-from domains.shell.runtime import DaitRuntime
+from domain.shell._internal.io import MemoryIO
+from domain.shell._internal.repl import ShellREPL
+from domain.shell._internal.runtime import DaitRuntime
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled

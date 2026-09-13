@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from domains.agents.system import (
+from domain.agents._internal.system import (
     AgentSystem,
     DEFAULT_AGENTS,
     get_agent_system,
@@ -17,11 +17,11 @@ from domains.agents.system import (
 @pytest.fixture
 def sys(tmp_path, monkeypatch):
     """Create an AgentSystem with a temp directory."""
-    monkeypatch.setattr("domains.agents.system.AGENTS_DIR", str(tmp_path))
-    monkeypatch.setattr("domains.agents.system._agent_repo", None)
-    from domains.agents.system import _agent_repo as _
+    monkeypatch.setattr("domain.agents._internal.system.AGENTS_DIR", str(tmp_path))
+    monkeypatch.setattr("domain.agents._internal.system._agent_repo", None)
+    from domain.agents._internal.system import _agent_repo as _
     # Reset singleton
-    import domains.agents.system as mod
+    import domain.agents._internal.system as mod
     mod._default_system = None
 
     # Patch the repo
@@ -32,9 +32,9 @@ def sys(tmp_path, monkeypatch):
         key_suffix=".json",
     )
     repo.enable_cache(ttl_seconds=5.0)
-    monkeypatch.setattr("domains.agents.system._agent_repo", repo)
-    monkeypatch.setattr("domains.agents.system.get_agent", lambda: MagicMock())
-    monkeypatch.setattr("domains.agents.system._default_inference_fn", lambda *a, **kw: {})
+    monkeypatch.setattr("domain.agents._internal.system._agent_repo", repo)
+    monkeypatch.setattr("domain.agents._internal.system.get_agent", lambda: MagicMock())
+    monkeypatch.setattr("domain.agents._internal.system._default_inference_fn", lambda *a, **kw: {})
 
     return AgentSystem()
 
@@ -161,8 +161,8 @@ class TestInferenceFunction:
 class TestSingleton:
 
     def test_get_returns_same(self):
-        with patch("domains.agents.system.get_agent", return_value=MagicMock()):
-            import domains.agents.system as mod
+        with patch("domain.agents._internal.system.get_agent", return_value=MagicMock()):
+            import domain.agents._internal.system as mod
             mod._default_system = None
             s1 = get_agent_system()
             s2 = get_agent_system()

@@ -19,7 +19,7 @@ from typing import Optional
 import logging
 
 import numpy as np
-from domains.training.slonet import SloLinear, Tensor
+from domain.training._internal.slonet import SloLinear, Tensor
 
 logger = logging.getLogger("slo.rlhf")
 
@@ -488,7 +488,7 @@ class PPOTrainer:
         return unique
 
     def _init_optimizer(self):
-        from domains.training.slonet import SloAdam
+        from domain.training._internal.slonet import SloAdam
         self._optimizer = SloAdam(lr=self.config.learning_rate)
 
     def _zero_grads(self):

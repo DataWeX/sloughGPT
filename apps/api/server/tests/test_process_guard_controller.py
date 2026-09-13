@@ -204,7 +204,7 @@ def test_build_process_guard_propagates_guard_to_provider_server(tmp_path):
     server's old guard reference. Otherwise generation falls back in-process
     because ``_use_guard()`` sees the stopped guard, leaving
     ``requests_served`` at 0."""
-    from domains.models.provider import clear_providers, register_provider
+    from domain.models._internal.provider import clear_providers, register_provider
 
     class _FakeServer:
         def __init__(self):

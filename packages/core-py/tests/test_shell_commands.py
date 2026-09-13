@@ -9,7 +9,7 @@ import types
 
 import pytest
 
-from domains.shell.commands import ShellCommands
+from domain.shell._internal.commands import ShellCommands
 
 from domains.shell import commands as mod
 

@@ -1,8 +1,8 @@
-"""Tests for domains.shell.cycles — vector math and data classes."""
+"""Tests for domain.shell._internal.cycles — vector math and data classes."""
 
 import numpy as np
 import pytest
-from domains.shell.cycles import (
+from domain.shell._internal.cycles import (
     _normalize, _dot, _cross, _reflect, _refract,
     Material, Mesh, Light, Camera, Scene, BVH,
     create_sphere, create_plane, create_cube,

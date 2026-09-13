@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from domains.training.status import (
+from domain.training._internal.status import (
     TrainingStage, CompletionStatus, StageStatus,
     TrainingCompletionReport, TrainingStatusTracker,
     _tensors_to_numpy,

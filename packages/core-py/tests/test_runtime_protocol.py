@@ -1,5 +1,5 @@
 import threading
-from domains.training.runtime_protocol import (
+from domain.training._internal.runtime_protocol import (
     set_training_runtime,
     get_training_runtime,
     _NoOpRuntime,

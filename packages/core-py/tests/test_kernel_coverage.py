@@ -12,11 +12,11 @@ import pytest
 import types
 
 from domains.shell import kernel as kernel_mod
-from domains.shell.kernel import Kernel, NeuralKernel
-from domains.shell.kernel_devices import NullDevice
-from domains.shell.kernel_interrupts import Interrupt, InterruptType
-from domains.shell.kernel_process import ProcessState
-from domains.shell.kernel_syscall import SyscallNumber
+from domain.shell._internal.kernel import Kernel, NeuralKernel
+from domain.shell._internal.kernel_devices import NullDevice
+from domain.shell._internal.kernel_interrupts import Interrupt, InterruptType
+from domain.shell._internal.kernel_process import ProcessState
+from domain.shell._internal.kernel_syscall import SyscallNumber
 
 
 def _make_fake_addon():
@@ -189,7 +189,7 @@ class TestProcessManagement:
         assert proc.release_tensor(999) is None
 
     def test_process_acquire_and_release_tensor(self):
-        from domains.shell.kernel_process import TensorRef
+        from domain.shell._internal.kernel_process import TensorRef
         k = Kernel()
         proc = k.spawn_process("t")
         ref = TensorRef(block_id=1, shape=(2, 3), dtype="float32", size_bytes=24, owner_pid=proc.pid)

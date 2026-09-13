@@ -16,8 +16,8 @@ from unittest.mock import patch
 
 import pytest
 
-import domains.shell.tui_repl as tui_mod
-from domains.shell.tui_repl import TuiIo, TuiRepl, _complete_path, _read_escape_remainder
+import domain.shell._internal.tui_repl as tui_mod
+from domain.shell._internal.tui_repl import TuiIo, TuiRepl, _complete_path, _read_escape_remainder
 
 
 class _FakeRepl:
@@ -212,7 +212,7 @@ def test_kill_ring_trims_to_max(repl):
 
 
 def test_tui_io_flush_and_read():
-    from domains.shell.surface import TextSurface
+    from domain.shell._internal.surface import TextSurface
 
     io = TuiIo(TextSurface())
     io.flush()
@@ -1296,7 +1296,7 @@ def test_render_input_handles_move_error():
 
 
 def test_tui_io_write_routes_to_surface():
-    from domains.shell.surface import TextSurface
+    from domain.shell._internal.surface import TextSurface
 
     surf = TextSurface()
     io = TuiIo(surf)
@@ -1509,7 +1509,7 @@ class _FakeStdscr:
 
 
 def test_draw_borders_horizontal():
-    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 0.5, border=Border("all")))
@@ -1525,7 +1525,7 @@ def test_draw_borders_horizontal():
 
 
 def test_draw_borders_vertical():
-    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("all")))
@@ -1540,7 +1540,7 @@ def test_draw_borders_vertical():
 
 
 def test_draw_borders_skips_empty_border():
-    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("none")))
@@ -1555,7 +1555,7 @@ def test_draw_borders_skips_empty_border():
 
 
 def test_draw_borders_skips_invisible_pane():
-    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("all"), visible=False))
@@ -1569,7 +1569,7 @@ def test_draw_borders_skips_invisible_pane():
 
 
 def test_draw_borders_custom_char():
-    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("horizontal", ch="#")))
@@ -1584,7 +1584,7 @@ def test_draw_borders_custom_char():
 
 
 def test_draw_borders_handles_curses_error():
-    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     layout = PaneLayout()
     layout.panes.append(Pane("console", 1.0, border=Border("all")))
@@ -1607,7 +1607,7 @@ def test_draw_borders_handles_curses_error():
 # ── _render_confirm ────────────────────────────────────────────────────
 
 def test_render_confirm_yes_default():
-    from domains.shell.pane import Rect
+    from domain.shell._internal.pane import Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._confirm_message = "Delete file?"
     tui._confirm_default = True
@@ -1621,7 +1621,7 @@ def test_render_confirm_yes_default():
 
 
 def test_render_confirm_no_default():
-    from domains.shell.pane import Rect
+    from domain.shell._internal.pane import Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._confirm_message = "Proceed?"
     tui._confirm_default = False
@@ -1636,7 +1636,7 @@ def test_render_confirm_no_default():
 # ── _render_ask ─────────────────────────────────────────────────────────
 
 def test_render_ask_with_default():
-    from domains.shell.pane import Rect
+    from domain.shell._internal.pane import Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._ask_message = "Enter name"
     tui._ask_default = "anon"
@@ -1652,7 +1652,7 @@ def test_render_ask_with_default():
 
 
 def test_render_ask_without_default():
-    from domains.shell.pane import Rect
+    from domain.shell._internal.pane import Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._ask_message = "Type something"
     tui._ask_default = ""
@@ -1670,7 +1670,7 @@ def test_render_ask_without_default():
 # ── _render_select ──────────────────────────────────────────────────────
 
 def test_render_select_basic():
-    from domains.shell.pane import Rect
+    from domain.shell._internal.pane import Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._select_title = "Pick one"
     tui._select_options = ["alpha", "bravo", "charlie"]
@@ -1688,7 +1688,7 @@ def test_render_select_basic():
 
 
 def test_render_select_with_filter():
-    from domains.shell.pane import Rect
+    from domain.shell._internal.pane import Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._select_title = "Pick"
     tui._select_options = ["alpha", "bravo", "alpine"]
@@ -1706,7 +1706,7 @@ def test_render_select_with_filter():
 
 
 def test_render_select_overflow_shows_count():
-    from domains.shell.pane import Rect
+    from domain.shell._internal.pane import Rect
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
     tui._select_title = "Big list"
     tui._select_options = [f"item-{i}" for i in range(20)]
@@ -1796,8 +1796,8 @@ def test_prompt_ask_timeout_returns_default():
 # ── _render_all ─────────────────────────────────────────────────────────
 
 def test_render_all_draws_borders_and_content():
-    from domains.shell.pane import Pane, Border, PaneLayout, Rect
-    from domains.shell.log_buffer import LogBuffer, LogEntry
+    from domain.shell._internal.pane import Pane, Border, PaneLayout, Rect
+    from domain.shell._internal.log_buffer import LogBuffer, LogEntry
     tui = _init_render_state(TuiRepl(_MainFakeRepl(), LogBuffer()))
     tui._log_surface._buffer.append(LogEntry(time.time(), "INFO", "test", "log line"))
     layout = PaneLayout()

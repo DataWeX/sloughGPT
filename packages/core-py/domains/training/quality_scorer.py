@@ -8,7 +8,7 @@ Scores pairs on a 0-5 scale using 4 independent signals:
   - Language quality: punctuation, unique words, sentence structure
 
 Usage:
-    from domains.training.quality_scorer import score_pair, score_batch
+    from domain.training._internal.quality_scorer import score_pair, score_batch
     score = score_pair("What is Python?", "Python is a programming language.")
     scores = score_batch([pair1, pair2, ...])
 """

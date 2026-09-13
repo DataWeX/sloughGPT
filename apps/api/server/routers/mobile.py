@@ -15,7 +15,7 @@ import subprocess
 import time as _time
 from collections.abc import AsyncGenerator
 
-from domains.infrastructure.errors import AppError
+from domain.infrastructure._internal.errors import AppError
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
@@ -282,7 +282,7 @@ class MobileRouter:
     @staticmethod
     def _get_souls():
         """Get soul list directly from the SloManager."""
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference._internal.slo_manager import get_slo_manager
 
         mgr = get_slo_manager()
         souls = mgr.list_souls()
@@ -294,7 +294,7 @@ class MobileRouter:
     @staticmethod
     def _get_current_soul():
         """Get current soul directly from the SloManager."""
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference._internal.slo_manager import get_slo_manager
 
         soul = get_slo_manager().get_current_soul()
         if soul is None:
@@ -340,7 +340,7 @@ class MobileRouter:
     @staticmethod
     def _get_knowledge_items(limit: int = 200, offset: int = 0, topic: str | None = None):
         """Get knowledge items directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.learner._internal.knowledge import get_knowledge_memory
 
         km = get_knowledge_memory()
         items = km.list_all(top_k=limit + offset)
@@ -363,7 +363,7 @@ class MobileRouter:
     @staticmethod
     def _search_knowledge(query: str, limit: int = 10):
         """Search knowledge items directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.learner._internal.knowledge import get_knowledge_memory
 
         km = get_knowledge_memory()
         results = km.search(query, top_k=limit)
@@ -382,7 +382,7 @@ class MobileRouter:
     @staticmethod
     def _create_knowledge_item(content: str, topic: str | None = None):
         """Create a knowledge item directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.learner._internal.knowledge import get_knowledge_memory
 
         km = get_knowledge_memory()
         return km.store(content, topic=topic)
@@ -395,7 +395,7 @@ class MobileRouter:
         importance: float | None = None,
     ):
         """Update a knowledge item directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.learner._internal.knowledge import get_knowledge_memory
 
         km = get_knowledge_memory()
         return km.update(item_id, content=content, topic=topic, importance=importance)
@@ -403,7 +403,7 @@ class MobileRouter:
     @staticmethod
     def _delete_knowledge_item(item_id: str):
         """Delete a knowledge item directly."""
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.learner._internal.knowledge import get_knowledge_memory
 
         km = get_knowledge_memory()
         return km.delete(item_id)
@@ -456,7 +456,7 @@ class MobileRouter:
     @staticmethod
     def _switch_soul(soul_name: str, checkpoint_name: str | None = None):
         """Switch soul directly."""
-        from domains.inference.slo_manager import get_slo_manager
+        from domain.inference._internal.slo_manager import get_slo_manager
 
         mgr = get_slo_manager()
         return mgr.switch_soul(soul_name, checkpoint_name=checkpoint_name)
@@ -946,7 +946,7 @@ class MobileRouter:
             Returns:
                 Registration status.
             """
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile._internal.notifications import get_notification_service
 
             svc = get_notification_service()
             result = svc.register_device(
@@ -965,7 +965,7 @@ class MobileRouter:
     ) -> dict:
         try:
             """Unregister a device from push notifications."""
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile._internal.notifications import get_notification_service
 
             svc = get_notification_service()
             removed = svc.unregister_device(body.token)
@@ -985,7 +985,7 @@ class MobileRouter:
             Returns:
                 List of registered devices.
             """
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile._internal.notifications import get_notification_service
 
             svc = get_notification_service()
             return success_response(data={"devices": svc.get_devices(topic=topic)})
@@ -1006,7 +1006,7 @@ class MobileRouter:
             Returns:
                 Send result with recipient count.
             """
-            from domains.mobile.notifications import NotificationPayload, get_notification_service
+            from domain.mobile._internal.notifications import NotificationPayload, get_notification_service
 
             svc = get_notification_service()
             payload = NotificationPayload(
@@ -1029,7 +1029,7 @@ class MobileRouter:
     async def notification_history(self, limit: int = Query(50, ge=1, le=200)) -> dict:
         try:
             """Get recent notification history."""
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile._internal.notifications import get_notification_service
 
             svc = get_notification_service()
             return success_response(data={"history": svc.get_history(limit=limit)})
@@ -1045,7 +1045,7 @@ class MobileRouter:
             Returns:
                 Count of removed devices.
             """
-            from domains.mobile.notifications import get_notification_service
+            from domain.mobile._internal.notifications import get_notification_service
 
             svc = get_notification_service()
             removed = svc.cleanup_stale()
@@ -1059,7 +1059,7 @@ class MobileRouter:
     ) -> dict:
         try:
             """Send a training-complete notification to all registered devices."""
-            from domains.mobile.notifications import NotificationPayload, get_notification_service
+            from domain.mobile._internal.notifications import NotificationPayload, get_notification_service
 
             svc = get_notification_service()
             training = self._get_training_status()
@@ -1106,7 +1106,7 @@ class MobileRouter:
 
         t0 = int(_time.time() * 1000)
 
-        from domains.training.mobile_training_store import get_training_store
+        from domain.training._internal.mobile_training_store import get_training_store
 
         store = get_training_store()
         pair_ids = store.add_batch(
@@ -1247,7 +1247,7 @@ class MobileRouter:
             Side effects:
                 - Reads from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training._internal.mobile_training_store import get_training_store
 
             store = get_training_store()
             stats = store.stats()
@@ -1280,7 +1280,7 @@ class MobileRouter:
             Side effects:
                 - Reads from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training._internal.mobile_training_store import get_training_store
 
             store = get_training_store()
             pairs = store.get_pending_pairs(limit=limit)
@@ -1328,7 +1328,7 @@ class MobileRouter:
         Side effects:
             - Reads from MogDB training data collection.
         """
-        from domains.training.mobile_training_store import get_training_store
+        from domain.training._internal.mobile_training_store import get_training_store
 
         store = get_training_store()
         pairs = store.list_pairs(
@@ -1378,7 +1378,7 @@ class MobileRouter:
         Side effects:
             - Reads from MogDB training data collection.
         """
-        from domains.training.mobile_training_store import get_training_store
+        from domain.training._internal.mobile_training_store import get_training_store
 
         store = get_training_store()
         pairs = store.list_pairs(limit=limit, min_quality=min_quality, session_id=session_id)
@@ -1418,7 +1418,7 @@ class MobileRouter:
             Side effects:
                 - Reads from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training._internal.mobile_training_store import get_training_store
 
             store = get_training_store()
             pairs = store.get_pairs_by_session(session_id)
@@ -1462,7 +1462,7 @@ class MobileRouter:
             Side effects:
                 - Updates quality field in MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training._internal.mobile_training_store import get_training_store
 
             store = get_training_store()
             updated = store.update_quality(pair_id, body.quality)
@@ -1491,7 +1491,7 @@ class MobileRouter:
             Side effects:
                 - Deletes pair from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training._internal.mobile_training_store import get_training_store
 
             store = get_training_store()
             deleted = store.delete_pair(pair_id)
@@ -1514,7 +1514,7 @@ class MobileRouter:
             Side effects:
                 - Deletes all synced pairs from MogDB training data collection.
             """
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training._internal.mobile_training_store import get_training_store
 
             store = get_training_store()
             count = store.delete_synced()
@@ -1531,7 +1531,7 @@ class MobileRouter:
     ) -> dict:
         try:
             """Delete multiple training pairs by ID."""
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training._internal.mobile_training_store import get_training_store
 
             store = get_training_store()
             count = 0
@@ -1549,7 +1549,7 @@ class MobileRouter:
     ) -> dict:
         try:
             """Compact the training data store (reclaim space from deleted records)."""
-            from domains.training.mobile_training_store import get_training_store
+            from domain.training._internal.mobile_training_store import get_training_store
 
             store = get_training_store()
             count = store.compact()
@@ -1586,12 +1586,12 @@ class MobileRouter:
         """
         from pathlib import Path
 
-        from domains.api.sse_envelope import sse_complete, sse_error, sse_event
+        from domain.api._internal.sse_envelope import sse_complete, sse_error, sse_event
 
         t0 = _time.time()
 
         # Extract pairs from server logs
-        from domains.training.pair_extractor import (
+        from domain.training._internal.pair_extractor import (
             extract_pairs_from_logs,
             extract_pairs_from_sessions,
             write_training_text,
@@ -1628,8 +1628,8 @@ class MobileRouter:
         text_file = write_training_text(pairs)
 
         # Store pairs in MogDB (with quality scoring)
-        from domains.training.mobile_training_store import get_training_store
-        from domains.training.quality_scorer import score_batch
+        from domain.training._internal.mobile_training_store import get_training_store
+        from domain.training._internal.quality_scorer import score_batch
 
         quality_scores = score_batch(pairs)
         store = get_training_store()
@@ -1856,7 +1856,7 @@ class MobileRouter:
             Side effects:
                 - None (reads from AutoTrainer singleton).
             """
-            from domains.training.auto_trainer import get_auto_trainer
+            from domain.training._internal.auto_trainer import get_auto_trainer
 
             trainer = get_auto_trainer()
             return success_response(data=trainer.status())
@@ -1883,7 +1883,7 @@ class MobileRouter:
         Side effects:
             - Modifies AutoTrainer singleton attributes.
         """
-        from domains.training.auto_trainer import get_auto_trainer
+        from domain.training._internal.auto_trainer import get_auto_trainer
 
         trainer = get_auto_trainer()
         if threshold is not None:

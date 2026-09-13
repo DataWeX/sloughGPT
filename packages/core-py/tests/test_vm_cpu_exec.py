@@ -1,5 +1,5 @@
 """
-Execution tests for the X86CPU in domains/shell/vm.py.
+Execution tests for the X86CPU in domain.shell._internal.vm.py.
 
 Drives the 32-bit CPU with raw machine-code bytes (loaded at 0x1000) to cover
 every instruction-decoder branch that assembled programs do not reach:
@@ -16,7 +16,7 @@ swallow a deliberate InsFault (DIV by zero / overflow).
 
 import pytest
 
-from domains.shell.vm import (
+from domain.shell._internal.vm import (
     X86CPU,
     InsFault,
     FLAG_CF,

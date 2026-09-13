@@ -1,4 +1,4 @@
-"""Coverage tests for domains/shell/init.py."""
+"""Coverage tests for domain.shell._internal.init.py."""
 
 import json
 import shlex
@@ -7,7 +7,7 @@ import sys
 import pytest
 
 from domains.shell import init as init_mod
-from domains.shell.init import (
+from domain.shell._internal.init import (
     InitSystem,
     SERVICE_STATES,
     ServiceDef,

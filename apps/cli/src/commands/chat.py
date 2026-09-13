@@ -156,7 +156,7 @@ def cmd_chat(args):
     log.blank()
 
     try:
-        from domains.shell.io import ConsoleIO
+        from domain.shell._internal.io import ConsoleIO
         io = ConsoleIO()
         while True:
             user_input = io.read("You: ")
@@ -207,7 +207,7 @@ def cmd_chat(args):
 def cmd_generate(args):
     """One-shot text generation."""
     from pathlib import Path
-    from domains.core import SloEngine
+    from domain.core._internal.soul import SloEngine
     from utils.helpers import local_soul_candidate_paths
 
     models_dir = Path("models")

@@ -30,7 +30,7 @@ class TestErrorRecovery:
     """Tests that training recovers gracefully from errors."""
 
     def test_missing_file_returns_error(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         trainer = ComprehensiveTrainer()
         result = trainer.run_full_cycle(
@@ -41,7 +41,7 @@ class TestErrorRecovery:
         assert result.error is not None
 
     def test_empty_file_returns_error(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("")
@@ -51,7 +51,7 @@ class TestErrorRecovery:
             assert not result.success
 
     def test_short_data_returns_error(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("short")
@@ -61,7 +61,7 @@ class TestErrorRecovery:
             assert not result.success
 
     def test_result_has_error_message(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         trainer = ComprehensiveTrainer()
         result = trainer.run_full_cycle(
@@ -72,7 +72,7 @@ class TestErrorRecovery:
         assert len(result.error) > 0
 
     def test_result_phases_recorded_on_error(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         trainer = ComprehensiveTrainer()
         result = trainer.run_full_cycle(
@@ -82,7 +82,7 @@ class TestErrorRecovery:
         assert len(result.phases) > 0
 
     def test_failed_result_has_duration(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         trainer = ComprehensiveTrainer()
         result = trainer.run_full_cycle(
@@ -96,7 +96,7 @@ class TestConfigValidation:
     """Tests that invalid configs are handled properly."""
 
     def test_invalid_method_uses_default(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -109,7 +109,7 @@ class TestConfigValidation:
             assert result.success
 
     def test_zero_epochs_handled(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -122,7 +122,7 @@ class TestConfigValidation:
             assert result.success
 
     def test_negative_epochs_handled(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -135,7 +135,7 @@ class TestConfigValidation:
             assert result.success
 
     def test_large_batch_size_handled(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -148,7 +148,7 @@ class TestConfigValidation:
             assert result.success
 
     def test_zero_batch_size_handled(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -161,7 +161,7 @@ class TestConfigValidation:
             assert result.success
 
     def test_missing_config_keys_use_defaults(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -174,7 +174,7 @@ class TestConfigValidation:
             assert result.success
 
     def test_empty_config_uses_defaults(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -188,7 +188,7 @@ class TestConcurrentSafety:
     """Tests that training is safe under concurrent access."""
 
     def test_sequential_runs_are_safe(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -201,7 +201,7 @@ class TestConcurrentSafety:
             assert all(r.success for r in results)
 
     def test_thread_safety(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         results = []
         errors = []
@@ -228,7 +228,7 @@ class TestConcurrentSafety:
         assert all(r.success for r in results)
 
     def test_multiple_trainers_same_data(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -238,7 +238,7 @@ class TestConcurrentSafety:
             assert all(r.success for r in results)
 
     def test_outcome_tracker_thread_safety(self):
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         errors = []
@@ -272,7 +272,7 @@ class TestResultSerialization:
     def test_result_to_dict(self):
         from dataclasses import asdict
 
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -285,7 +285,7 @@ class TestResultSerialization:
             assert "success" in result_dict
 
     def test_result_summary_string(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -297,7 +297,7 @@ class TestResultSerialization:
             assert len(summary) > 0
 
     def test_phase_results_have_required_fields(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)

@@ -1,5 +1,5 @@
 """
-Comprehensive tests for domains.shell.vm_devices.
+Comprehensive tests for domain.shell._internal.vm_devices.
 
 Pure-logic tests for all device abstractions: TensorDevice, PythonExecDevice,
 SlonetDevice, MultimodalDevice, EngineDevice, SlonetTrainingDevice, NPUVMDevice.
@@ -12,7 +12,7 @@ import math
 import pytest
 import numpy as np
 
-from domains.shell.vm_devices import (
+from domain.shell._internal.vm_devices import (
     TensorDevice,
     PythonExecDevice,
     SlonetDevice,
@@ -21,7 +21,7 @@ from domains.shell.vm_devices import (
     SlonetTrainingDevice,
     NPUVMDevice,
 )
-from domains.shell.vm import DeviceFault
+from domain.shell._internal.vm import DeviceFault
 
 
 # =============================================================================

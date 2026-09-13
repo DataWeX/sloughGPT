@@ -1,11 +1,11 @@
-"""Tests for domains/models/provider.py."""
+"""Tests for domain.models._internal.provider.py."""
 
 import pytest
 import threading
 from dataclasses import dataclass
 from typing import AsyncIterator, List, Optional
 
-from domains.models.provider import (
+from domain.models._internal.provider import (
     ModelCapabilities,
     ModelProvider,
     register_provider,
@@ -36,12 +36,12 @@ from domains.models.provider import (
 # =============================================================================
 
 def _clear_providers():
-    import domains.models.provider as p
+    import domain.models._internal.provider as p
     p._providers.clear()
 
 
 def _clear_processors():
-    import domains.models.provider as p
+    import domain.models._internal.provider as p
     p._processors.clear()
 
 

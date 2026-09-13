@@ -8,7 +8,7 @@ Tracks training completion status and enables:
 
 Checkpoint persistence and resume live in the canonical
 ``domains.training.train_pipeline.CheckpointManager`` (`.soul`/`.npz` via
-``domains.training.slonet``); this module no longer ships a checkpoint manager.
+``domain.training._internal.slonet``); this module no longer ships a checkpoint manager.
 """
 
 from __future__ import annotations
@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from domains.training.slonet import load_checkpoint_npz as _load_npz
-from domains.training.slonet import save_checkpoint_npz as _save_npz
+from domain.training._internal.slonet import load_checkpoint_npz as _load_npz
+from domain.training._internal.slonet import save_checkpoint_npz as _save_npz
 
 logger = logging.getLogger("slo.training.status")
 
@@ -374,7 +374,7 @@ def _tensors_to_numpy(state_dict: Dict[str, Any]) -> Dict[str, np.ndarray]:
     return result
 
 
-# Native implementations live in domains.training.slonet.
+# Native implementations live in domain.training._internal.slonet.
 save_checkpoint_npz = _save_npz
 load_checkpoint_npz = _load_npz
 

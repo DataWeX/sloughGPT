@@ -33,7 +33,7 @@ class TestTrainingThroughput:
     """Benchmarks training throughput and speed."""
 
     def test_small_dataset_throughput(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(2000))
@@ -52,7 +52,7 @@ class TestTrainingThroughput:
             print(f"\n  Small dataset: {duration:.2f}s, loss={result.final_loss:.4f}")
 
     def test_medium_dataset_throughput(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(10000))
@@ -71,7 +71,7 @@ class TestTrainingThroughput:
             print(f"\n  Medium dataset: {duration:.2f}s, loss={result.final_loss:.4f}")
 
     def test_training_speed_steps_per_second(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(5000))
@@ -91,7 +91,7 @@ class TestTrainingThroughput:
             print(f"\n  Speed: {steps_per_sec:.2f} steps/s, {duration:.2f}s total")
 
     def test_lora_vs_full_training_speed(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(3000))
@@ -122,7 +122,7 @@ class TestPhaseTimings:
     """Benchmarks individual phase timings."""
 
     def test_validation_phase_speed(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(5000))
@@ -139,7 +139,7 @@ class TestPhaseTimings:
             print(f"\n  Validation: {validation_time:.3f}s")
 
     def test_configuration_phase_speed(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(5000))
@@ -156,7 +156,7 @@ class TestPhaseTimings:
             print(f"\n  Configuration: {config_time:.3f}s")
 
     def test_preprocessing_phase_speed(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(5000))
@@ -177,7 +177,7 @@ class TestMemoryUsage:
     """Benchmarks memory usage during training."""
 
     def test_training_does_not_leak_memory(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(3000))
@@ -197,7 +197,7 @@ class TestMemoryUsage:
             assert len(losses) == 3
 
     def test_multiple_sequential_runs(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(3000))
@@ -223,7 +223,7 @@ class TestAdaptiveConfigPerformance:
     """Benchmarks the adaptive config engine."""
 
     def test_adaptive_config_recommendation_speed(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         t0 = time.time()
@@ -234,7 +234,7 @@ class TestAdaptiveConfigPerformance:
         print(f"\n  Adaptive config: {duration:.3f}s, confidence={rec.confidence:.2f}")
 
     def test_outcome_tracker_speed(self):
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         t0 = time.time()
@@ -257,7 +257,7 @@ class TestComprehensiveResultPerformance:
     """Tests performance metrics in ComprehensiveResult."""
 
     def test_result_performance_fields(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(3000))
@@ -278,7 +278,7 @@ class TestComprehensiveResultPerformance:
             assert perf["phases_completed"] >= 4
 
     def test_result_summary_with_performance(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(_make_data(3000))

@@ -1,8 +1,8 @@
-"""Tests for domains.training.performance — TrainingOptimizations, InferenceOptimizations, PerformanceConfig."""
+"""Tests for domain.training._internal.performance — TrainingOptimizations, InferenceOptimizations, PerformanceConfig."""
 
 import numpy as np
 import pytest
-from domains.training.performance import (
+from domain.training._internal.performance import (
     TrainingOptimizations,
     InferenceOptimizations,
     PerformanceConfig,

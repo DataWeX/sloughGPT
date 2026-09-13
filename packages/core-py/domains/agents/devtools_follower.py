@@ -5,7 +5,7 @@ Wraps the ComputerUseAgent to provide real-time logging, performance tracking,
 and automatic error detection during user journey tests.
 
 Usage:
-    from domains.agents.devtools_follower import DevToolsFollower
+    from domain.agents._internal.devtools_follower import DevToolsFollower
 
     async with DevToolsFollower(base_url="http://localhost:3000") as follower:
         await follower.navigate("/training")
@@ -171,7 +171,7 @@ class DevToolsFollower:
         headless: bool = True,
         output_path: str | None = None,
     ):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         self.agent = ComputerUseAgent(base_url=base_url, headless=headless)
         self.output_path = output_path

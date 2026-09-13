@@ -717,6 +717,7 @@ function StartupTab() {
   const stats = historyData?.stats as { count: number; avg_duration: number; min_duration: number; max_duration: number; p50_duration: number; p95_duration: number; success_rate: number } | undefined
   const stageStats = historyData?.stage_stats as Record<string, { avg: number; min: number; max: number; p50: number; count: number }> | undefined
   const alerts = historyData?.alerts as Array<{ type: string; severity: string; message: string; timestamp: number }> | undefined
+  const suggestions = historyData?.suggestions as Array<{ type: string; severity: string; message: string; stage?: string; hook?: string }> | undefined
 
   return (
     <div className="space-y-4">
@@ -748,6 +749,48 @@ function StartupTab() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Suggestions */}
+      {suggestions && suggestions.length > 0 && (
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
+            <span className="text-[11px] font-medium text-[#8e8e93]">Optimization Suggestions</span>
+            <span className="text-[9px] text-[#636366] ml-2">{suggestions.length} suggestions</span>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {suggestions.map((suggestion, i) => (
+              <div
+                key={`${suggestion.type}-${i}`}
+                className="px-4 py-3 flex items-start gap-3"
+              >
+                <span className={cn(
+                  'w-2 h-2 rounded-full shrink-0 mt-1',
+                  suggestion.severity === 'error' ? 'bg-[#ff5f57]' :
+                  suggestion.severity === 'warning' ? 'bg-[#febc2e]' : 'bg-[#0a7aff]',
+                )} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-[11px] font-medium',
+                      suggestion.severity === 'error' ? 'text-[#ff5f57]' :
+                      suggestion.severity === 'warning' ? 'text-[#febc2e]' : 'text-[#0a7aff]',
+                    )}>
+                      {suggestion.type.replace(/_/g, ' ')}
+                    </span>
+                    {suggestion.stage && (
+                      <span className="text-[9px] text-[#636366] bg-[#1c1c1e] px-1.5 py-0.5 rounded">{suggestion.stage}</span>
+                    )}
+                    {suggestion.hook && (
+                      <span className="text-[9px] text-[#636366] bg-[#1c1c1e] px-1.5 py-0.5 rounded">{suggestion.hook}</span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-[#8e8e93]">{suggestion.message}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

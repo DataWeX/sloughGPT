@@ -57,7 +57,7 @@ def cmd_dataset_import(args, source: str):
         log.blank()
 
         try:
-            from domains.training.data_import import RepoImporter
+            from domain.training._internal.data_import import RepoImporter
 
             repo = RepoImporter()
             result = repo.import_from_github(
@@ -82,7 +82,7 @@ def cmd_dataset_import(args, source: str):
         log.blank()
 
         try:
-            from domains.training.data_import import HuggingFaceImporter
+            from domain.training._internal.data_import import HuggingFaceImporter
 
             hf = HuggingFaceImporter()
             result = hf.download_dataset(
@@ -139,7 +139,7 @@ def cmd_dataset_search(args):
 
     if source == "hf":
         try:
-            from domains.training.data_import import HuggingFaceImporter
+            from domain.training._internal.data_import import HuggingFaceImporter
             results = HuggingFaceImporter().search_datasets(query=query, limit=args.limit)
             if results:
                 log.success(f"Found {len(results)} datasets")
@@ -156,7 +156,7 @@ def cmd_dataset_search(args):
             log.error(str(e))
     else:
         try:
-            from domains.training.data_import import GitHubSearch
+            from domain.training._internal.data_import import GitHubSearch
             results = GitHubSearch().search_repos(query=query, limit=args.limit)
             if results:
                 log.success(f"Found {len(results)} repositories")

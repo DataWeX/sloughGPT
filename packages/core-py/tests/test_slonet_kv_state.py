@@ -10,7 +10,7 @@ import math
 import numpy as np
 import pytest
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloTransformer, SloTransformerBlock, SloLinear, SloEmbedding,
     SloLayerNorm, NumpyKVState,
 )

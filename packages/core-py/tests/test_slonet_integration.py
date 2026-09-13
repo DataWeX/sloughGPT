@@ -14,8 +14,8 @@ import pytest
 import numpy as np
 
 from domains.infrastructure.slonet_server import SloNetServer
-from domains.inference.slonet_provider import SloNetChatProvider
-from domains.models.provider import (
+from domain.inference._internal.slonet_provider import SloNetChatProvider
+from domain.models._internal.provider import (
     setup_providers,
     get_provider,
     list_providers,
@@ -29,7 +29,7 @@ from domains.models.provider import (
 
 @pytest.fixture(autouse=True)
 def _clean_registries():
-    import domains.models.provider as mod
+    import domain.models._internal.provider as mod
     mod._providers.clear()
     mod._processors.clear()
     yield
@@ -256,7 +256,7 @@ class TestSetupProvidersWiring:
 
         try:
             with patch("domains.infrastructure.model_resolver.get_model_dir", return_value=tmp_path):
-                with patch("domains.inference.slonet_provider.SloNetChatProvider") as mock_cls:
+                with patch("domain.inference._internal.slonet_provider.SloNetChatProvider") as mock_cls:
                     mock_cls.from_slnc.return_value = mock_provider
                     setup_providers()
                     mock_cls.from_slnc.assert_called_once()

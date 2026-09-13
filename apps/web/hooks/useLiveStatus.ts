@@ -125,7 +125,7 @@ const RELOAD_WINDOW_MS = 120_000 // 2 minutes
  */
 export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
   const healthScore = d.health_score ?? { score: 0, status: 'unknown' }
-  const stagedLoader = (d as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
+  const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
   return {
     model_loaded: Boolean(d.model_loaded),
     model_loading: Boolean(d.model_loading),
@@ -281,7 +281,7 @@ export function initLiveStatus(): () => void {
     _receivedHealthEvent = true
     stopFallbackPoll()
     const d = envelope.data as Partial<LiveHealthSnapshot>
-    const stagedLoader = (d as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
+    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
     const snap: LiveHealthSnapshot = {
       model_loaded: Boolean(d.model_loaded),
       model_loading: Boolean(d.model_loading),

@@ -1,7 +1,7 @@
 """Tests for bidirectional DAG: forward-mode AD alongside backward-mode AD."""
 
 import numpy as np
-from domains.training.slonet import Tensor, cross_entropy, _layernorm, _rmsnorm, sigmoid, relu, tanh, gelu, silu, _softmax, _maxpool2d, flatten, no_grad, _transpose
+from domain.training._internal.slonet import Tensor, cross_entropy, _layernorm, _rmsnorm, sigmoid, relu, tanh, gelu, silu, _softmax, _maxpool2d, flatten, no_grad, _transpose
 
 
 class TestForwardGradBasic:

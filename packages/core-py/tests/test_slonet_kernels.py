@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.slonet_kernels import (
+from domain.training._internal.slonet_kernels import (
     nb_rmsnorm,
     nb_layernorm,
     nb_swiglu,

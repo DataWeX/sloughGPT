@@ -31,7 +31,7 @@ class FakeVectorStore:
         return len(entries)
 
     async def query(self, embedding, top_k=5):
-        from domains.inference.vector_store import QueryResult
+        from domain.inference._internal.vector_store import QueryResult
         return [
             QueryResult(text=e.text, score=0.9, id=e.id or str(i))
             for i, e in enumerate(self._entries[:top_k])
@@ -92,7 +92,7 @@ class TestGetStats:
 class TestInitVectorStore:
     def test_init_in_memory(self, client):
         fake_store = FakeVectorStore()
-        with patch("domains.inference.vector_store.create_vector_store",
+        with patch("domain.inference._internal.vector_store.create_vector_store",
                     new_callable=AsyncMock, return_value=fake_store):
             resp = client.post("/vector/init", json={"provider": "in_memory", "dimension": 384})
             assert resp.status_code == 200
@@ -109,7 +109,7 @@ class TestInitVectorStore:
                 raise ImportError("chromadb not installed")
             return FakeVectorStore()
 
-        with patch("domains.inference.vector_store.create_vector_store", side_effect=fake_create):
+        with patch("domain.inference._internal.vector_store.create_vector_store", side_effect=fake_create):
             resp = client.post("/vector/init", json={"provider": "chromadb"})
             assert resp.status_code == 200
             assert resp.json()["data"]["provider"] == "in_memory"
@@ -136,7 +136,7 @@ class TestUpsertVectors:
 
 class TestSearchVectors:
     def test_search(self, client):
-        from domains.inference.vector_store import QueryResult
+        from domain.inference._internal.vector_store import QueryResult
         fake_store = FakeVectorStore()
         fake_store._entries = [
             QueryResult(text="hello", score=0.9, id="1"),

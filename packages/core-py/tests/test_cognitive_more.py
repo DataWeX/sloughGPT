@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import pytest
-from domains.cognitive.grounding import (
+from domain.cognitive._internal.grounding import (
     KnowledgeGrounding,
     CurriculumLearner,
     Document,
     RAGGrounder,
 )
-from domains.cognitive.rag import (
+from domain.cognitive._internal.rag import (
     TextChunk,
     BM25Indexer,
     CitationTracker,

@@ -5,7 +5,7 @@ import types
 
 import pytest
 pytestmark = pytest.mark.slow
-from domains.agents.tools import ToolRegistry, ToolSpec, ToolParam, ToolResult
+from domain.agents._internal.tools import ToolRegistry, ToolSpec, ToolParam, ToolResult
 
 
 @pytest.fixture
@@ -382,13 +382,13 @@ class TestExecuteEdgeCases:
 
 class TestGetToolRegistry:
     def test_singleton_returns_same_instance(self):
-        from domains.agents.tools import get_tool_registry
+        from domain.agents._internal.tools import get_tool_registry
         r1 = get_tool_registry()
         r2 = get_tool_registry()
         assert r1 is r2
 
     def test_singleton_has_default_tools(self):
-        from domains.agents.tools import get_tool_registry
+        from domain.agents._internal.tools import get_tool_registry
         r = get_tool_registry()
         assert r.get("calculator") is not None
         assert r.get("current_time") is not None

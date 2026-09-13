@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 try:
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from domains.billing.token_service import get_token_billing_service, Tier
+    from domain.billing._internal.token_service import get_token_billing_service, Tier
     from apps.api.server.routers.tokens import router
     HAS_FASTAPI = True
 except ImportError:

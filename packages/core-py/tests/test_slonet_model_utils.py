@@ -6,7 +6,7 @@ import os
 import tempfile
 import pytest
 import numpy as np
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor,
     SloNet,
     SloTransformer,
@@ -91,7 +91,7 @@ class TestSoulsFromDirectory:
         assert result == []
 
     def test_with_sou_files(self):
-        from domains.training.slonet import export_to_sou
+        from domain.training._internal.slonet import export_to_sou
         with tempfile.TemporaryDirectory() as tmpdir:
             model = SloTransformer(
                 vocab_size=100, n_embed=32, n_layer=1, n_head=2,

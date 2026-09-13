@@ -6,8 +6,8 @@ import time
 
 import pytest
 
-from domains.training.sessions import start_from_sessions_training
-from domains.training.state import TrainingState
+from domain.training._internal.sessions import start_from_sessions_training
+from domain.training._internal.state import TrainingState
 
 
 @pytest.fixture

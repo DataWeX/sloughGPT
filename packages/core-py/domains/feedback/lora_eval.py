@@ -2,7 +2,7 @@
 LoRA Evaluator — measures quality delta before/after adapter merge.
 
 Usage:
-    from domains.feedback.lora_eval import LoRAEvaluator
+    from domain.feedback._internal.lora_eval import LoRAEvaluator
 
     eval = LoRAEvaluator(
         base_model="models/sloughgpt.safetensors",
@@ -232,7 +232,7 @@ class LoRAEvaluator:
             return self._default_gen
 
         try:
-            from domains.models.provider import get_provider
+            from domain.models._internal.provider import get_provider
         except Exception as e:
             logger.debug("provider import failed: %s", e)
             return None
@@ -646,7 +646,7 @@ class LoRAEvaluator:
         if output_sou is None:
             output_sou = str(Path(adapter_npz).with_suffix(".soul"))
 
-        from domains.training.slonet import SloNet
+        from domain.training._internal.slonet import SloNet
 
         net = SloNet(
             layers=[],

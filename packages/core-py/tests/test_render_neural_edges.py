@@ -6,8 +6,8 @@ Run: PYTHONPATH=packages/core-py python -m pytest tests/test_render_neural_edges
 
 import numpy as np
 import pytest
-from domains.shell.render_neural import RenderNeuralDevice, _softmax
-from domains.shell.vm import DeviceFault
+from domain.shell._internal.render_neural import RenderNeuralDevice, _softmax
+from domain.shell._internal.vm import DeviceFault
 
 
 def _tensors(keys=("image", "depth", "normal", "albedo")):

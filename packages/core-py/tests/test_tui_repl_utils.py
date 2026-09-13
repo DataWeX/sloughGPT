@@ -8,15 +8,15 @@ import shutil
 
 import pytest
 
-from domains.shell.surface import TextSurface
-from domains.shell.tui_repl import (
+from domain.shell._internal.surface import TextSurface
+from domain.shell._internal.tui_repl import (
     _complete_path,
     _ESC_FINALS,
     _STYLE_PAIRS,
     TuiIo,
     TuiRepl,
 )
-from domains.shell.surface import (
+from domain.shell._internal.surface import (
     STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL,
 )
 

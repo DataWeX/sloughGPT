@@ -3,12 +3,12 @@
 import math
 import pytest
 import numpy as np
-from domains.training.lora import (
+from domain.training._internal.lora import (
     LoRAType, LoRAConfig, LoRALinear, LoRAEmbedding,
     apply_lora_to_model, get_lora_parameters, count_lora_parameters,
     _to_np, _to_tensor,
 )
-from domains.training.slonet import Tensor
+from domain.training._internal.slonet import Tensor
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────

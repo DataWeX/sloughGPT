@@ -1,9 +1,9 @@
-"""Coverage tests for domains/shell/kernel_memory.py."""
+"""Coverage tests for domain.shell._internal.kernel_memory.py."""
 
 import numpy as np
 import pytest
 
-from domains.shell.kernel_memory import MemoryBlock, TensorMemory
+from domain.shell._internal.kernel_memory import MemoryBlock, TensorMemory
 
 
 def test_memory_block_num_elements():

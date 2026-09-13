@@ -1,4 +1,4 @@
-"""Tests for domains.inference.slo_manager — SloInfo and SloManager."""
+"""Tests for domain.inference._internal.slo_manager — SloInfo and SloManager."""
 
 import json
 import os
@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from domains.inference.slo_manager import SloInfo, SloManager
+from domain.inference._internal.slo_manager import SloInfo, SloManager
 
 
 # ---------------------------------------------------------------------------

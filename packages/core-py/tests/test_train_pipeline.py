@@ -1,4 +1,4 @@
-"""Tests for domains/training/train_pipeline.py (100% coverage target)."""
+"""Tests for domain.training._internal.train_pipeline.py (100% coverage target)."""
 
 import logging
 import math
@@ -12,9 +12,9 @@ import numpy as np
 import pytest
 
 from domains.training import train_pipeline as tp
-from domains.training.lr_schedulers import create_scheduler
-from domains.training.slonet import SloAdam, SloAdamW
-from domains.training.train_pipeline import (
+from domain.training._internal.lr_schedulers import create_scheduler
+from domain.training._internal.slonet import SloAdam, SloAdamW
+from domain.training._internal.train_pipeline import (
     CheckpointManager,
     SloughGPTTrainer,
     TextDataset,
@@ -230,7 +230,7 @@ class TestMakeJsonSafe:
 
 class TestLoadSoulCheckpoint:
     def _make_profile(self, metadata=None):
-        from domains.inference.slo_format import SloProfile
+        from domain.inference._internal.slo_format import SloProfile
 
         p = SloProfile(name="assistant")
         if metadata is not None:
@@ -460,7 +460,7 @@ class TestCheckpointManager:
         assert "model_state_dict" in bundle
 
     def test_load_from_path_npz(self, tmp_path, monkeypatch):
-        from domains.training.slonet import save_checkpoint_npz
+        from domain.training._internal.slonet import save_checkpoint_npz
 
         m = _manager(tmp_path)
         path = str(m.checkpoint_dir / "step_7.npz")
@@ -621,7 +621,7 @@ class TestCheckpointManager:
         assert m.latest_path() == str(real)
 
     def test_save_checkpoint_npz_atomic_no_tmp_left(self, tmp_path):
-        from domains.training.slonet import load_checkpoint_npz, save_checkpoint_npz
+        from domain.training._internal.slonet import load_checkpoint_npz, save_checkpoint_npz
 
         m = _manager(tmp_path)
         p = tmp_path / "ck" / "step_7.npz"
@@ -632,7 +632,7 @@ class TestCheckpointManager:
         assert load_checkpoint_npz(str(p))["step"] == 7
 
     def test_save_checkpoint_npz_failure_leaves_no_artifact(self, tmp_path, monkeypatch):
-        from domains.training.slonet import save_checkpoint_npz
+        from domain.training._internal.slonet import save_checkpoint_npz
 
         m = _manager(tmp_path)
 
@@ -1247,7 +1247,7 @@ class TestSaveCheckpoint:
         assert t._last_checkpoint_path is not None
         assert t._last_checkpoint_path.endswith(".soul")
         assert os.path.exists(t._last_checkpoint_path)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         profile, _ = load_soul(t._last_checkpoint_path)
         assert profile.metadata["vocab_size"] == t.vocab_size
         assert profile.metadata["chars"] is not None
@@ -1263,7 +1263,7 @@ class TestSaveCheckpoint:
     def test_periodic_checkpoint_keeps_optimizer_state(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
         t.save_checkpoint({"eval_loss": 1.5})
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         profile, _ = load_soul(t._last_checkpoint_path)
         ts = profile.metadata["training_state"]
         assert "state" in ts["optimizer"]
@@ -1271,7 +1271,7 @@ class TestSaveCheckpoint:
     def test_final_checkpoint_strips_optimizer_state(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
         t.save_checkpoint({"eval_loss": 0.1}, is_final=True)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         profile, _ = load_soul(t._last_checkpoint_path)
         ts = profile.metadata["training_state"]
         assert "hyperparameters" in ts["optimizer"]
@@ -1285,7 +1285,7 @@ class TestSaveCheckpoint:
         assert not [p for p in (tmp_path / "ck").iterdir() if p.suffix == ".tmp"]
 
     def test_save_soul_meta_failure_leaves_no_partial_artifact(self, data_path, tmp_path, monkeypatch):
-        import domains.inference.slo_format as slo_format
+        import domain.inference._internal.slo_format as slo_format
 
         def boom(*args, **kwargs):
             raise RuntimeError("meta write failed")
@@ -1304,7 +1304,7 @@ class TestSaveCheckpoint:
         def fake_time():
             return next(ticks)
 
-        monkeypatch.setattr("domains.training.train_pipeline.time.time", fake_time)
+        monkeypatch.setattr("domain.training._internal.train_pipeline.time.time", fake_time)
         # INFO/DEBUG log records (if the CLI configured an active slo.trainer
         # logger) each consume a fake time.time tick via Logger.makeRecord,
         # which would break the timestamp arithmetic below. Disable the logger
@@ -1412,7 +1412,7 @@ class TestSave:
         t.current_epoch = 1
         out = str(tmp_path / "model_ts")
         t.save(out)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
         assert ts["step"] == 3
@@ -1424,7 +1424,7 @@ class TestSave:
         t._last_train_loss = 3.5
         out = str(tmp_path / "model_loss")
         t.save(out)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         profile, _ = load_soul(out + ".soul")
         assert profile.final_train_loss == 3.5
 
@@ -1432,7 +1432,7 @@ class TestSave:
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "model_fresh")
         t.save(out)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         profile, _ = load_soul(out + ".soul")
         assert profile.final_train_loss is None
         assert profile.final_val_loss is None
@@ -1441,7 +1441,7 @@ class TestSave:
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "model_noopt")
         t.save(out, include_optimizer_state=False)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
         assert "optimizer" in ts
@@ -1453,7 +1453,7 @@ class TestSave:
         t.global_step = 5
         out = str(tmp_path / "model_fullopt")
         t.save(out)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
         assert ts["step"] == 5
@@ -1485,7 +1485,7 @@ class TestGenerate:
 
 class TestTokenizerTraining:
     def test_prepare_data_with_tokenizer(self, tmp_path):
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
         p = tmp_path / "c.txt"
         p.write_text(DATA_TEXT, encoding="utf-8")
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
@@ -1497,7 +1497,7 @@ class TestTokenizerTraining:
         assert data.shape[0] < len(DATA_TEXT)  # BPE compresses below char count
 
     def test_trainer_uses_tokenizer_vocab(self, data_path, tmp_path):
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         cfg = tiny_config(tmp_path)
         t = SloughGPTTrainer(data_path, config=cfg, tokenizer=tree)
@@ -1508,7 +1508,7 @@ class TestTokenizerTraining:
         assert len(t.data) < len(DATA_TEXT)
 
     def test_generate_round_trip_through_tokenizer(self, data_path, tmp_path):
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
         np.random.seed(0)
@@ -1518,8 +1518,8 @@ class TestTokenizerTraining:
         assert len(text) > 0
 
     def test_save_embeds_tokenizer(self, data_path, tmp_path):
-        from domains.training.token_tree import TokenTree
-        from domains.inference.slo_format import load_soul
+        from domain.training._internal.token_tree import TokenTree
+        from domain.inference._internal.slo_format import load_soul
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
         out = str(tmp_path / "tok")
@@ -1531,7 +1531,7 @@ class TestTokenizerTraining:
         assert profile.metadata["vocab_size"] == tree.vocab_size
 
     def test_save_without_tokenizer_no_key(self, data_path, tmp_path):
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "plain")
         t.save(out)
@@ -1539,8 +1539,8 @@ class TestTokenizerTraining:
         assert "tokenizer" not in profile.metadata
 
     def test_from_soul_round_trip_tree_tokenizer(self, data_path, tmp_path):
-        from domains.inference.slonet_provider import SloNetChatProvider
-        from domains.training.token_tree import TokenTree
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.training._internal.token_tree import TokenTree
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
         out = str(tmp_path / "tok")

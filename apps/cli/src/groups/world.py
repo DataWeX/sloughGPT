@@ -22,8 +22,8 @@ def register(cli):
     @click.option("--output", "-o", default=None, help="Output file (PPM)")
     @click.option("--neural", is_flag=True, help="Run neural processing on render")
     def world_render(width, height, samples, output, neural):
-        from domains.shell.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
-        from domains.shell.simulation import WorldGrid
+        from domain.shell._internal.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
+        from domain.shell._internal.simulation import WorldGrid
         import numpy as np
 
         cfg = RenderConfig(width=width, height=height, samples=samples)
@@ -70,15 +70,15 @@ def register(cli):
     @click.option("--neural", is_flag=True, help="Enable neural processing")
     @click.option("--verbose", is_flag=True, help="Verbose output")
     def world_tick(ticks, babies, render, neural, verbose):
-        from domains.shell.simulation import SimScene, Simulation, WorldParams
-        from domains.shell.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
+        from domain.shell._internal.simulation import SimScene, Simulation, WorldParams
+        from domain.shell._internal.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
 
         params = WorldParams()
         scene = SimScene(params)
 
         for _ in range(babies):
             import numpy as np
-            from domains.shell.simulation import SimBaby, Entity, EntityType
+            from domain.shell._internal.simulation import SimBaby, Entity, EntityType
             baby = SimBaby()
             baby.entity.position[0] = 32 + np.random.randint(-10, 10)
             baby.entity.position[2] = 32 + np.random.randint(-10, 10)
@@ -110,8 +110,8 @@ def register(cli):
     @click.option("--babies", default=4, type=int, help="Number of baby agents")
     @click.option("--threshold", default=0.1, type=float, help="Change detection threshold")
     def world_analyze(ticks, babies, threshold):
-        from domains.shell.simulation import SimScene, Simulation, WorldParams
-        from domains.shell.world_render import RenderBridge, RenderAnalyzer, RenderConfig
+        from domain.shell._internal.simulation import SimScene, Simulation, WorldParams
+        from domain.shell._internal.world_render import RenderBridge, RenderAnalyzer, RenderConfig
 
         config = RenderConfig(width=64, height=48, samples=1)
         bridge = RenderBridge(config)
@@ -121,7 +121,7 @@ def register(cli):
 
         for _ in range(babies):
             import numpy as np
-            from domains.shell.simulation import SimBaby
+            from domain.shell._internal.simulation import SimBaby
             baby = SimBaby()
             baby.entity.position[0] = 32 + np.random.randint(-10, 10)
             baby.entity.position[2] = 32 + np.random.randint(-10, 10)
@@ -156,7 +156,7 @@ def register(cli):
     @click.argument("image_b", type=click.Path(exists=True))
     def world_diff(image_a, image_b):
         import numpy as np
-        from domains.shell.world_render import RenderDiff
+        from domain.shell._internal.world_render import RenderDiff
         from PIL import Image as PILImage
 
         a = np.array(PILImage.open(image_a)).astype(np.float32) / 255.0
@@ -181,9 +181,9 @@ def register(cli):
     @click.option("--verbose", is_flag=True, help="Verbose output")
     def world_ingest(source_type, source_value, radius, decay, verbose):
         import numpy as np
-        from domains.collections.perception import WorldPerception, PerceptionConfig
-        from domains.collections.sources import FileSource, UrlSource, RssSource, GeneratorSource, Record
-        from domains.shell.simulation import WorldGrid
+        from domain.collections._internal.perception import WorldPerception, PerceptionConfig
+        from domain.collections._internal.sources import FileSource, UrlSource, RssSource, GeneratorSource, Record
+        from domain.shell._internal.simulation import WorldGrid
 
         config = PerceptionConfig(radius=radius, decay_rate=decay)
         perception = WorldPerception(config)
@@ -198,11 +198,11 @@ def register(cli):
                         records.append(Record(content=line))
             events = perception.ingest_records(records)
         elif source_type == "url":
-            from domains.collections.sources import UrlSource
+            from domain.collections._internal.sources import UrlSource
             source = UrlSource(source_value)
             events = perception.ingest_source(source)
         elif source_type == "rss":
-            from domains.collections.sources import RssSource
+            from domain.collections._internal.sources import RssSource
             source = RssSource(source_value)
             events = perception.ingest_source(source)
         else:

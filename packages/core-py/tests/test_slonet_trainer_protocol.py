@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from domains.training.trainer_protocol import TrainResult
+from domain.training._internal.trainer_protocol import TrainResult
 
 
 # ── TrainResult ─────────────────────────────────────────────────────────────

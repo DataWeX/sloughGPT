@@ -16,7 +16,7 @@ from enum import Enum
 
 import numpy as np
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloLayer, SloEmbedding, SloDropout,
     randn, _matmul,
 )
@@ -282,7 +282,7 @@ def _walk_slo_tree(node, path_parts):
     Yields:
         (dotted_path, module) for every leaf module
     """
-    from domains.training.slonet import (
+    from domain.training._internal.slonet import (
         SloTransformerBlock, SloMultiHeadAttention,
         SloFeedForward, SloLinear, SloEmbedding,
     )

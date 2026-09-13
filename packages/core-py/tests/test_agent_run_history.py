@@ -1,10 +1,10 @@
-"""Tests for domains.agents.run_history — AgentRunStore MogDB persistence."""
+"""Tests for domain.agents._internal.run_history — AgentRunStore MogDB persistence."""
 
 import os
 import tempfile
 
 import pytest
-from domains.agents.run_history import AgentRunStore, _new_run_id, reset_agent_run_store, set_mogdb_path, reset_mogdb
+from domain.agents._internal.run_history import AgentRunStore, _new_run_id, reset_agent_run_store, set_mogdb_path, reset_mogdb
 
 
 @pytest.fixture

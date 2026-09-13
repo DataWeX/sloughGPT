@@ -1,5 +1,5 @@
 """
-Comprehensive tests for domains.shell.vm_engine.
+Comprehensive tests for domain.shell._internal.vm_engine.
 
 Pure-logic tests for Breakpoint, StepEvent, BreakpointEvent, FaultEvent,
 SyscallEvent, ExecutionTrace, DeviceBus, ConsoleDevice, and VMEngine.
@@ -11,7 +11,7 @@ from __future__ import annotations
 import struct
 import pytest
 
-from domains.shell.vm import (
+from domain.shell._internal.vm import (
     X86CPU,
     X86Assembler,
     InsFault,
@@ -22,7 +22,7 @@ from domains.shell.vm import (
     ProcessState,
     Scheduler,
 )
-from domains.shell.vm_engine import (
+from domain.shell._internal.vm_engine import (
     Breakpoint,
     StepEvent,
     BreakpointEvent,

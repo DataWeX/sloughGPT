@@ -1,11 +1,11 @@
-FROM nvidia/cuda:12.1.0-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.1.0-cudnn-runtime-ubuntu22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
-WORKDIR /app
+WORKDIR /build
 
 RUN apt-get update && apt-get install -y \
     python3.11 \
@@ -27,15 +27,44 @@ RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r /tmp/requirements-api.txt && \
     pip install --no-cache-dir scipy psutil
 
+COPY apps/api/server /build/apps/api/server
+COPY packages/core-py /build/packages/core-py
+COPY packages/sdk-py/sloughgpt_sdk /build/packages/sdk-py/sloughgpt_sdk
+COPY pyproject.toml README.md LICENSE /build/
+
+RUN pip install --no-cache-dir -e /build \
+    && pip install --no-cache-dir -e /build/packages/core-py \
+    && pip install --no-cache-dir -e /build/packages/sdk-py/sloughgpt_sdk
+
+# ─── Runtime stage (no build tools, no CUDA dev libs) ───────────
+FROM nvidia/cuda:12.1.0-cudnn-runtime-ubuntu22.04 AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    SLO_ENV=production \
+    CUDA_VISIBLE_DEVICES=0
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-venv \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
+
+# Copy installed Python packages from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy app code
 COPY apps/api/server /app/apps/api/server
 COPY packages/core-py /app/packages/core-py
 COPY packages/sdk-py/sloughgpt_sdk /app/packages/sdk-py/sloughgpt_sdk
 COPY pyproject.toml README.md LICENSE /app/
 
 RUN mkdir -p /app/models /app/datasets /app/data /app/logs /app/cache && chmod -R 755 /app
-
-ENV SLO_ENV=production
-ENV CUDA_VISIBLE_DEVICES=0
 
 EXPOSE 8000
 

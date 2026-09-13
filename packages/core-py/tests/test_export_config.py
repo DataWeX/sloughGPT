@@ -1,7 +1,7 @@
-"""Tests for domains.training.export — ExportConfig, GGUFExportOptions, ModelMetadata."""
+"""Tests for domain.training._internal.export — ExportConfig, GGUFExportOptions, ModelMetadata."""
 
 import pytest
-from domains.training.export import ExportConfig, GGUFExportOptions, ModelMetadata, list_export_formats
+from domain.training._internal.export import ExportConfig, GGUFExportOptions, ModelMetadata, list_export_formats
 
 
 class TestExportConfig:

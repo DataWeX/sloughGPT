@@ -1,4 +1,4 @@
-"""Backward-compatibility — allows ``from domains.shell.runtime import ...``."""
+"""Backward-compatibility — allows ``from domain.shell._internal.runtime import ...``."""
 from domain.shell._internal.runtime import (
     DaitRuntime,
     Resource,

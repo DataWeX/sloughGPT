@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor,
     relu,
     gelu,
@@ -314,12 +314,12 @@ class TestLogitProcessors:
 class TestNoGradClass:
 
     def test_context(self):
-        from domains.training.slonet import _NoGrad
+        from domain.training._internal.slonet import _NoGrad
         with _NoGrad():
             pass
 
     def test_decorator(self):
-        from domains.training.slonet import _NoGrad
+        from domain.training._internal.slonet import _NoGrad
         @_NoGrad()
         def fn():
             return 42

@@ -20,13 +20,13 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
 
-from domains.shell.tensor_device import TensorDevice
-from domains.shell.npu_device import NPUDevice
-from domains.shell.storage_device import StorageDevice
-from domains.shell.network_device import NetworkDevice
-from domains.shell.display_device import DisplayDevice
-from domains.shell.input_device import InputDevice
-from domains.shell.kernel_devices import (
+from domain.shell._internal.tensor_device import TensorDevice
+from domain.shell._internal.npu_device import NPUDevice
+from domain.shell._internal.storage_device import StorageDevice
+from domain.shell._internal.network_device import NetworkDevice
+from domain.shell._internal.display_device import DisplayDevice
+from domain.shell._internal.input_device import InputDevice
+from domain.shell._internal.kernel_devices import (
     DeviceType,
     DeviceState,
     DeviceHandle,
@@ -35,8 +35,8 @@ from domains.shell.kernel_devices import (
     DeviceManager,
     NullDevice,
 )
-from domains.shell.ioctl import IoctlCommand
-from domains.shell.kernel_syscall import SyscallResult
+from domain.shell._internal.ioctl import IoctlCommand
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 
 # =============================================================================

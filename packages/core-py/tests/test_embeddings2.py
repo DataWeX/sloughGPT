@@ -2,7 +2,7 @@ import hashlib
 import numpy as np
 import pytest
 
-from domains.inference.embeddings import (
+from domain.inference._internal.embeddings import (
     EmbeddingProvider,
     EmbeddingResult,
     InMemoryEmbedder,

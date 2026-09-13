@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from domains.collections.baby_building import (
+from domain.collections._internal.baby_building import (
     StructureType, ToolType, BuildingConfig, Structure, Tool,
     BabyBuilding, BuildingRegistry,
 )

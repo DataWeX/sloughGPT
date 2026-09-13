@@ -104,7 +104,7 @@ def cmd_optimize(args):
 
     log.section("Accelerator (SloNet)")
     try:
-        from domains.training.slonet import _ACCEL_THRESHOLD, _get_accelerator
+        from domain.training._internal.slonet import _ACCEL_THRESHOLD, _get_accelerator
         acc = _get_accelerator()
         if acc is not None:
             log.key_value("Backend", acc.name)
@@ -265,7 +265,7 @@ def cmd_setup(args):
     log.key_value("Python", platform.python_version())
 
     try:
-        from domains.training.slonet import _get_accelerator
+        from domain.training._internal.slonet import _get_accelerator
         acc = _get_accelerator()
         backend = acc.name if acc is not None else "cpu"
         log.key_value("SloNet Accelerator", backend)

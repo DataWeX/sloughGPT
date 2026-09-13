@@ -1,4 +1,4 @@
-"""Tests for domains.shell.config — API base URL configuration.
+"""Tests for domain.shell._internal.config — API base URL configuration.
 
 Covers: default value, env var override, get_api_base.
 """
@@ -15,7 +15,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.shell.config import get_api_base, DEFAULT_API_BASE
+from domain.shell._internal.config import get_api_base, DEFAULT_API_BASE
 
 
 # ---------------------------------------------------------------------------
@@ -35,14 +35,14 @@ class TestDefaultApiBase:
     def test_reflects_env_at_import_time(self, monkeypatch):
         monkeypatch.setenv("MAN_API_URL", "http://custom:9999")
         import importlib
-        import domains.shell.config as mod
+        import domain.shell._internal.config as mod
         mod.DEFAULT_API_BASE = os.environ.get("MAN_API_URL", "http://localhost:8000")
         assert mod.DEFAULT_API_BASE == "http://custom:9999"
 
     def test_fallback_when_env_unset(self, monkeypatch):
         monkeypatch.delenv("MAN_API_URL", raising=False)
         import importlib
-        import domains.shell.config as mod
+        import domain.shell._internal.config as mod
         mod.DEFAULT_API_BASE = os.environ.get("MAN_API_URL", "http://localhost:8000")
         assert mod.DEFAULT_API_BASE == "http://localhost:8000"
 
@@ -154,7 +154,7 @@ class TestGetApiBase:
     def test_fresh_import_returns_new_value(self, monkeypatch):
         monkeypatch.setenv("MAN_API_URL", "http://fresh:1111")
         import importlib
-        import domains.shell.config as mod
+        import domain.shell._internal.config as mod
         importlib.reload(mod)
         assert mod.get_api_base() == "http://fresh:1111"
 
@@ -174,7 +174,7 @@ class TestModuleConstants:
     def test_default_has_localhost(self, monkeypatch):
         monkeypatch.delenv("MAN_API_URL", raising=False)
         import importlib
-        import domains.shell.config as mod
+        import domain.shell._internal.config as mod
         importlib.reload(mod)
         assert "localhost" in mod.DEFAULT_API_BASE or "8000" in mod.DEFAULT_API_BASE
 
@@ -185,7 +185,7 @@ class TestModuleConstants:
     def test_default_is_http_scheme(self, monkeypatch):
         monkeypatch.delenv("MAN_API_URL", raising=False)
         import importlib
-        import domains.shell.config as mod
+        import domain.shell._internal.config as mod
         importlib.reload(mod)
         assert mod.DEFAULT_API_BASE.startswith("http")
 

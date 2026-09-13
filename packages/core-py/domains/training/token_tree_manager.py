@@ -24,7 +24,7 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
-from domains.training.token_tree import TokenTree
+from domain.training._internal.token_tree import TokenTree
 from domains.shared import find_repo_root
 
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())

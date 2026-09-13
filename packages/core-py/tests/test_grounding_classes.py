@@ -1,6 +1,6 @@
-"""Tests for domains.cognitive.grounding — HierarchicalContext, CurriculumLearner, RAGGrounder, KnowledgeGrounding, GroundingOrchestrator."""
+"""Tests for domain.cognitive._internal.grounding — HierarchicalContext, CurriculumLearner, RAGGrounder, KnowledgeGrounding, GroundingOrchestrator."""
 
-from domains.cognitive.grounding import (
+from domain.cognitive._internal.grounding import (
     HierarchicalContext,
     CurriculumLearner,
     RAGGrounder,

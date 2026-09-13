@@ -44,7 +44,7 @@ class StatusRouter:
 
         # Check database connectivity
         try:
-            from domains.feedback.database import get_feedback_db
+            from domain.feedback._internal.database import get_feedback_db
 
             db = get_feedback_db()
             checks["database"] = db is not None

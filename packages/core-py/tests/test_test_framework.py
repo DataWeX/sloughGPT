@@ -9,7 +9,7 @@ Covers:
 
 import time
 import pytest
-from domains.shared.test_framework import (
+from domain.shared._internal.test_framework import (
     TestFramework,
     TestResult,
     TestSuite,

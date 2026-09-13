@@ -14,7 +14,7 @@ class TestFusedLayerNorm:
     """SloLayerNorm.forward_numpy uses fused_layer_norm when numba is available."""
 
     def test_matches_manual_computation(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(42)
         ln = SloLayerNorm(64)
@@ -27,7 +27,7 @@ class TestFusedLayerNorm:
         assert np.abs(out - expected).max() < 1e-5
 
     def test_batch_input(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(123)
         ln = SloLayerNorm(128)
@@ -37,8 +37,8 @@ class TestFusedLayerNorm:
         assert np.all(np.isfinite(out))
 
     def test_matches_einsum_with_kernels_disabled(self):
-        from domains.training.slonet import SloLayerNorm
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(7)
         ln = SloLayerNorm(32)
@@ -53,7 +53,7 @@ class TestFusedLayerNorm:
         assert diff < 1e-5, f"Kernel vs no-kernel diff: {diff}"
 
     def test_output_shape_matches_input(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(10)
         ln = SloLayerNorm(256)
@@ -62,7 +62,7 @@ class TestFusedLayerNorm:
         assert out.shape == (8, 256)
 
     def test_output_finite(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(11)
         ln = SloLayerNorm(128)
@@ -71,7 +71,7 @@ class TestFusedLayerNorm:
         assert np.all(np.isfinite(out))
 
     def test_zero_input(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         ln = SloLayerNorm(32)
         x = np.zeros((1, 32), dtype=np.float32)
@@ -79,7 +79,7 @@ class TestFusedLayerNorm:
         assert np.all(np.isfinite(out))
 
     def test_large_values(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(12)
         ln = SloLayerNorm(64)
@@ -88,7 +88,7 @@ class TestFusedLayerNorm:
         assert np.all(np.isfinite(out))
 
     def test_small_values(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(13)
         ln = SloLayerNorm(64)
@@ -97,7 +97,7 @@ class TestFusedLayerNorm:
         assert np.all(np.isfinite(out))
 
     def test_weight_bias_effect(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(14)
         ln = SloLayerNorm(32)
@@ -106,7 +106,7 @@ class TestFusedLayerNorm:
         assert not np.allclose(out, x), "LayerNorm should change values"
 
     def test_single_element_batch(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(15)
         ln = SloLayerNorm(16)
@@ -115,7 +115,7 @@ class TestFusedLayerNorm:
         assert out.shape == (1, 16)
 
     def test_large_batch(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(16)
         ln = SloLayerNorm(64)
@@ -129,8 +129,8 @@ class TestFusedAttentionSingle:
     """Single-token attention in forward_numpy with KV cache."""
 
     def test_matches_einsum_path(self):
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(42)
         attn = SloMultiHeadAttention(64, 4)
@@ -152,7 +152,7 @@ class TestFusedAttentionSingle:
         assert diff < 1e-5, f"Single-token fused vs einsum diff: {diff}"
 
     def test_output_shape(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(99)
         attn = SloMultiHeadAttention(64, 4)
@@ -165,8 +165,8 @@ class TestFusedAttentionSingle:
         assert np.all(np.isfinite(out))
 
     def test_preserves_output_projection(self):
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(55)
         attn = SloMultiHeadAttention(64, 4)
@@ -183,7 +183,7 @@ class TestFusedAttentionSingle:
         assert diff < 1e-5, f"Output projection diff: {diff}"
 
     def test_cache_shape(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(100)
         attn = SloMultiHeadAttention(64, 4)
@@ -196,7 +196,7 @@ class TestFusedAttentionSingle:
         assert v_cache.shape[2] == 4
 
     def test_single_token_output_finite(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(101)
         attn = SloMultiHeadAttention(64, 4)
@@ -208,7 +208,7 @@ class TestFusedAttentionSingle:
         assert np.all(np.isfinite(out))
 
     def test_with_different_head_dim(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(102)
         attn = SloMultiHeadAttention(128, 8)
@@ -224,8 +224,8 @@ class TestFusedAttentionMulti:
     """Multi-token attention in forward_numpy with causal masking."""
 
     def test_matches_einsum_with_causal_mask(self):
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(42)
         attn = SloMultiHeadAttention(64, 4)
@@ -250,7 +250,7 @@ class TestFusedAttentionMulti:
         assert diff < 1e-5, f"Multi-token fused vs einsum diff: {diff}"
 
     def test_output_shape(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(77)
         attn = SloMultiHeadAttention(64, 4)
@@ -264,7 +264,7 @@ class TestFusedAttentionMulti:
         assert np.all(np.isfinite(out))
 
     def test_output_finite(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(78)
         attn = SloMultiHeadAttention(64, 4)
@@ -276,7 +276,7 @@ class TestFusedAttentionMulti:
         assert np.all(np.isfinite(out))
 
     def test_sequence_length_two(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(79)
         attn = SloMultiHeadAttention(64, 4)
@@ -288,7 +288,7 @@ class TestFusedAttentionMulti:
         assert out.shape == (1, 2, 64)
 
     def test_large_sequence(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(80)
         attn = SloMultiHeadAttention(64, 4)
@@ -305,7 +305,7 @@ class TestFusedAttentionStability:
     """Verify fused kernels produce stable results across calls."""
 
     def test_reproducible_output(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(42)
         attn = SloMultiHeadAttention(64, 4)
@@ -319,8 +319,8 @@ class TestFusedAttentionStability:
 
     def test_single_vs_multi_agree_on_one_token(self):
         """Single-token path should agree with multi-token path when seq_len=1."""
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(42)
         attn = SloMultiHeadAttention(64, 4)
@@ -338,7 +338,7 @@ class TestFusedAttentionStability:
         assert diff < 1e-5, f"Single vs multi path diff: {diff}"
 
     def test_reproducible_with_cache(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(43)
         attn = SloMultiHeadAttention(64, 4)
@@ -355,7 +355,7 @@ class TestFusedAttentionStability:
         assert np.array_equal(out1, out2)
 
     def test_stable_across_different_seeds(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         results = []
         for seed in [1, 2, 3]:
@@ -375,13 +375,13 @@ class TestFusedKernelsAvailability:
     """Test kernel availability detection and fallback."""
 
     def test_kernels_flag_is_set(self):
-        import domains.training.slonet as slonet_mod
+        import domain.training._internal.slonet as slonet_mod
         assert hasattr(slonet_mod, '_KERNELS_AVAILABLE')
         assert isinstance(slonet_mod._KERNELS_AVAILABLE, bool)
 
     def test_layer_norm_works_with_kernels_disabled(self):
-        from domains.training.slonet import SloLayerNorm
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(42)
         ln = SloLayerNorm(32)
@@ -395,8 +395,8 @@ class TestFusedKernelsAvailability:
         assert np.all(np.isfinite(out))
 
     def test_attention_works_with_kernels_disabled(self):
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(42)
         attn = SloMultiHeadAttention(64, 4)
@@ -412,8 +412,8 @@ class TestFusedKernelsAvailability:
         assert np.all(np.isfinite(out))
 
     def test_toggling_kernels_produces_same_result(self):
-        from domains.training.slonet import SloLayerNorm
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(44)
         ln = SloLayerNorm(32)
@@ -429,8 +429,8 @@ class TestFusedKernelsAvailability:
         assert diff < 1e-5
 
     def test_single_token_with_kernels_disabled(self):
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(45)
         attn = SloMultiHeadAttention(64, 4)
@@ -446,8 +446,8 @@ class TestFusedKernelsAvailability:
         assert np.all(np.isfinite(out))
 
     def test_multi_token_no_mask_with_kernels_disabled(self):
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(46)
         attn = SloMultiHeadAttention(64, 4)
@@ -463,8 +463,8 @@ class TestFusedKernelsAvailability:
         assert np.all(np.isfinite(out))
 
     def test_layer_norm_disabled_vs_enabled_shape(self):
-        from domains.training.slonet import SloLayerNorm
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(47)
         ln = SloLayerNorm(64)
@@ -478,8 +478,8 @@ class TestFusedKernelsAvailability:
         assert out_off.shape == out_on.shape
 
     def test_layer_norm_disabled_matches_manual(self):
-        from domains.training.slonet import SloLayerNorm
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloLayerNorm
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(48)
         ln = SloLayerNorm(32)
@@ -496,8 +496,8 @@ class TestFusedKernelsAvailability:
         assert diff < 1e-5
 
     def test_attention_with_cache_disabled_kernels(self):
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(49)
         attn = SloMultiHeadAttention(64, 4)
@@ -515,7 +515,7 @@ class TestFusedKernelsAvailability:
         assert np.all(np.isfinite(out))
 
     def test_different_head_counts(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(50)
         for n_heads in [2, 4, 8]:
@@ -527,7 +527,7 @@ class TestFusedKernelsAvailability:
             assert out.shape == (1, 1, 64)
 
     def test_causal_mask_effect(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(51)
         attn = SloMultiHeadAttention(64, 4)
@@ -550,7 +550,7 @@ class TestFusedKernelsAvailability:
 
 class TestFusedLayerNormExpanded:
     def test_different_eps_values(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(100)
         for eps in [1e-3, 1e-5, 1e-9]:
@@ -560,28 +560,28 @@ class TestFusedLayerNormExpanded:
             assert np.all(np.isfinite(out)), f"Not finite with eps={eps}"
 
     def test_weight_bias_shapes(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         ln = SloLayerNorm(64)
         assert ln.weight.data.shape == (64,)
         assert ln.bias.data.shape == (64,)
 
     def test_weight_bias_are_trainable(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         ln = SloLayerNorm(32)
         assert ln.weight.requires_grad is True
         assert ln.bias.requires_grad is True
 
     def test_parameters_count(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         ln = SloLayerNorm(64)
         params = ln.parameters()
         assert len(params) == 2
 
     def test_zero_weight_zero_output(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         ln = SloLayerNorm(32)
         ln.weight.data = np.zeros(32, dtype=np.float32)
@@ -591,7 +591,7 @@ class TestFusedLayerNormExpanded:
         np.testing.assert_allclose(out, 0.0, atol=1e-6)
 
     def test_large_eps_near_identity(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(101)
         ln = SloLayerNorm(32, eps=1e10)
@@ -605,7 +605,7 @@ class TestFusedLayerNormExpanded:
         np.testing.assert_allclose(out, expected, atol=1e-5)
 
     def test_reproducible_two_calls(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(200)
         ln = SloLayerNorm(64)
@@ -615,7 +615,7 @@ class TestFusedLayerNormExpanded:
         np.testing.assert_array_equal(out1, out2)
 
     def test_single_dim(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         ln = SloLayerNorm(1)
         x = np.array([[5.0]], dtype=np.float32)
@@ -624,7 +624,7 @@ class TestFusedLayerNormExpanded:
         assert np.all(np.isfinite(out))
 
     def test_dim_256(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(102)
         ln = SloLayerNorm(256)
@@ -635,7 +635,7 @@ class TestFusedLayerNormExpanded:
 
 class TestFusedAttentionExpanded:
     def test_gqa_fewer_kv_heads(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(300)
         attn = SloMultiHeadAttention(64, 4, n_kv_head=2)
@@ -647,7 +647,7 @@ class TestFusedAttentionExpanded:
         assert np.all(np.isfinite(out))
 
     def test_gqa_single_kv_head(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(301)
         attn = SloMultiHeadAttention(64, 4, n_kv_head=1)
@@ -659,7 +659,7 @@ class TestFusedAttentionExpanded:
         assert np.all(np.isfinite(out))
 
     def test_single_token_with_kv_cache(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(302)
         attn = SloMultiHeadAttention(64, 4)
@@ -674,7 +674,7 @@ class TestFusedAttentionExpanded:
         assert v_out.shape[1] == 6
 
     def test_batch_size_2(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(303)
         attn = SloMultiHeadAttention(64, 4)
@@ -686,7 +686,7 @@ class TestFusedAttentionExpanded:
         assert np.all(np.isfinite(out))
 
     def test_d_model_128(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(304)
         attn = SloMultiHeadAttention(128, 8)
@@ -697,7 +697,7 @@ class TestFusedAttentionExpanded:
         assert out.shape == (1, 4, 128)
 
     def test_zero_input_attention(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         attn = SloMultiHeadAttention(64, 4)
         q = np.zeros((1, 3, 64), dtype=np.float32)
@@ -708,7 +708,7 @@ class TestFusedAttentionExpanded:
         assert np.all(np.isfinite(out))
 
     def test_output_projection_changes_values(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(305)
         attn = SloMultiHeadAttention(64, 4)
@@ -719,7 +719,7 @@ class TestFusedAttentionExpanded:
         assert not np.allclose(out, q), "Output projection should change values"
 
     def test_multi_token_with_explicit_causal_mask(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(306)
         attn = SloMultiHeadAttention(64, 4)
@@ -736,8 +736,8 @@ class TestFusedAttentionExpanded:
         assert np.all(np.isfinite(out))
 
     def test_gqa_output_matches_non_gqa_when_same_heads(self):
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(307)
         attn = SloMultiHeadAttention(64, 4, n_kv_head=4)
@@ -752,7 +752,7 @@ class TestFusedAttentionExpanded:
         slonet_mod._KERNELS_AVAILABLE = True
 
     def test_attention_all_ones_input(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(308)
         attn = SloMultiHeadAttention(64, 4)
@@ -764,7 +764,7 @@ class TestFusedAttentionExpanded:
         assert np.all(np.isfinite(out))
 
     def test_cache_grows_correctly(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(309)
         attn = SloMultiHeadAttention(64, 4)
@@ -778,7 +778,7 @@ class TestFusedAttentionExpanded:
         assert v_out.shape[1] == 3
 
     def test_reproducible_with_mask(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(310)
         attn = SloMultiHeadAttention(64, 4)
@@ -795,7 +795,7 @@ class TestFusedAttentionExpanded:
         np.testing.assert_array_equal(out1, out2)
 
     def test_different_head_dim_32(self):
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
 
         np.random.seed(311)
         attn = SloMultiHeadAttention(64, 2)
@@ -807,7 +807,7 @@ class TestFusedAttentionExpanded:
         assert np.all(np.isfinite(out))
 
     def test_layer_norm_matches_manual_with_kernels(self):
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
 
         np.random.seed(400)
         ln = SloLayerNorm(64)
@@ -819,8 +819,8 @@ class TestFusedAttentionExpanded:
         assert np.abs(out - expected).max() < 1e-5
 
     def test_single_vs_multi_agree_with_cache(self):
-        from domains.training.slonet import SloMultiHeadAttention
-        import domains.training.slonet as slonet_mod
+        from domain.training._internal.slonet import SloMultiHeadAttention
+        import domain.training._internal.slonet as slonet_mod
 
         np.random.seed(401)
         attn = SloMultiHeadAttention(64, 4)

@@ -1484,7 +1484,7 @@ class ModelServer:
             )
             return
         try:
-            from domains.inference.slonet_provider import SloNetChatProvider
+            from domain.inference._internal.slonet_provider import SloNetChatProvider
 
             slnc_path = self._slnc_path
             if not slnc_path:

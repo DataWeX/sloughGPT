@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from domains.shell.vm import X86VirtualSystem, X86Assembler, ProcessState
-from domains.shell.vm_permissions import X86RBAC, Role, Permission
+from domain.shell._internal.vm import X86VirtualSystem, X86Assembler, ProcessState
+from domain.shell._internal.vm_permissions import X86RBAC, Role, Permission
 
 
 class TestX86RBAC:
@@ -308,7 +308,7 @@ class TestX86VMIntegration:
                 calls.append(config_json)
                 return 1
 
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge())
         vs = X86VirtualSystem()
         result = self._run_train_syscall(vs, role=Role.USER)
         assert result == 0xFFFFFFFE, f"expected -2 (denied), got {result}"
@@ -323,7 +323,7 @@ class TestX86VMIntegration:
                 calls.append(config_json)
                 return 1
 
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge())
         vs = X86VirtualSystem()
         result = self._run_train_syscall(vs, role=Role.ADMIN)
         assert result == 1, f"expected job_id 1, got {result}"
@@ -372,7 +372,7 @@ class TestX86VMIntegration:
                 assert job_id == 1
                 return '{"loss": 1.5}'
 
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge())
         vs = X86VirtualSystem()
         self._write_at(vs, 0x80000, b'{"dataset":"shakespeare","epochs":1}\x00')
         self._write_at(vs, 0x90000, b"\x00" * 64)

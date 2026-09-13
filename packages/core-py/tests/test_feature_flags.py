@@ -1,8 +1,8 @@
-"""Tests for domains.shared.feature_flags — FeatureFlags, FeatureFlag, FlagStatus."""
+"""Tests for domain.shared._internal.feature_flags — FeatureFlags, FeatureFlag, FlagStatus."""
 
 import os
 import pytest
-from domains.shared.feature_flags import (
+from domain.shared._internal.feature_flags import (
     FlagStatus, FeatureFlag, FeatureFlags, is_enabled,
 )
 
@@ -315,7 +315,7 @@ class TestRegisterDefaults:
 
     def test_idempotent_defaults(self):
         """Calling _register_defaults twice doesn't duplicate flags."""
-        from domains.shared.feature_flags import _register_defaults
+        from domain.shared._internal.feature_flags import _register_defaults
         count_before = len(FeatureFlags._flags)
         _register_defaults()
         count_after = len(FeatureFlags._flags)

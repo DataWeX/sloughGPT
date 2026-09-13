@@ -1,5 +1,5 @@
 """
-Comprehensive tests for domains.shell.console.
+Comprehensive tests for domain.shell._internal.console.
 
 Pure-logic tests for Console formatting, rendering, block recording,
 helper classes (_Capture, _Indent, _Live, _Spinner), and utility functions.
@@ -16,8 +16,8 @@ import pytest
 
 os.environ["NO_COLOR"] = "1"
 
-from domains.shell.io import MemoryIO
-from domains.shell.console import (
+from domain.shell._internal.io import MemoryIO
+from domain.shell._internal.console import (
     Console,
     Block,
     _color,
@@ -49,7 +49,7 @@ def _output(io: MemoryIO) -> str:
 
 class TestColor:
     def test_color_disabled_returns_plain_text(self, monkeypatch):
-        import domains.shell.console as _mod
+        import domain.shell._internal.console as _mod
         monkeypatch.setattr(_mod, "_COLOR_ENABLED", False)
         result = _color("hello", "\033[36m")
         assert result == "hello"

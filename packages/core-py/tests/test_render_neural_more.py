@@ -1,11 +1,11 @@
-"""Coverage tests for RenderNeuralDevice (domains.shell.render_neural)."""
+"""Coverage tests for RenderNeuralDevice (domain.shell._internal.render_neural)."""
 
 import numpy as np
 import pytest
 
-from domains.shell.render_neural import RenderNeuralDevice
-from domains.shell.cycles_device import CyclesDevice
-from domains.shell.vm import DeviceFault
+from domain.shell._internal.render_neural import RenderNeuralDevice
+from domain.shell._internal.cycles_device import CyclesDevice
+from domain.shell._internal.vm import DeviceFault
 
 
 def _tensor_dict(H=6, W=8):

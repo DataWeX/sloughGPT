@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends
 
 logger = logging.getLogger(__name__)
 
-from domains.infrastructure.errors import AppError
+from domain.infrastructure._internal.errors import AppError
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
 
@@ -272,7 +272,7 @@ class BenchmarkRouter:
         """Get recent logged responses for review."""
         _t0 = _time.monotonic()
         try:
-            from domains.feedback.response_tracker import get_response_tracker
+            from domain.feedback._internal.response_tracker import get_response_tracker
 
             tracker = get_response_tracker()
             responses = tracker.get_responses(limit=limit, model=model)

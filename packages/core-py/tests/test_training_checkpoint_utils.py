@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from domains.training.checkpoint_utils import (
+from domain.training._internal.checkpoint_utils import (
     KEY_MODEL_LEGACY,
     KEY_MODEL_STATE,
     KEY_TRAINING_INFO,

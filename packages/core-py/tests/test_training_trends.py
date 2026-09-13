@@ -4,7 +4,7 @@ import json
 import time
 import pytest
 from pathlib import Path
-from domains.training.outcome_tracker import (
+from domain.training._internal.outcome_tracker import (
     TrainingOutcome,
     TrainingOutcomeTracker,
 )

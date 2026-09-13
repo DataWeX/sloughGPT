@@ -3,7 +3,7 @@
 import json
 import pytest
 from pathlib import Path
-from domains.consciousness.config import ConsciousnessConfig
+from domain.consciousness._internal.config import ConsciousnessConfig
 
 
 class TestConsciousnessConfig:

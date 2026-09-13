@@ -1,5 +1,5 @@
 """
-Tests for the Stage 14 seasonal boundary (``domains/shell/evolution.py``).
+Tests for the Stage 14 seasonal boundary (``domain.shell._internal.evolution.py``).
 
 Covers the year envelope physics (world.light modulation, season labels,
 season index mapping, year counting), conservation under the seasonal
@@ -13,12 +13,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domains.shell.evolution import (
+from domain.shell._internal.evolution import (
     Genome,
     _conservation_sweep,
     benchmark_seasons,
 )
-from domains.shell.simulation import SimScene, WorldParams
+from domain.shell._internal.simulation import SimScene, WorldParams
 
 
 def _seasonal_params(**kw) -> WorldParams:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pathlib import Path
 
-from domains.context.managers import (
+from domain.context._internal.managers import (
     TRAIT_SCHEMA,
     ALL_TRAITS,
     TraitWeightsConfig,

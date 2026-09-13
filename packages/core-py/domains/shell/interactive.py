@@ -6,7 +6,7 @@ Provides gh-auth-login-style interactive selection in the default
 does not support raw input (e.g. piped stdin, tests with MemoryIO).
 
 Usage:
-    from domains.shell.interactive import InteractivePrompt
+    from domain.shell._internal.interactive import InteractivePrompt
     prompt = InteractivePrompt(io)
     choice = prompt.select("Pick an account", ["GitHub.com", "GitHub Enterprise"])
 """

@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.health_flow — Severity, Diagnosis, HealthFlowResult; domains.infrastructure.event_bus — EventPriority, Event, Subscription."""
+"""Tests for domains.infrastructure.health_flow — Severity, Diagnosis, HealthFlowResult; domain.infrastructure._internal.event_bus — EventPriority, Event, Subscription."""
 
 import asyncio
 import threading
@@ -16,7 +16,7 @@ from domains.infrastructure.health_flow import (
     _check_resources,
     run_health_flow,
 )
-from domains.infrastructure.event_bus import (
+from domain.infrastructure._internal.event_bus import (
     EventPriority,
     Event,
     Subscription,

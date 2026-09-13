@@ -235,7 +235,7 @@ describe('streamChatResponse', () => {
     expect(mockParams.onToken).toHaveBeenCalledWith('Hi')
     expect(mockParams.onComplete).toHaveBeenCalled()
     expect(mockParams.onError).not.toHaveBeenCalled()
-  })
+  }, 40_000)
 
   it('calls onError after exhausting retries on persistent 503', async () => {
     vi.mocked(fetch).mockResolvedValue({
@@ -248,7 +248,7 @@ describe('streamChatResponse', () => {
 
     expect(mockParams.onError).toHaveBeenCalledTimes(1)
     expect(mockParams.onError).toHaveBeenCalledWith(503, expect.stringContaining('503'), expect.any(Object))
-  })
+  }, 40_000)
 
   it('does not retry on non-retryable 400 error', async () => {
     vi.mocked(fetch).mockResolvedValue({

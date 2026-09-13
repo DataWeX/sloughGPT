@@ -1,13 +1,13 @@
 """
 Tokenizer API Router — thin wrapper around TokenizerManager.
 
-All business logic lives in ``packages/core-py/domains/training/tokenizer_manager.py``.
+All business logic lives in ``packages/core-py/domain.training._internal.tokenizer_manager.py``.
 This router just exposes manager methods as HTTP endpoints.
 """
 
 import asyncio
 
-from domains.training.tokenizer_manager import get_tokenizer_manager
+from domain.training._internal.tokenizer_manager import get_tokenizer_manager
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field

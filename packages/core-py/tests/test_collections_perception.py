@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from domains.collections.sources import Record
-from domains.collections.stores import MemoryStore
-from domains.collections.perception import (
+from domain.collections._internal.sources import Record
+from domain.collections._internal.stores import MemoryStore
+from domain.collections._internal.perception import (
     PerceptionConfig,
     PerceptionEvent,
     RecordToMaterial,

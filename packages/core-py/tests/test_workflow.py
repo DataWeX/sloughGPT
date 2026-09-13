@@ -1,4 +1,4 @@
-"""Tests for domains.feedback.workflow — automated feedback workflow manager."""
+"""Tests for domain.feedback._internal.workflow — automated feedback workflow manager."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.feedback.workflow import (
+from domain.feedback._internal.workflow import (
     FeedbackWorkflowManager,
     WorkflowConfig,
     get_feedback_workflow,

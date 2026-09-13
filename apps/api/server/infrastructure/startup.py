@@ -51,13 +51,13 @@ _PREWARM_MODEL_LOAD_IMPORTS = [
     "state",
     "config",
     "domains.infrastructure.safetensors_loader",
-    "domains.inference.slonet_provider",
+    "domain.inference._internal.slonet_provider",
     "domains.infrastructure.process_guard",
     "domains.infrastructure.server_state",
     "controllers.models",
     "domains.infrastructure.model_registry",
-    "domains.models.provider",
-    "domains.inference.slo_manager",
+    "domain.models._internal.provider",
+    "domain.inference._internal.slo_manager",
     "domains.slolib.gpu",
     "domains.infrastructure.model_catalog",
     "domains.infrastructure.task_queue",
@@ -150,8 +150,8 @@ class StartupOrchestrator:
         if self._lifecycle is not None:
             return
         try:
-            from domains.infrastructure.event_bus import EventBus
-            from domains.infrastructure.lifecycle import (
+            from domain.infrastructure._internal.event_bus import EventBus
+            from domain.infrastructure._internal.lifecycle import (
                 ALL_PROFILES,
                 ShutdownHook,
                 StartupHook,
@@ -374,6 +374,9 @@ class StartupOrchestrator:
                 import state as server_state
                 if server_state.model is not None:
                     return
+                # Lazy guard path: provider is set but model is None
+                if getattr(server_state, "provider", None) is not None:
+                    return
                 await asyncio.sleep(0.5)
             logger.warning("Model load timeout after 120s", extra={"tag": "START"})
 
@@ -403,7 +406,7 @@ class StartupOrchestrator:
 
         async def _init_autotrainer():
             try:
-                from domains.training.auto_trainer import start_auto_trainer_if_enabled
+                from domain.training._internal.auto_trainer import start_auto_trainer_if_enabled
                 start_auto_trainer_if_enabled()
             except Exception as e:
                 logger.debug("AutoTrainer init deferred: %s", e)
@@ -411,7 +414,7 @@ class StartupOrchestrator:
         async def _init_rag():
             # RAG document ingestion (heavy, runs in background)
             try:
-                from domains.cognitive.rag_service import get_rag_service
+                from domain.cognitive._internal.rag_service import get_rag_service
                 rag = get_rag_service()
                 if hasattr(rag, 'auto_ingest_repo_docs'):
                     await asyncio.get_event_loop().run_in_executor(None, rag.auto_ingest_repo_docs)
@@ -475,7 +478,7 @@ class StartupOrchestrator:
                 except Exception as e:
                     logger.debug("Core ServerState mirror failed: %s", e, extra={"tag": "START"})
                 try:
-                    from domains.models.provider import setup_providers
+                    from domain.models._internal.provider import setup_providers
 
                     setup_providers(
                         slonet_provider=engine_client,
@@ -510,7 +513,6 @@ class StartupOrchestrator:
                     cfg.autoload_model,
                     extra={"tag": "START"},
                 )
-                _start_parent_preload(cfg.autoload_model)
                 return
 
             try:
@@ -585,7 +587,7 @@ class StartupOrchestrator:
             logger.info("Phase: W&B skipped (enable with SLO_WANDB=1)", extra={"tag": "START"})
             return
         try:
-            from domains.ops.wandb_server import start_wandb_server_background
+            from domain.ops._internal.wandb_server import start_wandb_server_background
 
             async def _start():
                 try:
@@ -696,7 +698,7 @@ class StartupOrchestrator:
                 # Pre-initialize SloManager so the first /souls request is
                 # instant (the scan runs here instead of blocking a request).
                 try:
-                    from domains.inference.slo_manager import get_slo_manager
+                    from domain.inference._internal.slo_manager import get_slo_manager
 
                     get_slo_manager()
                 except Exception as e:
@@ -710,7 +712,7 @@ class StartupOrchestrator:
                     try:
                         import asyncio as _aio
 
-                        from domains.training.service import list_checkpoints as _service_list_checkpoints
+                        from domain.training._internal.service import list_checkpoints as _service_list_checkpoints
 
                         _loop = _aio.new_event_loop()
                         try:
@@ -796,7 +798,7 @@ class StartupOrchestrator:
         except Exception as e:
             logger.warning("Memory handler registration failed: %s", e, extra={"tag": "START"})
         try:
-            from domains.memory.maintenance import start_memory_maintenance
+            from domain.memory._internal.maintenance import start_memory_maintenance
 
             start_memory_maintenance()
             logger.info("Memory maintenance scheduler started", extra={"tag": "START"})
@@ -809,7 +811,7 @@ class StartupOrchestrator:
         """Validate and warm the config system + init ResourceManager."""
         STARTUP_PHASE.update(phase="config", step=3, total=9, message="Validating config...")
         try:
-            from domains.infrastructure.config import get_config
+            from domain.infrastructure._internal.config import get_config
 
             cfg = get_config()
             _ = cfg.model.name
@@ -870,7 +872,7 @@ class StartupOrchestrator:
         """Gracefully stop the background task queue."""
         if self._task_queue is not None:
             try:
-                from domains.memory.maintenance import stop_memory_maintenance
+                from domain.memory._internal.maintenance import stop_memory_maintenance
 
                 await stop_memory_maintenance()
             except Exception as e:
@@ -957,7 +959,7 @@ class StartupOrchestrator:
     async def _shutdown_executor(self):
         """Gracefully shut down the TrainingExecutor thread pool."""
         try:
-            from domains.training.executor import _instance
+            from domain.training._internal.executor import _instance
 
             if _instance is not None:
                 _instance.shutdown(wait=True)
@@ -999,8 +1001,8 @@ async def _restore_training_runtime():
 def _sync_soul_traits():
     """Sync current soul traits to the PersonalityProcessor (best-effort)."""
     try:
-        from domains.inference.slo_manager import get_slo_manager
-        from domains.models.provider import update_personality_traits
+        from domain.inference._internal.slo_manager import get_slo_manager
+        from domain.models._internal.provider import update_personality_traits
 
         mgr = get_slo_manager()
         current = mgr.get_current_soul()
@@ -1015,9 +1017,10 @@ def _sync_soul_traits():
 def _start_parent_preload(model_type: str):
     """Background preload of parent weights after lazy-guard autoload.
 
-    Materializes parent weights while the guard continues serving requests.
-    Only after parent is ready, the guard is stopped to release the
-    subprocess copy (avoiding double-memory OOM). No blackout period.
+    Materializes parent weights while the guard still serves requests.
+    The preload is delayed by 15 seconds to avoid holding the GIL while
+    uvicorn binds the server socket (``loop.create_server()`` hangs when
+    the event loop is starved by heavy C-extension weight loading).
     """
     import state as server_state
 
@@ -1041,9 +1044,6 @@ def _start_parent_preload(model_type: str):
                 extra={"tag": "START"},
             )
 
-            # Wire server_state.model so _wait_for_model() unblocks.
-            server_state.model = getattr(provider, "_model", provider)
-
             # NOW stop the guard to release the subprocess copy.
             try:
                 server = getattr(provider, "_server", None)
@@ -1066,8 +1066,19 @@ def _start_parent_preload(model_type: str):
                 extra={"tag": "START"},
             )
 
-    threading.Thread(
-        target=_preload, daemon=True, name=f"parent-preload-{model_type.split('/')[-1]}"
+    # Delay parent preload by 15s so uvicorn's loop.create_server() can
+    # bind the socket before heavy GIL-holding weight materialization starts.
+    _delay = 15.0
+    logger.info(
+        "Parent preload: scheduling in %.0fs (avoid GIL starvation of uvicorn bind)",
+        _delay,
+        extra={"tag": "START"},
+    )
+    threading.Timer(
+        _delay,
+        lambda: threading.Thread(
+            target=_preload, daemon=True, name=f"parent-preload-{model_type.split('/')[-1]}"
+        ).start(),
     ).start()
 
 
@@ -1118,7 +1129,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         return False
 
     try:
-        from domains.inference.slonet_provider import SloNetChatProvider
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
 
         provider = SloNetChatProvider.lazy_from_slnc(
             slnc_path,
@@ -1188,7 +1199,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
 
     try:
         from domains.infrastructure.model_registry import get_model_registry
-        from domains.models.provider import setup_providers
+        from domain.models._internal.provider import setup_providers
 
         setup_providers(
             slonet_provider=provider,
@@ -1283,7 +1294,7 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     import state as server_state
     from domains.infrastructure.model_registry import get_model_registry
     from domains.infrastructure.safetensors_loader import _get_model_dir
-    from domains.models.provider import setup_providers
+    from domain.models._internal.provider import setup_providers
 
     registry = get_model_registry()
 
@@ -1350,7 +1361,7 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
 
     # Auto-select precision on GPU (fp16 benchmark)
     try:
-        from domains.slolib.gpu import set_accelerator_precision
+        from domain.slolib._internal.gpu import set_accelerator_precision
 
         active = set_accelerator_precision("auto")
         if active == "fp16":
@@ -1394,7 +1405,7 @@ def _autoload_model(cfg: ServerConfig):
         soul_path = Path(cfg.native_soul_path)
         if soul_path.exists():
             try:
-                from domains.inference.slonet_provider import SloNetChatProvider
+                from domain.inference._internal.slonet_provider import SloNetChatProvider
 
                 provider = SloNetChatProvider.from_soul(str(soul_path), model_id="native-soul")
                 server_state.model = provider._model

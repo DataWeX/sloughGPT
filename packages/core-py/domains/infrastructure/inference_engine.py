@@ -236,7 +236,7 @@ class InferenceEngine:
         logger.info("Inference engine: loading model %s ...", self.model_id)
         _st = _time.monotonic()
 
-        from domains.inference.slonet_provider import SloNetChatProvider
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
 
         load_kwargs: Dict[str, Any] = {
             "quantize": self.quantize,
@@ -483,7 +483,7 @@ class InferenceEngine:
         _st = _time.monotonic()
 
         try:
-            from domains.inference.slonet_provider import SloNetChatProvider
+            from domain.inference._internal.slonet_provider import SloNetChatProvider
 
             load_kwargs: Dict[str, Any] = {
                 "quantize": self.quantize,
@@ -542,7 +542,7 @@ def main():
     parser.add_argument("--quant-clip", type=float, default=0.999)
     args = parser.parse_args()
 
-    from domains.logging.config import setup_logging
+    from domain.logging._internal.config import setup_logging
     setup_logging()
 
     engine = InferenceEngine(

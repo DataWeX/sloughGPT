@@ -171,7 +171,7 @@ class TrainingRuntime:
     def _signal_auto_train_cancel(self) -> None:
         """Set the service-layer cancel events for auto-train and turbo."""
         try:
-            from domains.training.service import get_cancel_event, get_turbo_cancel_event
+            from domain.training._internal.service import get_cancel_event, get_turbo_cancel_event
 
             ev = get_cancel_event()
             if ev is not None:
@@ -350,7 +350,7 @@ def get_training_runtime() -> TrainingRuntime:
 def _register_runtime_with_core() -> None:
     """Register this runtime as the implementation for the core protocol."""
     try:
-        from domains.training.runtime_protocol import set_training_runtime
+        from domain.training._internal.runtime_protocol import set_training_runtime
 
         set_training_runtime(_runtime or get_training_runtime())
     except ImportError:

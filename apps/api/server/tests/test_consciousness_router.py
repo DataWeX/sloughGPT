@@ -237,7 +237,7 @@ class TestConsciousnessAPI:
         mock_eng.config.level = 1
 
         # Create fake episodes with qualia
-        from domains.consciousness.self_model import SelfEpisode
+        from domain.consciousness._internal.self_model import SelfEpisode
         episodes = [
             SelfEpisode(
                 timestamp=time.time() - 100 + i,
@@ -270,7 +270,7 @@ class TestConsciousnessAPI:
     def test_submit_feedback(self, _auth, mock_engine):
         from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
-        from domains.consciousness.self_model import SelfEpisode
+        from domain.consciousness._internal.self_model import SelfEpisode
         import time
 
         router_obj = ConsciousnessRouter()
@@ -332,11 +332,11 @@ class TestConsciousnessAPI:
     def test_seed_data(self, _auth):
         from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
-        from domains.consciousness.self_model import SelfModel
-        from domains.consciousness.qualia import QualiaEngine
-        from domains.consciousness.meta_cognition import MetaCognition
-        from domains.consciousness.config import ConsciousnessConfig
-        from domains.consciousness.narrative import NarrativeGenerator
+        from domain.consciousness._internal.self_model import SelfModel
+        from domain.consciousness._internal.qualia import QualiaEngine
+        from domain.consciousness._internal.meta_cognition import MetaCognition
+        from domain.consciousness._internal.config import ConsciousnessConfig
+        from domain.consciousness._internal.narrative import NarrativeGenerator
 
         router_obj = ConsciousnessRouter()
         real_engine = MagicMock()
@@ -405,7 +405,7 @@ class TestConsciousnessAPI:
     def test_personality_history_with_episodes(self, _auth):
         from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
-        from domains.consciousness.self_model import SelfEpisode
+        from domain.consciousness._internal.self_model import SelfEpisode
         import time
 
         router_obj = ConsciousnessRouter()
@@ -713,7 +713,7 @@ class TestConsciousnessStream:
         assert accel == "no"
 
     def test_stream_payload_shape(self):
-        from domains.consciousness.self_model import SelfEpisode
+        from domain.consciousness._internal.self_model import SelfEpisode
         import time as _time
 
         router_obj = self._make_router()
@@ -815,7 +815,7 @@ class TestConsciousnessBatch:
     def test_batch_feedback(self, _auth):
         from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
-        from domains.consciousness.self_model import SelfEpisode
+        from domain.consciousness._internal.self_model import SelfEpisode
         import time as _time
 
         router_obj = ConsciousnessRouter()
@@ -869,7 +869,7 @@ class TestConsciousnessStats:
     def test_stats_empty(self, _auth):
         from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
-        from domains.consciousness.personality import PersonalityManager, PersonalityProfile
+        from domain.consciousness._internal.personality import PersonalityManager, PersonalityProfile
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
@@ -907,7 +907,7 @@ class TestConsciousnessStats:
     def test_stats_with_episodes(self, _auth):
         from apps.api.server.routers.consciousness import ConsciousnessRouter
         from infrastructure.exception_handlers import register_app_error_handler
-        from domains.consciousness.self_model import SelfEpisode
+        from domain.consciousness._internal.self_model import SelfEpisode
         import time as _time
 
         router_obj = ConsciousnessRouter()

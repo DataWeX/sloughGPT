@@ -25,7 +25,7 @@ def _trigger_hf_dpo():
         tokenizer = getattr(server_state, "tokenizer", None)
         if model is None or tokenizer is None:
             return
-        from domains.feedback.hf_dpo import HFDPOTrainer
+        from domain.feedback._internal.hf_dpo import HFDPOTrainer
 
         trainer = HFDPOTrainer(model=model, tokenizer=tokenizer)
         pairs = trainer.prepare_dpo_pairs()
@@ -83,7 +83,7 @@ class FeedbackController:
         """Lazy-load feedback workflow and wire the current model."""
         if self._workflow is None:
             try:
-                from domains.feedback.workflow import get_feedback_workflow
+                from domain.feedback._internal.workflow import get_feedback_workflow
 
                 self._workflow = get_feedback_workflow()
                 self._wire_model()
@@ -94,7 +94,7 @@ class FeedbackController:
     def _wire_model(self):
         """Set the current auto-train model on the workflow for background training."""
         try:
-            from domains.training.service import get_state
+            from domain.training._internal.service import get_state
 
             at_state = get_state()
             if self._workflow and at_state.student_net is not None:
@@ -114,7 +114,7 @@ class FeedbackController:
         """Lazy-load online LoRA updater."""
         if self._lora_updater is None:
             try:
-                from domains.feedback.online_train import get_online_lora_updater
+                from domain.feedback._internal.online_train import get_online_lora_updater
 
                 self._lora_updater = get_online_lora_updater()
             except Exception as e:
@@ -185,7 +185,7 @@ class FeedbackController:
 
         # Trigger HF DPO in background on thumbs-down
         if rating == "thumbs_down":
-            from domains.training.executor import get_training_executor
+            from domain.training._internal.executor import get_training_executor
 
             executor = get_training_executor()
             executor.submit(_trigger_hf_dpo, f"dpo_{feedback_id}")

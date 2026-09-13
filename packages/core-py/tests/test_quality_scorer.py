@@ -1,7 +1,7 @@
 """Tests for training pair quality scorer."""
 
 import pytest
-from domains.training.quality_scorer import (
+from domain.training._internal.quality_scorer import (
     score_pair,
     score_batch,
     _length_score,

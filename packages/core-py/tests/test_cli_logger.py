@@ -4,8 +4,8 @@ import io
 
 import pytest
 
-from domains.logging.base import LogLevel, LogRecord
-from domains.logging.cli_logger import (
+from domain.logging._internal.base import LogLevel, LogRecord
+from domain.logging._internal.cli_logger import (
     CLILogger,
     set_cli_terminal,
     _TERMINAL_ENABLED,
@@ -49,7 +49,7 @@ def logger(buf):
 @pytest.fixture(autouse=True)
 def reset_terminal():
     """Reset global terminal state between tests."""
-    import domains.logging.cli_logger as mod
+    import domain.logging._internal.cli_logger as mod
     mod._TERMINAL_ENABLED = True
     yield
     mod._TERMINAL_ENABLED = True
@@ -401,7 +401,7 @@ class TestTimer:
 
 class TestSetCliTerminal:
     def test_disable_and_reenable(self):
-        import domains.logging.cli_logger as mod
+        import domain.logging._internal.cli_logger as mod
         set_cli_terminal(False)
         assert mod._TERMINAL_ENABLED is False
         set_cli_terminal(True)

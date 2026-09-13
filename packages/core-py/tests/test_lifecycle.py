@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.lifecycle — LifecyclePhase, StartupProfile, hooks, topological sort, dependency levels."""
+"""Tests for domain.infrastructure._internal.lifecycle — LifecyclePhase, StartupProfile, hooks, topological sort, dependency levels."""
 
 import asyncio
 import os
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domains.infrastructure.lifecycle import (
+from domain.infrastructure._internal.lifecycle import (
     LifecyclePhase, StartupProfile, StartupHook, ShutdownHook, _HookResult,
     _topological_sort, _dependency_levels, LifecycleManager,
     EVT_PHASE_CHANGED, EVT_HOOK_STARTED, EVT_HOOK_COMPLETED, EVT_HOOK_FAILED,

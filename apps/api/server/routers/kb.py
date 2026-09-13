@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 import urllib.parse
 
-from domains.infrastructure.errors import AppError
+from domain.infrastructure._internal.errors import AppError
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.ssrf import is_private_ip as _is_private_ip
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
@@ -169,7 +169,7 @@ class KBRouter:
         self.router.add_api_route("/kg/pipeline-stats", self.kg_pipeline_stats, methods=["GET"])
 
     def _get_memory(self):
-        from domains.learner.knowledge import get_knowledge_memory
+        from domain.learner._internal.knowledge import get_knowledge_memory
 
         return get_knowledge_memory()
 
@@ -327,7 +327,7 @@ class KBRouter:
     ) -> dict:
         """Store a new knowledge fact in KnowledgeMemory."""
         try:
-            from domains.learner.knowledge import KnowledgeFact
+            from domain.learner._internal.knowledge import KnowledgeFact
 
             memory = self._get_memory()
             topic = req.topic if not req.auto_tag else self._auto_tag(req.content)
@@ -365,7 +365,7 @@ class KBRouter:
             # Auto-ingest into production RAG for grounding verification
             if is_new:
                 try:
-                    from domains.cognitive.rag_service import get_rag_service
+                    from domain.cognitive._internal.rag_service import get_rag_service
 
                     rag_svc = get_rag_service()
                     rag_svc.add_document(
@@ -421,7 +421,7 @@ class KBRouter:
                 raise_error("Item not found", "E_NOT_FOUND", status_code=404)
 
             # Build updated fact
-            from domains.learner.knowledge import KnowledgeFact
+            from domain.learner._internal.knowledge import KnowledgeFact
 
             new_fact = KnowledgeFact(
                 content=req.content if req.content is not None else target["content"],
@@ -452,7 +452,7 @@ class KBRouter:
     ) -> dict:
         """Store multiple knowledge items in KnowledgeMemory."""
         try:
-            from domains.learner.knowledge import KnowledgeFact
+            from domain.learner._internal.knowledge import KnowledgeFact
 
             memory = self._get_memory()
 
@@ -574,7 +574,7 @@ class KBRouter:
                 raise_error(
                     "Internal/private host URLs not allowed", "E_BAD_REQUEST", status_code=400
                 )
-            from domains.learner.knowledge import get_knowledge_ingestor
+            from domain.learner._internal.knowledge import get_knowledge_ingestor
 
             ingestor = get_knowledge_ingestor()
             result = ingestor.ingest_url(req.url)
@@ -582,7 +582,7 @@ class KBRouter:
             # Auto-ingest extracted content into production RAG
             if result.get("new_facts", 0) > 0:
                 try:
-                    from domains.cognitive.rag_service import get_rag_service
+                    from domain.cognitive._internal.rag_service import get_rag_service
 
                     rag_svc = get_rag_service()
                     # Re-fetch the facts we just stored to get their content
@@ -793,7 +793,7 @@ class KBRouter:
         else:
             chunks = self._chunk_text(text, chunk_size, overlap)
 
-        from domains.learner.knowledge import KnowledgeFact
+        from domain.learner._internal.knowledge import KnowledgeFact
 
         memory = self._get_memory()
 
@@ -815,7 +815,7 @@ class KBRouter:
 
         # Auto-ingest into production RAG
         try:
-            from domains.cognitive.rag_service import get_rag_service
+            from domain.cognitive._internal.rag_service import get_rag_service
 
             rag_svc = get_rag_service()
 
@@ -916,7 +916,7 @@ class KBRouter:
             """
             from pathlib import Path as _P
 
-            from domains.learner.knowledge_ops import FileIndex
+            from domain.learner._internal.knowledge_ops import FileIndex
 
             search_path = _P(req.path).resolve()
             _allowed_bases = [_P.home(), _P.cwd(), _P("/tmp")]
@@ -954,7 +954,7 @@ class KBRouter:
 
             Returns whether it's a duplicate, the best match, and similarity score.
             """
-            from domains.learner.knowledge_ops import DuplicateDetector
+            from domain.learner._internal.knowledge_ops import DuplicateDetector
 
             memory = self._get_memory()
             dup = DuplicateDetector(threshold=req.threshold)
@@ -982,7 +982,7 @@ class KBRouter:
     ) -> dict:
         try:
             """Auto-assign a topic to content based on existing knowledge categories."""
-            from domains.learner.knowledge_ops import AutoCategorizer
+            from domain.learner._internal.knowledge_ops import AutoCategorizer
 
             memory = self._get_memory()
             cat = AutoCategorizer()
@@ -1008,7 +1008,7 @@ class KBRouter:
     async def knowledge_gaps(self) -> dict:
         try:
             """Find under-represented topics and knowledge gaps."""
-            from domains.learner.knowledge_ops import KnowledgeGapDetector
+            from domain.learner._internal.knowledge_ops import KnowledgeGapDetector
 
             memory = self._get_memory()
             gap = KnowledgeGapDetector()
@@ -1040,7 +1040,7 @@ class KBRouter:
             The synchronous ingest runs in a thread pool so the event loop is not
             blocked for other requests.
             """
-            from domains.learner.knowledge_ops import BulkProcessor
+            from domain.learner._internal.knowledge_ops import BulkProcessor
 
             memory = self._get_memory()
             bp = BulkProcessor(memory)
@@ -1083,7 +1083,7 @@ class KBRouter:
             def _train():
                 from pathlib import Path
 
-                from domains.inference.slo_embedder import train_embedder
+                from domain.inference._internal.slo_embedder import train_embedder
 
                 REPO = Path(__file__).resolve().parents[4]
                 texts = []
@@ -1174,7 +1174,7 @@ class KBRouter:
     async def embedder_status(self) -> dict:
         try:
             """Check if a trained embedder checkpoint exists."""
-            from domains.inference.slo_embedder import _EMBEDDER_PATH, SloTextEmbedder
+            from domain.inference._internal.slo_embedder import _EMBEDDER_PATH, SloTextEmbedder
 
             exists = await asyncio.to_thread(lambda: _EMBEDDER_PATH.exists())
             info = None
@@ -1252,7 +1252,7 @@ class KBRouter:
             import time as _time
 
             _t0 = _time.monotonic()
-            from domains.cognitive.rag_service import get_rag_service
+            from domain.cognitive._internal.rag_service import get_rag_service
 
             rag_svc = get_rag_service()
             chunk_ids = rag_svc.add_document(
@@ -1285,7 +1285,7 @@ class KBRouter:
             import time as _time
 
             _t0 = _time.monotonic()
-            from domains.cognitive.rag_service import get_rag_service
+            from domain.cognitive._internal.rag_service import get_rag_service
 
             rag_svc = get_rag_service()
             result = rag_svc.query(req.question, top_k=req.top_k)
@@ -1304,7 +1304,7 @@ class KBRouter:
             import time as _time
 
             _t0 = _time.monotonic()
-            from domains.cognitive.rag_service import get_rag_service
+            from domain.cognitive._internal.rag_service import get_rag_service
 
             rag_svc = get_rag_service()
             result = rag_svc.verify_and_ground(req.text, req.question)
@@ -1318,7 +1318,7 @@ class KBRouter:
     async def rag_list_documents(self) -> dict:
         try:
             """List all documents in the RAG index (metadata only)."""
-            from domains.cognitive.rag_service import get_rag_service, is_rag_service_ready
+            from domain.cognitive._internal.rag_service import get_rag_service, is_rag_service_ready
 
             if not is_rag_service_ready():
                 return success_response(data={"documents": [], "stats": {}, "ready": False})
@@ -1339,7 +1339,7 @@ class KBRouter:
             """Clear the entire RAG index and persisted documents."""
             import time
 
-            from domains.cognitive.rag_service import get_rag_service
+            from domain.cognitive._internal.rag_service import get_rag_service
 
             rag_svc = get_rag_service()
             _t0 = time.monotonic()
@@ -1358,7 +1358,7 @@ class KBRouter:
     async def rag_stats(self) -> dict:
         try:
             """Retrieve statistics for the production RAG index."""
-            from domains.cognitive.rag_service import get_rag_service, is_rag_service_ready
+            from domain.cognitive._internal.rag_service import get_rag_service, is_rag_service_ready
 
             if not is_rag_service_ready():
                 return success_response(
@@ -1373,7 +1373,7 @@ class KBRouter:
     def kg_sync_to_rag(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Sync all KG triples into the RAG index via the training pipeline."""
-            from domains.cognitive.rag_service import KGTrainingPipeline, get_rag_service
+            from domain.cognitive._internal.rag_service import KGTrainingPipeline, get_rag_service
 
             rag_svc = get_rag_service()
             pipeline = KGTrainingPipeline(rag_service=rag_svc)
@@ -1386,7 +1386,7 @@ class KBRouter:
     def kg_pipeline_stats(self) -> dict:
         try:
             """Return KG → RAG pipeline queue stats."""
-            from domains.cognitive.rag_service import KGTrainingPipeline
+            from domain.cognitive._internal.rag_service import KGTrainingPipeline
 
             pipeline = KGTrainingPipeline()
             return success_response(data=pipeline.stats())

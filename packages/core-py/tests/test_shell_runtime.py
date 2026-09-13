@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
 
-from domains.shell.runtime import Resource, APIServerProcess, _probe_api, _default_api_url
+from domain.shell._internal.runtime import Resource, APIServerProcess, _probe_api, _default_api_url
 
 
 # ── Resource ────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ class TestProbeApi:
 class TestAPIServerProcess:
 
     def setup_method(self):
-        import domains.shell.runtime as mod
+        import domain.shell._internal.runtime as mod
         mod._shared_proc = None
         mod._shared_started_at = 0.0
 
@@ -104,7 +104,7 @@ class TestAPIServerProcess:
 
     def test_status_not_running(self):
         api = APIServerProcess()
-        with patch("domains.shell.runtime._probe_api", return_value={"available": False}):
+        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": False}):
             result = api.status()
         assert result["running"] is False
         assert result["available"] is False
@@ -122,18 +122,18 @@ class TestAPIServerProcess:
 
     def test_is_running_false(self):
         api = APIServerProcess()
-        with patch("domains.shell.runtime._probe_api", return_value={"available": False}):
+        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": False}):
             assert api.is_running is False
 
     def test_start_already_healthy(self):
         api = APIServerProcess()
-        with patch("domains.shell.runtime._probe_api", return_value={"available": True, "model_id": "slonet"}):
+        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": True, "model_id": "slonet"}):
             result = api.start()
         assert result["ok"] is True
         assert "connected" in result["message"]
 
     def test_start_already_spawned(self):
-        import domains.shell.runtime as mod
+        import domain.shell._internal.runtime as mod
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
         mod._shared_proc = mock_proc
@@ -145,13 +145,13 @@ class TestAPIServerProcess:
         mod._shared_proc = None
 
     def test_start_stale_process(self):
-        import domains.shell.runtime as mod
+        import domain.shell._internal.runtime as mod
         mock_proc = MagicMock()
         mock_proc.poll.return_value = 0  # exited
         mod._shared_proc = mock_proc
         mod._shared_started_at = time.time() - 100
         api = APIServerProcess()
-        with patch("domains.shell.runtime._probe_api", return_value={"available": True}):
+        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": True}):
             result = api.start()
         assert result["ok"] is True
         mod._shared_proc = None
@@ -163,26 +163,26 @@ class TestAPIServerProcess:
 class TestDaitRuntime:
 
     def setup_method(self):
-        import domains.shell.runtime as mod
+        import domain.shell._internal.runtime as mod
         mod._shared_proc = None
         mod._shared_started_at = 0.0
 
     def test_init(self):
         with patch("domains.shell.kernel.Kernel"):
-            from domains.shell.runtime import DaitRuntime
+            from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert rt._model_loaded is False
             assert rt._boot_complete is False
 
     def test_api_property(self):
         with patch("domains.shell.kernel.Kernel"):
-            from domains.shell.runtime import DaitRuntime
+            from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert isinstance(rt.api, APIServerProcess)
 
     def test_api_status(self):
         with patch("domains.shell.kernel.Kernel"):
-            from domains.shell.runtime import DaitRuntime
+            from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             with patch.object(rt._api, "status", return_value={"available": True, "model_loaded": True}):
                 result = rt.api_status
@@ -194,7 +194,7 @@ class TestDaitRuntime:
             mock_kernel = MockKernel.return_value
             mock_kernel.uptime = 100
             mock_kernel.list_processes.return_value = []
-            from domains.shell.runtime import DaitRuntime
+            from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             with patch.object(rt._api, "status", return_value={"available": False}):
                 summary = rt.status_summary
@@ -202,18 +202,18 @@ class TestDaitRuntime:
 
     def test_init_system_property(self):
         with patch("domains.shell.kernel.Kernel"):
-            from domains.shell.runtime import DaitRuntime
+            from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert rt.init_system is None
 
     def test_devices_property(self):
         with patch("domains.shell.kernel.Kernel"):
-            from domains.shell.runtime import DaitRuntime
+            from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert rt.devices is None
 
     def test_vfs_property(self):
         with patch("domains.shell.kernel.Kernel"):
-            from domains.shell.runtime import DaitRuntime
+            from domain.shell._internal.runtime import DaitRuntime
             rt = DaitRuntime()
             assert rt.vfs is None

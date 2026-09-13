@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from domains.multimodal.italian_phoneme_encoder import (
+from domain.multimodal._internal.italian_phoneme_encoder import (
     ItalianPhonemeEncoder, italian_text_to_phonemes,
     ITALIAN_ID_TO_PHONEME, BOS, EOS, PAD, SPACE, NUM_ITALIAN_PHONEMES,
 )

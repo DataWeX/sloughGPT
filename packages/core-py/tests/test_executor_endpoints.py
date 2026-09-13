@@ -1,4 +1,4 @@
-"""Tests for domains.training.executor — TrainingExecutor, JobInfo, JobStatus, get_training_executor."""
+"""Tests for domain.training._internal.executor — TrainingExecutor, JobInfo, JobStatus, get_training_executor."""
 
 import sys
 import time
@@ -12,7 +12,7 @@ if _repo_root not in sys.path:
 import numpy as np
 import pytest
 
-from domains.training.executor import (
+from domain.training._internal.executor import (
     TrainingExecutor,
     JobInfo,
     JobStatus,
@@ -23,7 +23,7 @@ from domains.training.executor import (
 @pytest.fixture(autouse=True)
 def reset_executor():
     """Reset TrainingExecutor singleton before each test."""
-    import domains.training.executor as exec_mod
+    import domain.training._internal.executor as exec_mod
     old = exec_mod._instance
     exec_mod._instance = None
     yield
@@ -502,5 +502,5 @@ class TestShutdown:
         ex = get_training_executor()
         assert ex is not None
         ex.shutdown(wait=False)
-        import domains.training.executor as exec_mod
+        import domain.training._internal.executor as exec_mod
         assert exec_mod._instance is None

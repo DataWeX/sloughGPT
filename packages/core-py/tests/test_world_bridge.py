@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from domains.collections.world_bridge import (
+from domain.collections._internal.world_bridge import (
     WorldFeedConfig,
     RecordToWorldMapper,
     WorldGridBridge,
@@ -17,7 +17,7 @@ from domains.collections.world_bridge import (
     CollectionWorldPipeline,
     MATERIAL_SIGNAL,
 )
-from domains.collections.sources import Record
+from domain.collections._internal.sources import Record
 
 
 # ── WorldFeedConfig ───────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ class TestCollectionWorldPipeline:
         assert pipeline.stats["total_injected"] == 2
 
     def test_run_filters(self):
-        from domains.collections.filters import LengthFilter
+        from domain.collections._internal.filters import LengthFilter
         grid = MagicMock()
         src = self._make_source([Record(content="hi"), Record(content="long enough text")])
         pipeline = CollectionWorldPipeline(src, grid, filters=[LengthFilter(min_length=10)])

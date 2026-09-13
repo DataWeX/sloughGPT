@@ -6,7 +6,7 @@ const isExport = process.env.NEXT_EXPORT === '1'
 const nextConfig = {
   outputFileTracingRoot: path.join(__dirname, '../../'),
   reactStrictMode: true,
-  productionBrowserSourceMaps: true,
+  productionBrowserSourceMaps: process.env.SOURCE_MAPS === '1',
   ...(isProd && !isExport && { output: 'standalone' }),
   ...(isExport && { output: 'export', images: { unoptimized: true }, trailingSlash: true }),
   onDemandEntries: {
@@ -17,6 +17,22 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: false },
   distDir: process.env.BUILD_DIST || (process.env.NODE_ENV === 'development' ? '.next-dev' : '.next'),
   transpilePackages: ['@sloughgpt/strui'],
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+  },
+  experimental: {
+    optimizeCss: true,
+    modularizeImports: {
+      'lucide-react': {
+        transform: 'lucide-react/dist/esm/icons/{{ kebabCase member }}',
+      },
+      'recharts': {
+        transform: 'recharts/{{ member }}',
+      },
+    },
+  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {

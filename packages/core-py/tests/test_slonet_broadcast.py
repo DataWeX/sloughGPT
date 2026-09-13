@@ -7,7 +7,7 @@ or incorrect gradients.
 
 import numpy as np
 import pytest
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, cross_entropy, _broadcast_back, _broadcast_forward,
     _add, _sub, _mul, _neg, _pow, _sum, _mean, _reshape, _transpose,
     _ensure, tensor,
@@ -392,7 +392,7 @@ class TestTensorHelper:
 
 class TestSliceBackward:
     def test_slice_basic_index_helper(self):
-        from domains.training.slonet import _basic_index
+        from domain.training._internal.slonet import _basic_index
         assert _basic_index((slice(None), 0, slice(None)))
         assert _basic_index((slice(1, 3),))
         assert _basic_index((Ellipsis, slice(None)))

@@ -1,6 +1,6 @@
 """Tests for training sequence — phases, state tracking, config, and checkpoint format."""
 
-from domains.training.sequence import (
+from domain.training._internal.sequence import (
     TrainingSequence,
     PhaseResult,
     TrainingSequenceState,

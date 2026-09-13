@@ -29,8 +29,8 @@ class TestAdaptiveConfigToTrainerFlow:
     """Tests flow from adaptive config recommendation to trainer execution."""
 
     def test_recommendation_applied_to_trainer(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         engine = AdaptiveConfigEngine()
         rec = engine.recommend(dataset_size=1000, model="gpt2", method="finetune")
@@ -50,7 +50,7 @@ class TestAdaptiveConfigToTrainerFlow:
             assert result.success
 
     def test_recommendation_confidence_affects_config(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         low = engine.recommend(dataset_size=50, model="gpt2", method="finetune")
@@ -66,8 +66,8 @@ class TestTrainerToOutcomeFlow:
     """Tests flow from trainer execution to outcome tracking."""
 
     def test_outcome_recorded_after_training(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         initial_count = len(tracker.load_outcomes())
@@ -82,7 +82,7 @@ class TestTrainerToOutcomeFlow:
         assert after_count >= initial_count
 
     def test_outcome_contains_training_metrics(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -99,8 +99,8 @@ class TestOutcomeToExportFlow:
 
     def test_export_after_multiple_runs(self):
 
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         initial = len(tracker.export_json(limit=100))
@@ -119,8 +119,8 @@ class TestOutcomeToExportFlow:
         import csv
         import io
 
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
 
@@ -141,9 +141,9 @@ class TestFullWorkflowIntegration:
 
     def test_adaptive_training_export_cycle(self):
 
-        from domains.training.adaptive_config import AdaptiveConfigEngine
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
 
         engine = AdaptiveConfigEngine()
         tracker = TrainingOutcomeTracker()
@@ -168,7 +168,7 @@ class TestFullWorkflowIntegration:
         assert isinstance(json_data, list)
 
     def test_multiple_methods_same_data(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -185,7 +185,7 @@ class TestFullWorkflowIntegration:
     def test_trainer_result_serializable(self):
         import json
 
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         def _default(obj):
             if hasattr(obj, "value"):
@@ -204,8 +204,8 @@ class TestFullWorkflowIntegration:
             assert len(json_str) > 0
 
     def test_preset_based_training(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
-        from domains.training.presets import apply_preset
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.presets import apply_preset
 
         preset_config = apply_preset("quick-finetune")
         assert preset_config is not None
@@ -222,7 +222,7 @@ class TestPerformanceConsistency:
     """Tests that training performance is consistent across runs."""
 
     def test_multiple_runs_have_similar_duration(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         durations = []
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
@@ -239,7 +239,7 @@ class TestPerformanceConsistency:
             assert abs(d - avg) < avg * 2.0
 
     def test_loss_decreases_or_stable(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         losses = []
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:

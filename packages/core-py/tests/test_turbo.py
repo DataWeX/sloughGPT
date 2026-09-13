@@ -11,11 +11,11 @@ from unittest.mock import patch, MagicMock, PropertyMock
 import pytest
 
 from domains.training import state as _state_mod
-from domains.training.state import (
+from domain.training._internal.state import (
     _state, _turbo_lock, _turbo_cancel_event, _turbo_pause_event, _turbo_state,
     CHECKPOINTS_DIR, TURBO_DIR, REPO_ROOT,
 )
-from domains.training.turbo import get_turbo_status, start_turbo_training, run_turbo_worker
+from domain.training._internal.turbo import get_turbo_status, start_turbo_training, run_turbo_worker
 
 
 def _reset_turbo():
@@ -165,7 +165,7 @@ class TestStartTurboTraining:
             soul_file.unlink(missing_ok=True)
 
     @patch("domains.training.runtime_protocol.get_training_runtime")
-    @patch("domains.training.turbo.resolve_dataset_path")
+    @patch("domain.training._internal.turbo.resolve_dataset_path")
     def test_dataset_id_fallback(self, mock_resolve, mock_get_rt):
         mock_get_rt.return_value = MagicMock()
         datasets_dir = REPO_ROOT / "datasets"
@@ -206,7 +206,7 @@ class TestRunTurboWorker:
     def setup_method(self):
         _reset_turbo()
 
-    @patch("domains.training.turbo.update_job")
+    @patch("domain.training._internal.turbo.update_job")
     def test_no_data_path_errors(self, mock_update):
         with _turbo_lock:
             _turbo_state["job_id"] = "test_job"
@@ -214,14 +214,14 @@ class TestRunTurboWorker:
         mock_update.assert_called_once()
         assert mock_update.call_args[1].get("status") == "error" or mock_update.call_args[0][1] == "error"
 
-    @patch("domains.training.turbo.update_job")
+    @patch("domain.training._internal.turbo.update_job")
     def test_no_data_path_with_dataset_id_fails(self, mock_update):
         with _turbo_lock:
             _turbo_state["job_id"] = "test_job"
         run_turbo_worker({"dataset_id": "nonexistent"})
         mock_update.assert_called_once()
 
-    @patch("domains.training.turbo.update_job")
+    @patch("domain.training._internal.turbo.update_job")
     @patch("domains.training.runtime_protocol.get_training_runtime")
     def test_trainer_exception(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
@@ -236,7 +236,7 @@ class TestRunTurboWorker:
             assert _turbo_state["status"] == "error"
             assert "boom" in _turbo_state["error"]
 
-    @patch("domains.training.turbo.update_job")
+    @patch("domain.training._internal.turbo.update_job")
     @patch("domains.training.runtime_protocol.get_training_runtime")
     def test_trainer_result_error(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
@@ -253,7 +253,7 @@ class TestRunTurboWorker:
             assert _turbo_state["status"] == "error"
             assert _turbo_state["error"] == "train failed"
 
-    @patch("domains.training.turbo.update_job")
+    @patch("domain.training._internal.turbo.update_job")
     @patch("domains.training.runtime_protocol.get_training_runtime")
     def test_cancel_during_training(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
@@ -274,7 +274,7 @@ class TestRunTurboWorker:
             assert _turbo_state["status"] == "error"
             assert _turbo_state["error"] == "Training cancelled"
 
-    @patch("domains.training.turbo.update_job")
+    @patch("domain.training._internal.turbo.update_job")
     @patch("domains.training.runtime_protocol.get_training_runtime")
     def test_successful_training(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
@@ -296,7 +296,7 @@ class TestRunTurboWorker:
             assert _turbo_state["progress"] == 100.0
         soul_file.unlink(missing_ok=True)
 
-    @patch("domains.training.turbo.update_job")
+    @patch("domain.training._internal.turbo.update_job")
     @patch("domains.training.runtime_protocol.get_training_runtime")
     def test_on_progress_callback(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
@@ -336,7 +336,7 @@ class TestRunTurboWorker:
             assert _turbo_state["elapsed_s"] == 2.0
             assert _turbo_state["avg_quality"] == 0.7
 
-    @patch("domains.training.turbo.update_job")
+    @patch("domain.training._internal.turbo.update_job")
     @patch("domains.training.runtime_protocol.get_training_runtime")
     def test_state_running_false_after_worker(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()

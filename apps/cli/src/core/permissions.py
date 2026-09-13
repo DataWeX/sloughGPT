@@ -76,7 +76,7 @@ class PermissionsManager:
             self.auto_yes = True
         else:
             try:
-                from domains.infrastructure.config import get_config
+                from domain.infrastructure._internal.config import get_config
                 self.auto_yes = get_config().features.auto_download
             except (ImportError, AttributeError):
                 self.auto_yes = False

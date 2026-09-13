@@ -1,5 +1,5 @@
 """
-Coverage-completion tests for domains/shell/vm_devices.py.
+Coverage-completion tests for domain.shell._internal.vm_devices.py.
 
 Exercises every layer-4 device driver (TensorDevice, PythonExecDevice,
 SlonetDevice, MultimodalDevice, EngineDevice, SlonetTrainingDevice,
@@ -14,8 +14,8 @@ import types
 import numpy as np
 import pytest
 
-from domains.shell.vm import DeviceFault
-from domains.shell.vm_devices import (
+from domain.shell._internal.vm import DeviceFault
+from domain.shell._internal.vm_devices import (
     TensorDevice,
     PythonExecDevice,
     SlonetDevice,
@@ -24,7 +24,7 @@ from domains.shell.vm_devices import (
     SlonetTrainingDevice,
     NPUVMDevice,
 )
-from domains.training.slonet import SloTransformer
+from domain.training._internal.slonet import SloTransformer
 
 
 # ── Shared fakes ──────────────────────────────────────────────────────────
@@ -133,8 +133,8 @@ def _tiny_model():
 def _slonet_shim_without_scheduler():
     """Module shim that shadows WarmupCosineScheduler to force the
     has_scheduler=False branch in SlonetTrainingDevice._train."""
-    import domains.training.slonet as real
-    shim = types.ModuleType("domains.training.slonet")
+    import domain.training._internal.slonet as real
+    shim = types.ModuleType("domain.training._internal.slonet")
     for name in ("cross_entropy", "SloAdam", "clip_grad_norm_",
                  "Tensor", "export_to_sou"):
         setattr(shim, name, getattr(real, name))
@@ -509,7 +509,7 @@ class TestSlonetTrainingDevice:
         assert ev["batches_evaluated"] == 2
 
     def test_train_without_scheduler(self, tmp_path, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domains.training.slonet",
+        monkeypatch.setitem(sys.modules, "domain.training._internal.slonet",
                             _slonet_shim_without_scheduler())
         dev = SlonetTrainingDevice(model=_tiny_model())
         dev.call("config", "checkpoint_dir", str(tmp_path / "ckpt"))

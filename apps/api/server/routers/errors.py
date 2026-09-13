@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from domains.infrastructure.output_buffer import get_server_buffer
-from domains.logging.base import LogTag
+from domain.logging._internal.base import LogTag
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled

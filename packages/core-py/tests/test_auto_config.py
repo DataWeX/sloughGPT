@@ -1,8 +1,8 @@
-"""Tests for domains.training.auto_config: dataset analysis and auto-config engine."""
+"""Tests for domain.training._internal.auto_config: dataset analysis and auto-config engine."""
 
 import json
 
-from domains.training.auto_config import (
+from domain.training._internal.auto_config import (
     DatasetAnalysis,
     TrainingConfig,
     analyse_dataset,

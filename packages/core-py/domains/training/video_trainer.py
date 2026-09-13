@@ -22,7 +22,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from domains.shared import find_repo_root
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor,
     SloAdam, cross_entropy as _cross_entropy, tensor as _tensor,
 )
@@ -67,8 +67,8 @@ class VideoCaptionTrainer:
         self.max_seq_len = max_seq_len
         self.lr = lr
 
-        from domains.multimodal.video import TemporalEncoder
-        from domains.multimodal.engine import VisionEncoder, SloTransformerDecoder
+        from domain.multimodal._internal.video import TemporalEncoder
+        from domain.multimodal._internal.engine import VisionEncoder, SloTransformerDecoder
 
         self.vision_encoder = VisionEncoder(embed_dim, n_heads, n_vision_layers)
         self.temporal_encoder = TemporalEncoder(embed_dim, n_heads, n_temporal_layers, max_frames)
@@ -150,7 +150,7 @@ class VideoCaptionTrainer:
         Returns (1, N, 224, 224, 3) or None on failure.
         """
         try:
-            from domains.multimodal.video import VideoProcessor
+            from domain.multimodal._internal.video import VideoProcessor
             proc = VideoProcessor(max_frames=self.max_frames)
             frames = proc.extract_frames(video_path, self.max_frames)
             if not frames:

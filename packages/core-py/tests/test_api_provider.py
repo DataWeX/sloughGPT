@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from domains.inference.api_provider import ApiProvider
+from domain.inference._internal.api_provider import ApiProvider
 
 
 class TestApiProviderInit:
@@ -54,7 +54,7 @@ class TestApiProviderChat:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch("domains.inference.api_provider.httpx.AsyncClient") as MockClient:
+        with patch("domain.inference._internal.api_provider.httpx.AsyncClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -84,7 +84,7 @@ class TestApiProviderChat:
         mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
         mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("domains.inference.api_provider.httpx.AsyncClient") as MockClient:
+        with patch("domain.inference._internal.api_provider.httpx.AsyncClient") as MockClient:
             mock_client = AsyncMock()
             mock_client.stream = MagicMock(return_value=mock_stream_ctx)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -107,7 +107,7 @@ class TestApiProviderConnection:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch("domains.inference.api_provider.httpx.Client") as MockClient:
+        with patch("domain.inference._internal.api_provider.httpx.Client") as MockClient:
             mock_client = MagicMock()
             mock_client.get.return_value = mock_response
             mock_client.__enter__ = MagicMock(return_value=mock_client)
@@ -121,7 +121,7 @@ class TestApiProviderConnection:
     def test_test_connection_failure(self):
         p = ApiProvider(api_key="sk-test", api_url="https://api.openai.com/v1")
 
-        with patch("domains.inference.api_provider.httpx.Client") as MockClient:
+        with patch("domain.inference._internal.api_provider.httpx.Client") as MockClient:
             mock_client = MagicMock()
             mock_client.get.side_effect = Exception("Connection refused")
             mock_client.__enter__ = MagicMock(return_value=mock_client)

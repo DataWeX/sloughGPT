@@ -1,4 +1,4 @@
-"""Tests for domains.models.provider — ModelCapabilities, ToolDef; domains.multimodal.vision — ImageCaption, VisualObject; domains.shell.surface — RenderLine, TextSurface, strip_ansi, clip, LogSurface."""
+"""Tests for domain.models._internal.provider — ModelCapabilities, ToolDef; domain.multimodal._internal.vision — ImageCaption, VisualObject; domain.shell._internal.surface — RenderLine, TextSurface, strip_ansi, clip, LogSurface."""
 
 import asyncio
 import threading
@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from domains.models.provider import (
+from domain.models._internal.provider import (
     ModelCapabilities, ToolDef,
     VisionProcessor, KnowledgeProcessor, ToolUseProcessor,
     PersonalityProcessor, StyleProcessor,
@@ -16,13 +16,13 @@ from domains.models.provider import (
     register_processor, get_processor, list_processors, apply_processors,
     _processors,
 )
-from domains.multimodal.vision import ImageCaption, VisualObject
-from domains.shell.surface import (
+from domain.multimodal._internal.vision import ImageCaption, VisualObject
+from domain.shell._internal.surface import (
     RenderLine, TextSurface, strip_ansi, clip,
     LogSurface, Surface, STYLE_INFO, STYLE_WARN, STYLE_ERROR,
     STYLE_DEBUG, STYLE_CRITICAL, _display_width,
 )
-from domains.shell.log_buffer import LogBuffer, LogEntry
+from domain.shell._internal.log_buffer import LogBuffer, LogEntry
 
 
 # ── ModelCapabilities ────────────────────────────────────────────────
@@ -1275,11 +1275,11 @@ class TestAttachProcessGuard:
         clear_providers()
 
     def test_no_provider_returns_false(self):
-        from domains.models.provider import attach_process_guard_to_provider
+        from domain.models._internal.provider import attach_process_guard_to_provider
         assert attach_process_guard_to_provider(None) is False
 
     def test_provider_no_server_returns_false(self):
-        from domains.models.provider import attach_process_guard_to_provider
+        from domain.models._internal.provider import attach_process_guard_to_provider
         class FakeProvider:
             def get_server(self):
                 return None
@@ -1288,7 +1288,7 @@ class TestAttachProcessGuard:
         clear_providers()
 
     def test_provider_no_setter_returns_false(self):
-        from domains.models.provider import attach_process_guard_to_provider
+        from domain.models._internal.provider import attach_process_guard_to_provider
         class FakeServer:
             pass
         class FakeProvider:
@@ -1299,7 +1299,7 @@ class TestAttachProcessGuard:
         clear_providers()
 
     def test_provider_with_setter_calls_it(self):
-        from domains.models.provider import attach_process_guard_to_provider
+        from domain.models._internal.provider import attach_process_guard_to_provider
         called_with = []
         class FakeServer:
             def set_process_guard(self, guard):

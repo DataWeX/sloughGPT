@@ -707,7 +707,7 @@ class HealthRouter:
             Envelope with ``status: "ok"`` plus monitor stats, or raises
             a classified error if the monitor is unavailable.
         """
-        from domains.feedback.model_health import get_health_monitor
+        from domain.feedback._internal.model_health import get_health_monitor
 
         mon = get_health_monitor()
         import state as server_state
@@ -892,7 +892,7 @@ class HealthRouter:
         services = {}
         # Training
         try:
-            from domains.training.outcome_tracker import TrainingOutcomeTracker
+            from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
             tracker = TrainingOutcomeTracker()
             stats = tracker.get_stats()
             services["training"] = {"status": "ok", "total_runs": stats.get("total_runs", 0)}
@@ -900,7 +900,7 @@ class HealthRouter:
             services["training"] = {"status": "error", "error": str(e)}
         # Settings
         try:
-            from domains.settings.persistent import get_settings
+            from domain.settings._internal.persistent import get_settings
             ps = get_settings()
             services["settings"] = {"status": "ok", "sections": list(vars(ps.settings).keys())}
         except Exception as e:
@@ -914,7 +914,7 @@ class HealthRouter:
             services["plugins"] = {"status": "error", "error": str(e)}
         # Adaptive engine
         try:
-            from domains.training.adaptive_config import AdaptiveConfigEngine
+            from domain.training._internal.adaptive_config import AdaptiveConfigEngine
             AdaptiveConfigEngine()
             services["adaptive"] = {"status": "ok"}
         except Exception as e:

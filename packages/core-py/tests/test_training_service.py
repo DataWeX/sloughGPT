@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from domains.training.service import (
+from domain.training._internal.service import (
     _finite_payload,
     parse_subtitle_text,
     resolve_dataset_path,
@@ -401,7 +401,7 @@ class TestFindCheckpoint:
         ckpt_dir = tmp_path / "auto-training"
         ckpt_dir.mkdir()
 
-        with patch("domains.training.service.CHECKPOINTS_DIR", ckpt_dir):
+        with patch("domain.training._internal.service.CHECKPOINTS_DIR", ckpt_dir):
             result = find_checkpoint("nonexistent")
         assert result is None
 

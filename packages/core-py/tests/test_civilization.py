@@ -32,7 +32,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domains.shell.evolution import (
+from domain.shell._internal.evolution import (
     Genome,
     _conservation_sweep,
     benchmark_civilization,
@@ -42,7 +42,7 @@ from domains.shell.evolution import (
     _reproduce_rng,
     _role_rng,
 )
-from domains.shell.simulation import WorldParams
+from domain.shell._internal.simulation import WorldParams
 
 
 def _all_on_params(**kw) -> WorldParams:
@@ -106,7 +106,7 @@ class TestConservationSweep:
                 b.entity.energy += 100.0
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("domains.shell.evolution.Simulation.step",
+            mp.setattr("domain.shell._internal.evolution.Simulation.step",
                        _energy_injector)
             result = _conservation_sweep(params, genomes, ticks=4)
         assert result["monotonic"] is False
@@ -167,7 +167,7 @@ class TestConservationSweep:
                 b.entity.energy += 100.0
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("domains.shell.evolution.Simulation.step",
+            mp.setattr("domain.shell._internal.evolution.Simulation.step",
                        _energy_injector)
             result = _conservation_sweep(params, genomes, ticks=4)
         for v in result["violations"]:

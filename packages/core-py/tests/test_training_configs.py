@@ -1,11 +1,11 @@
-"""Tests for domains.training — DistillConfig, TextDataset, DistillEvalResult; domains.training.lr_schedulers — SchedulerConfig, CosineAnnealingConfig, WarmupConfig, OneCycleConfig, CyclicConfig."""
+"""Tests for domains.training — DistillConfig, TextDataset, DistillEvalResult; domain.training._internal.lr_schedulers — SchedulerConfig, CosineAnnealingConfig, WarmupConfig, OneCycleConfig, CyclicConfig."""
 
 import numpy as np
-from domains.training.distill_gpt2 import (
+from domain.training._internal.distill_gpt2 import (
     DistillConfig, TextDataset, DistillEvalResult,
     _softmax, _kl_div_loss, _cross_entropy_loss, _compute_perplexity, _bleu_score,
 )
-from domains.training.lr_schedulers import (
+from domain.training._internal.lr_schedulers import (
     SchedulerConfig, CosineAnnealingConfig, WarmupConfig, OneCycleConfig, CyclicConfig,
 )
 

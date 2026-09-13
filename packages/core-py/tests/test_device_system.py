@@ -1,4 +1,4 @@
-"""Tests for domains.shell.device_system — central device registry."""
+"""Tests for domain.shell._internal.device_system — central device registry."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.shell.device_system import (
+from domain.shell._internal.device_system import (
     DeviceSystem,
     get_device_system,
     reset_device_system,
 )
-from domains.shell.vm import Device, DeviceFault
+from domain.shell._internal.vm import Device, DeviceFault
 
 
 @pytest.fixture(autouse=True)

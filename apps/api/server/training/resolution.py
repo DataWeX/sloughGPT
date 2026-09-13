@@ -15,7 +15,7 @@ from .schemas import TrainDatasetRef
 def _repo_root() -> Path:
     from pathlib import Path
 
-    from domains.shared.utils import find_repo_root
+    from domain.shared._internal.utils import find_repo_root
 
     return find_repo_root(Path(__file__).resolve())
 
@@ -31,7 +31,7 @@ def resolve_training_inputs(
     source_kind is ``legacy`` | ``manifest`` | ``ref``.
     """
 
-    from domains.training.dataset_manifest import ManifestError, resolve_training_data_path
+    from domain.training._internal.dataset_manifest import ManifestError, resolve_training_data_path
 
     manifest_meta: dict[str, Any] | None = None
 

@@ -1,8 +1,8 @@
-"""Comprehensive tests for domains/cognitive/grounding.py — pure logic only."""
+"""Comprehensive tests for domain.cognitive._internal.grounding.py — pure logic only."""
 
 import pytest
 import numpy as np
-from domains.cognitive.grounding import (
+from domain.cognitive._internal.grounding import (
     Document,
     RAGGrounder,
     FisherInformation,

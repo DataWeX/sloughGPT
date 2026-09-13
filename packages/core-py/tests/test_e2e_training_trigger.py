@@ -59,14 +59,14 @@ class TestE2ETrainingTrigger:
 
     @pytest.fixture
     async def agent(self):
-        from domains.agents.computer_use import ComputerUseAgent
+        from domain.agents._internal.computer_use import ComputerUseAgent
 
         async with ComputerUseAgent(base_url=BASE, headless=True) as a:
             yield a
 
     @pytest.fixture
     async def follower(self):
-        from domains.agents.devtools_follower import DevToolsFollower
+        from domain.agents._internal.devtools_follower import DevToolsFollower
 
         async with DevToolsFollower(base_url=BASE, headless=True) as f:
             yield f

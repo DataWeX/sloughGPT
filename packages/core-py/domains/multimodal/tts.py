@@ -18,11 +18,11 @@ import logging
 
 logger = logging.getLogger("slo.multimodal.tts")
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm,
     SloAdam,
 )
-from domains.multimodal.phoneme_encoder import PhonemeEncoder, NUM_PHONEMES, SILENCE
+from domain.multimodal._internal.phoneme_encoder import PhonemeEncoder, NUM_PHONEMES, SILENCE
 
 
 # SSML tag patterns

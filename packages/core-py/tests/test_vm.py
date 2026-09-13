@@ -8,7 +8,7 @@ import time
 import tempfile
 import pytest
 import numpy as np
-from domains.shell.vm import (
+from domain.shell._internal.vm import (
     ProgramLoader, VirtualCPU, VMRunner, VMFault, Halt, MemFault, InsFault,
     HELLO_ASM, NUM_REGS, MEM_SIZE, STACK_BASE, F_ZERO, F_NEG,
     X86VirtualSystem, X86CPU, X86Assembler,
@@ -18,7 +18,7 @@ from domains.shell.vm import (
     Memory, FlatFS, BlockDevice, DiskProgramLoader, X86Shell,
     Device, DeviceFault,
 )
-from domains.shell.vm_permissions import X86RBAC, Permission, Role
+from domain.shell._internal.vm_permissions import X86RBAC, Permission, Role
 
 
 # ── ProgramLoader (Assembler) ──────────────────────────────────────────────
@@ -336,7 +336,7 @@ class TestVMRunner:
         assert any("PRINT" in line for line in listing)
 
     def test_self_test(self):
-        from domains.shell.vm import self_test
+        from domain.shell._internal.vm import self_test
         results = self_test()
         assert len(results) >= 3
 
@@ -468,7 +468,7 @@ class TestMemoryOpcodes:
 
 class TestConsoleIO:
     def test_out_writes(self):
-        from domains.shell.vm import CPU as VMCPU, Assembler, DeviceBus
+        from domain.shell._internal.vm import CPU as VMCPU, Assembler, DeviceBus
 
         output = []
         bus = DeviceBus()
@@ -481,7 +481,7 @@ class TestConsoleIO:
         assert output == ["42", "99"]
 
     def test_in_reads(self):
-        from domains.shell.vm import CPU as VMCPU, Assembler, DeviceBus
+        from domain.shell._internal.vm import CPU as VMCPU, Assembler, DeviceBus
 
         bus = DeviceBus()
         bus.register_console(stdin_fn=lambda: "7")
@@ -495,14 +495,14 @@ class TestConsoleIO:
 
 class TestBlockDevice:
     def test_read_write_sector(self):
-        from domains.shell.vm import BlockDevice
+        from domain.shell._internal.vm import BlockDevice
         blk = BlockDevice(num_sectors=4)
         blk.write_sector(0, b"hello world")
         data = blk.read_sector(0)
         assert bytes(data[:11]) == b"hello world"
 
     def test_sector_stats(self):
-        from domains.shell.vm import BlockDevice
+        from domain.shell._internal.vm import BlockDevice
         blk = BlockDevice(num_sectors=4)
         blk.write_sector(0, b"x" * 512)
         blk.read_sector(0)
@@ -511,7 +511,7 @@ class TestBlockDevice:
         assert info["writes"] == 1
 
     def test_out_of_range(self):
-        from domains.shell.vm import BlockDevice, DeviceFault
+        from domain.shell._internal.vm import BlockDevice, DeviceFault
         blk = BlockDevice(num_sectors=4)
         with pytest.raises(DeviceFault):
             blk.read_sector(10)
@@ -519,14 +519,14 @@ class TestBlockDevice:
 
 class TestVirtualSystem:
     def test_run_program(self):
-        from domains.shell.vm import VirtualSystem
+        from domain.shell._internal.vm import VirtualSystem
         vs = VirtualSystem()
         vs.load_program("LOAD_CONST R0, 42\nPRINT R0\nHALT")
         out = vs.run()
         assert out == ["42"]
 
     def test_carry_flag(self):
-        from domains.shell.vm import VirtualSystem
+        from domain.shell._internal.vm import VirtualSystem
         vs = VirtualSystem()
         vs.load_program("LOAD_CONST R0, 4294967295\nLOAD_CONST R1, 1\nIADD R2, R0, R1\nHALT")
         vs.run()
@@ -534,7 +534,7 @@ class TestVirtualSystem:
         assert vs.cpu.regs[2] == 0
 
     def test_status(self):
-        from domains.shell.vm import VirtualSystem
+        from domain.shell._internal.vm import VirtualSystem
         vs = VirtualSystem(enable_block=True)
         status = vs.status()
         assert "pc" in status
@@ -544,14 +544,14 @@ class TestVirtualSystem:
 
 class TestFlatFS:
     def test_write_read(self):
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         fs.write("test.txt", b"hello world")
         assert fs.read("test.txt")[:11] == b"hello world"
 
     def test_list_files(self):
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         fs.write("a.txt", b"aaa")
@@ -559,7 +559,7 @@ class TestFlatFS:
         assert sorted(fs.list_files()) == ["a.txt", "b.txt"]
 
     def test_delete(self):
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         fs.write("del.txt", b"bye")
@@ -568,7 +568,7 @@ class TestFlatFS:
         assert not fs.delete("del.txt")
 
     def test_reload_persists(self):
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.vm import BlockDevice, FlatFS
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         fs.write("persist.txt", b"data")
@@ -580,7 +580,7 @@ class TestFlatFS:
 class TestSyscall:
     def test_syscall_print(self):
         import time as _time
-        from domains.shell.kernel import Kernel
+        from domain.shell._internal.kernel import Kernel
         output = []
         k = Kernel()
         k.boot()
@@ -602,7 +602,7 @@ class TestSyscall:
 
 class TestIRQ:
     def test_irq_fires(self):
-        from domains.shell.vm import CPU, Assembler, IRQDevice
+        from domain.shell._internal.vm import CPU, Assembler, IRQDevice
         fired = []
         cpu = CPU()
         irq = IRQDevice()
@@ -614,7 +614,7 @@ class TestIRQ:
         assert len(fired) == 1  # fires at tick 10
 
     def test_keyboard_irq(self):
-        from domains.shell.vm import CPU, IRQDevice
+        from domain.shell._internal.vm import CPU, IRQDevice
         cpu = CPU()
         irq = IRQDevice()
         cpu.register_irq(1, lambda c: fired.append("key"))
@@ -630,8 +630,8 @@ class TestIRQ:
 class TestShellWrite:
     def test_write_file(self):
         import time as _time
-        from domains.shell.kernel import Kernel
-        from domains.shell.vm import BlockDevice, FlatFS
+        from domain.shell._internal.kernel import Kernel
+        from domain.shell._internal.vm import BlockDevice, FlatFS
 
         blk = BlockDevice(num_sectors=32)
         fs = FlatFS(blk)
@@ -663,36 +663,36 @@ class TestShellWrite:
 
 class TestX86Assembler:
     def test_nop(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("nop")
         assert code == b'\x90'
 
     def test_hlt(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("hlt")
         assert code == b'\xf4'
 
     def test_cli_sti(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         assert asm.assemble("cli") == b'\xfa'
         assert asm.assemble("sti") == b'\xfb'
 
     def test_ret(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         assert asm.assemble("ret") == b'\xc3'
 
     def test_mov_reg_imm(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nmov eax, 1")
         assert code[0] == 0xB8  # MOV EAX, imm32
 
     def test_mov_reg_reg(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nmov eax, ebx")
         assert len(code) == 2
@@ -700,37 +700,37 @@ class TestX86Assembler:
         assert code[1] == 0xD8  # ModR/M: reg=ebx(3), rm=eax(0)
 
     def test_int(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("int 0x10")
         assert code == b'\xcd\x10'
 
     def test_push_reg(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\npush eax")
         assert code[0] == 0x50  # PUSH EAX
 
     def test_pop_reg(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\npop eax")
         assert code[0] == 0x58  # POP EAX
 
     def test_jmp(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("jmp 0x100")
         assert code[0] == 0xE9  # JMP near
 
     def test_add_reg_imm(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("[BITS 32]\nadd eax, 1")
         assert code[0] == 0x83  # ADD r32, imm8
 
     def test_label(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("start:\n  nop\n  jmp start")
         assert code[0] == 0x90  # NOP
@@ -740,61 +740,61 @@ class TestX86Assembler:
         assert offset == -4
 
     def test_bits_directive(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         asm.assemble("[BITS 32]\nnop")
         assert asm._bits == 32
 
     def test_org_directive(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         asm.assemble("[ORG 0x1000]\nnop")
         assert asm._org == 0x1000
 
     def test_db_string(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble('db "Hello", 0')
         assert code == b'Hello\x00'
 
     def test_db_bytes(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("db 0x90, 0x90, 0x90")
         assert code == b'\x90\x90\x90'
 
     def test_dw(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("dw 0xAA55")
         assert code == b'\x55\xAA'
 
     def test_dd(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("dd 0x12345678")
         assert code == b'\x78\x56\x34\x12'
 
     def test_times(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("times 3 nop")
         assert code == b'\x90\x90\x90'
 
     def test_mov_al_imm(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("mov al, 0x41")
         assert code[0] == 0xB0  # MOV AL, imm8
 
     def test_in_al(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("in al, 0x60")
         assert code == b'\xe4\x60'
 
     def test_out(self):
-        from domains.shell.vm import X86Assembler
+        from domain.shell._internal.vm import X86Assembler
         asm = X86Assembler()
         code = asm.assemble("out 0x20, al")
         assert code == b'\xe6\x20'
@@ -802,25 +802,25 @@ class TestX86Assembler:
 
 class TestX86Bootloader:
     def test_bootloader_source_valid(self):
-        from domains.shell.vm_programs import X86_BOOTLOADER_ASM
+        from domain.shell._internal.vm_programs import X86_BOOTLOADER_ASM
         assert "[BITS 16]" in X86_BOOTLOADER_ASM
         assert "[ORG 0x7C00]" in X86_BOOTLOADER_ASM
 
     def test_kernel_source_valid(self):
-        from domains.shell.vm_programs import X86_KERNEL_ASM
+        from domain.shell._internal.vm_programs import X86_KERNEL_ASM
         assert "[BITS 32]" in X86_KERNEL_ASM
         assert "kernel_start" in X86_KERNEL_ASM
         assert "vga_print" in X86_KERNEL_ASM
         assert "timer_handler" in X86_KERNEL_ASM
 
     def test_export_binary(self):
-        from domains.shell.vm_programs import export_x86_binary, X86_BOOTLOADER_ASM
+        from domain.shell._internal.vm_programs import export_x86_binary, X86_BOOTLOADER_ASM
         binary = export_x86_binary(X86_BOOTLOADER_ASM)
         assert isinstance(binary, bytes)
         assert len(binary) > 0
 
     def test_build_disk_image(self):
-        from domains.shell.vm_programs import build_disk_image
+        from domain.shell._internal.vm_programs import build_disk_image
         boot = b'\x00' * 512
         kernel = b'\x00' * 1024
         image = build_disk_image(boot, kernel, size_mb=1)
@@ -829,8 +829,8 @@ class TestX86Bootloader:
         assert image[512:1536] == kernel
 
     def test_bootloader_compiles_to_512(self):
-        from domains.shell.vm import X86Assembler
-        from domains.shell.vm_programs import X86_BOOTLOADER_ASM
+        from domain.shell._internal.vm import X86Assembler
+        from domain.shell._internal.vm_programs import X86_BOOTLOADER_ASM
         asm = X86Assembler()
         code = asm.assemble(X86_BOOTLOADER_ASM)
         assert len(code) == 512
@@ -838,13 +838,13 @@ class TestX86Bootloader:
         assert code[511] == 0xAA
 
     def test_kernel_has_vga(self):
-        from domains.shell.vm_programs import X86_KERNEL_ASM
+        from domain.shell._internal.vm_programs import X86_KERNEL_ASM
         assert "VGA_BUFFER" in X86_KERNEL_ASM
         assert "vga_print" in X86_KERNEL_ASM
         assert "vga_clear" in X86_KERNEL_ASM
 
     def test_kernel_has_interrupts(self):
-        from domains.shell.vm_programs import X86_KERNEL_ASM
+        from domain.shell._internal.vm_programs import X86_KERNEL_ASM
         assert "timer_handler" in X86_KERNEL_ASM
         assert "keyboard_handler" in X86_KERNEL_ASM
         assert "iret" in X86_KERNEL_ASM
@@ -852,21 +852,21 @@ class TestX86Bootloader:
 
 class TestVGA:
     def test_vga_write(self):
-        from domains.shell.vm import VGADevice
+        from domain.shell._internal.vm import VGADevice
         vga = VGADevice()
         vga.call("write", 0, 0, 'A', 15, 0)
         screen = vga.call("get_screen")
         assert screen[0][0] == 'A'
 
     def test_vga_write_string(self):
-        from domains.shell.vm import VGADevice
+        from domain.shell._internal.vm import VGADevice
         vga = VGADevice()
         vga.call("write_string", 0, 0, "Hello", 10, 0)
         screen = vga.call("get_screen")
         assert screen[0][:5] == "Hello"
 
     def test_vga_clear(self):
-        from domains.shell.vm import VGADevice
+        from domain.shell._internal.vm import VGADevice
         vga = VGADevice()
         vga.call("write", 5, 5, 'X', 15, 0)
         vga.call("clear", 15, 1)
@@ -874,7 +874,7 @@ class TestVGA:
         assert all(c == ' ' for c in screen[0])
 
     def test_vga_scroll(self):
-        from domains.shell.vm import VGADevice
+        from domain.shell._internal.vm import VGADevice
         vga = VGADevice()
         vga.call("write_string", 0, 0, "Line1", 15, 0)
         vga.call("write_string", 1, 0, "Line2", 15, 0)
@@ -884,13 +884,13 @@ class TestVGA:
         assert screen[1][:5] == "     "
 
     def test_vga_cursor(self):
-        from domains.shell.vm import VGADevice
+        from domain.shell._internal.vm import VGADevice
         vga = VGADevice()
         vga.call("set_cursor", 10, 20)
         assert vga.call("get_cursor") == (10, 20)
 
     def test_vga_info(self):
-        from domains.shell.vm import VGADevice
+        from domain.shell._internal.vm import VGADevice
         vga = VGADevice()
         info = vga.info()
         assert info["type"] == "vga"
@@ -900,25 +900,25 @@ class TestVGA:
 
 class TestPS2Keyboard:
     def test_read_key(self):
-        from domains.shell.vm import PS2KeyboardDevice
+        from domain.shell._internal.vm import PS2KeyboardDevice
         kb = PS2KeyboardDevice()
         kb.call("push_scancode", 0x10)  # 'q'
         assert kb.call("read_key") == ord('q')
 
     def test_empty_returns_zero(self):
-        from domains.shell.vm import PS2KeyboardDevice
+        from domain.shell._internal.vm import PS2KeyboardDevice
         kb = PS2KeyboardDevice()
         assert kb.call("read_key") == 0
 
     def test_has_key(self):
-        from domains.shell.vm import PS2KeyboardDevice
+        from domain.shell._internal.vm import PS2KeyboardDevice
         kb = PS2KeyboardDevice()
         assert kb.call("has_key") is False
         kb.call("push_scancode", 0x1E)  # 'a'
         assert kb.call("has_key") is True
 
     def test_clear(self):
-        from domains.shell.vm import PS2KeyboardDevice
+        from domain.shell._internal.vm import PS2KeyboardDevice
         kb = PS2KeyboardDevice()
         kb.call("push_scancode", 0x1E)
         kb.call("push_scancode", 0x30)
@@ -926,24 +926,24 @@ class TestPS2Keyboard:
         assert kb.call("has_key") is False
 
     def test_key_release_ignored(self):
-        from domains.shell.vm import PS2KeyboardDevice
+        from domain.shell._internal.vm import PS2KeyboardDevice
         kb = PS2KeyboardDevice()
         kb.call("push_scancode", 0x9E)  # key release 'a'
         assert kb.call("has_key") is False
 
     def test_enter_key(self):
-        from domains.shell.vm import PS2KeyboardDevice
+        from domain.shell._internal.vm import PS2KeyboardDevice
         kb = PS2KeyboardDevice()
         kb.call("push_scancode", 0x1C)  # Enter
         assert kb.call("read_key") == 10
 
     def test_space_key(self):
-        from domains.shell.vm import PS2KeyboardDevice
+        from domain.shell._internal.vm import PS2KeyboardDevice
         kb = PS2KeyboardDevice()
         kb.call("push_scancode", 0x39)  # Space
         assert kb.call("read_key") == ord(' ')
     def test_list_programs(self):
-        from domains.shell.vm import BlockDevice, FlatFS, DiskProgramLoader
+        from domain.shell._internal.vm import BlockDevice, FlatFS, DiskProgramLoader
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         fs.write('hello.asm', 'HALT')
@@ -952,7 +952,7 @@ class TestPS2Keyboard:
         assert loader.list_programs() == ['hello.asm']
 
     def test_load_and_run(self):
-        from domains.shell.vm import BlockDevice, FlatFS, DiskProgramLoader
+        from domain.shell._internal.vm import BlockDevice, FlatFS, DiskProgramLoader
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         fs.write('test.asm', 'LOAD_CONST R0, 42\nPRINT R0\nHALT')
@@ -962,14 +962,14 @@ class TestPS2Keyboard:
         assert result['steps'] == 3
 
     def test_save_and_load(self):
-        from domains.shell.vm import BlockDevice, FlatFS, DiskProgramLoader
+        from domain.shell._internal.vm import BlockDevice, FlatFS, DiskProgramLoader
         blk = BlockDevice(num_sectors=16)
         fs = FlatFS(blk)
         loader = DiskProgramLoader(fs)
         loader.save_program('mine.asm', 'NOP\nHALT')
         source = loader.load_source('mine.asm')
         assert 'NOP' in source
-from domains.shell.vm import (
+from domain.shell._internal.vm import (
     PageFrameAllocator, ProcessControlBlock, ProcessState,
     ProcessTable, Scheduler, X86SyscallHandler, PITDevice,
     X86VirtualSystem, X86CPU, X86Assembler, FlatFS, BlockDevice,
@@ -978,7 +978,7 @@ from domains.shell.vm import (
     NUM_REGS, FileDevice, VGADevice, PS2KeyboardDevice, ConsoleDevice, IRQDevice,
     DiskProgramLoader, VirtualSystem, DeviceFault, X86Shell, FLAG_DF, FLAG_ZF,
 )
-from domains.shell.vm_permissions import Role
+from domain.shell._internal.vm_permissions import Role
 import struct
 
 
@@ -1765,7 +1765,7 @@ class TestAssemblerMiscCoverage:
 
 
 """High-impact branch coverage tests for vm.py uncovered lines."""
-from domains.shell.vm import (
+from domain.shell._internal.vm import (
     PageFrameAllocator, ProcessControlBlock, ProcessState,
     ProcessTable, Scheduler, X86SyscallHandler, PITDevice,
     X86VirtualSystem, X86CPU, X86Assembler, FlatFS, BlockDevice,
@@ -1774,7 +1774,7 @@ from domains.shell.vm import (
     NUM_REGS, FileDevice, VGADevice, PS2KeyboardDevice, ConsoleDevice, IRQDevice,
     DiskProgramLoader, VirtualSystem, DeviceFault, X86Shell, FLAG_DF, FLAG_ZF,
 )
-from domains.shell.vm_permissions import Role
+from domain.shell._internal.vm_permissions import Role
 import struct
 
 
@@ -3729,7 +3729,7 @@ class TestSyscallCoverage:
 
 class TestX86SyscallHandler:
     def _make_handler(self):
-        from domains.shell.vm import X86SyscallHandler, X86CPU, ProcessTable, Scheduler, PageFrameAllocator
+        from domain.shell._internal.vm import X86SyscallHandler, X86CPU, ProcessTable, Scheduler, PageFrameAllocator
         cpu = X86CPU()
         pt = ProcessTable()
         sch = Scheduler(process_table=pt)
@@ -3944,7 +3944,7 @@ class TestVGADeviceCoverage:
 
 class TestFlatFSExtended:
     def test_flatfs_write_and_read(self):
-        from domains.shell.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import FlatFS, BlockDevice
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("test.txt", b"Hello World")
@@ -3952,7 +3952,7 @@ class TestFlatFSExtended:
         assert data.startswith(b"Hello World")
 
     def test_flatfs_list_files(self):
-        from domains.shell.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import FlatFS, BlockDevice
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("a.txt", b"aaa")
@@ -3961,7 +3961,7 @@ class TestFlatFSExtended:
         assert len(files) >= 2
 
     def test_flatfs_exists(self):
-        from domains.shell.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import FlatFS, BlockDevice
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("exists.txt", b"yes")
@@ -3969,7 +3969,7 @@ class TestFlatFSExtended:
         assert fs.exists("no.txt") is False
 
     def test_flatfs_size(self):
-        from domains.shell.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import FlatFS, BlockDevice
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("size.txt", b"12345")
@@ -3977,7 +3977,7 @@ class TestFlatFSExtended:
         assert size >= 5
 
     def test_flatfs_delete(self):
-        from domains.shell.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import FlatFS, BlockDevice
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         fs.write("del.txt", b"delete me")
@@ -3986,7 +3986,7 @@ class TestFlatFSExtended:
         assert not fs.exists("del.txt")
 
     def test_flatfs_delete_nonexistent(self):
-        from domains.shell.vm import FlatFS, BlockDevice
+        from domain.shell._internal.vm import FlatFS, BlockDevice
         bd = BlockDevice(num_sectors=64)
         fs = FlatFS(bd)
         result = fs.delete("no.txt")
@@ -4102,12 +4102,12 @@ class TestBlockDeviceExtended:
 
 class TestIRQDevice:
     def test_irq_device_init(self):
-        from domains.shell.vm import IRQDevice
+        from domain.shell._internal.vm import IRQDevice
         irq = IRQDevice()
         assert irq is not None
 
     def test_irq_device_info(self):
-        from domains.shell.vm import IRQDevice
+        from domain.shell._internal.vm import IRQDevice
         irq = IRQDevice()
         info = irq.info()
         assert isinstance(info, dict)

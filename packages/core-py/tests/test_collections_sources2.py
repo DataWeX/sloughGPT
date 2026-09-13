@@ -1,4 +1,4 @@
-"""Tests for domains.collections.sources — pure logic only."""
+"""Tests for domain.collections._internal.sources — pure logic only."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.collections.sources import (
+from domain.collections._internal.sources import (
     ApiSource,
     FileSource,
     GeneratorSource,

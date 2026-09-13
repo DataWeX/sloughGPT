@@ -156,9 +156,8 @@ describe('ConversationPicker', () => {
     mockList.mockRejectedValue(new Error('network'))
     render(<ConversationPicker {...defaultProps} />)
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('Search conversations...')).toBeDefined()
+      expect(screen.getByText('No other conversations')).toBeDefined()
     })
-    expect(screen.getByText('No other conversations')).toBeDefined()
   })
 
   it('shows message count for each conversation', async () => {

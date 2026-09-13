@@ -27,25 +27,25 @@ class TestCheckpointOperations:
     """Tests for checkpoint loading and listing."""
 
     def test_find_checkpoint_nonexistent(self):
-        from domains.training.checkpoints import find_checkpoint
+        from domain.training._internal.checkpoints import find_checkpoint
 
         result = find_checkpoint("nonexistent_checkpoint_xyz")
         assert result is None
 
     def test_load_soul_nonexistent(self):
-        from domains.training.checkpoints import load_soul
+        from domain.training._internal.checkpoints import load_soul
 
         result = load_soul("nonexistent_soul_xyz")
         assert result is None
 
     def test_scan_all_checkpoints(self):
-        from domains.training.checkpoints import _scan_all_checkpoints
+        from domain.training._internal.checkpoints import _scan_all_checkpoints
 
         checkpoints = _scan_all_checkpoints()
         assert isinstance(checkpoints, list)
 
     def test_checkpoint_dirs_exist(self):
-        from domains.training.state import CHECKPOINTS_DIR, LORA_DIR, TURBO_DIR
+        from domain.training._internal.state import CHECKPOINTS_DIR, LORA_DIR, TURBO_DIR
 
         assert CHECKPOINTS_DIR.exists()
         assert LORA_DIR.exists()
@@ -56,14 +56,14 @@ class TestExportFormats:
     """Tests for model export format handling."""
 
     def test_list_export_formats(self):
-        from domains.training.export import list_export_formats
+        from domain.training._internal.export import list_export_formats
 
         formats = list_export_formats()
         assert isinstance(formats, dict)
         assert len(formats) > 0
 
     def test_export_formats_have_descriptions(self):
-        from domains.training.export import list_export_formats
+        from domain.training._internal.export import list_export_formats
 
         formats = list_export_formats()
         for name, desc in formats.items():
@@ -76,7 +76,7 @@ class TestModelMetadata:
     """Tests for model metadata handling."""
 
     def test_create_model_metadata(self):
-        from domains.training.export import ModelMetadata
+        from domain.training._internal.export import ModelMetadata
 
         metadata = ModelMetadata(
             name="test_model",
@@ -88,7 +88,7 @@ class TestModelMetadata:
         assert metadata.model_type == "slnet"
 
     def test_metadata_has_timestamp(self):
-        from domains.training.export import ModelMetadata
+        from domain.training._internal.export import ModelMetadata
 
         metadata = ModelMetadata(
             name="test_model",
@@ -98,7 +98,7 @@ class TestModelMetadata:
         assert metadata.created_at is not None
 
     def test_metadata_to_dict(self):
-        from domains.training.export import ModelMetadata
+        from domain.training._internal.export import ModelMetadata
 
         metadata = ModelMetadata(
             name="test_model",
@@ -115,14 +115,14 @@ class TestExportConfig:
     """Tests for export configuration."""
 
     def test_export_config_defaults(self):
-        from domains.training.export import ExportConfig
+        from domain.training._internal.export import ExportConfig
 
         config = ExportConfig()
         assert config.output_path is not None
         assert config.format is not None
 
     def test_export_config_custom(self):
-        from domains.training.export import ExportConfig
+        from domain.training._internal.export import ExportConfig
 
         config = ExportConfig(
             output_path="test_model",
@@ -136,7 +136,7 @@ class TestTrainingStateConstants:
     """Tests for training state constants."""
 
     def test_valid_checkpoint_name_regex(self):
-        from domains.training.state import VALID_CKPT_NAME
+        from domain.training._internal.state import VALID_CKPT_NAME
 
         assert VALID_CKPT_NAME.match("my-checkpoint_v1")
         assert VALID_CKPT_NAME.match("checkpoint.001")
@@ -144,7 +144,7 @@ class TestTrainingStateConstants:
         assert not VALID_CKPT_NAME.match("checkpoint/slash")
 
     def test_max_checkpoint_disk_mb(self):
-        from domains.training.state import MAX_CHECKPOINT_DISK_MB
+        from domain.training._internal.state import MAX_CHECKPOINT_DISK_MB
 
         assert MAX_CHECKPOINT_DISK_MB > 0
         assert isinstance(MAX_CHECKPOINT_DISK_MB, int)
@@ -154,13 +154,13 @@ class TestTrainingSequenceExtended:
     """Extended tests for training sequence."""
 
     def test_sequence_ordered_phases_count(self):
-        from domains.training.sequence import TrainingSequence
+        from domain.training._internal.sequence import TrainingSequence
 
         phases = TrainingSequence.ordered_phases()
         assert len(phases) == 9
 
     def test_phase_result_to_dict(self):
-        from domains.training.sequence import PhaseResult, TrainingSequence
+        from domain.training._internal.sequence import PhaseResult, TrainingSequence
 
         pr = PhaseResult(
             phase=TrainingSequence.TRAIN,
@@ -173,7 +173,7 @@ class TestTrainingSequenceExtended:
         assert d["metrics"]["loss"] == 0.5
 
     def test_training_run_config_defaults(self):
-        from domains.training.sequence import TrainingRunConfig
+        from domain.training._internal.sequence import TrainingRunConfig
 
         config = TrainingRunConfig()
         assert config.skip_generate is False
@@ -181,7 +181,7 @@ class TestTrainingSequenceExtended:
         assert config.early_stop_patience == 3
 
     def test_training_sequence_state_transitions(self):
-        from domains.training.sequence import TrainingSequence, TrainingSequenceState
+        from domain.training._internal.sequence import TrainingSequence, TrainingSequenceState
 
         state = TrainingSequenceState()
         assert state.current_phase == TrainingSequence.IDLE
@@ -199,7 +199,7 @@ class TestComprehensiveTrainerExtended:
     """Extended tests for ComprehensiveTrainer."""
 
     def test_trainer_multiple_runs(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -210,7 +210,7 @@ class TestComprehensiveTrainerExtended:
                 assert result.success
 
     def test_trainer_result_performance(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -223,7 +223,7 @@ class TestComprehensiveTrainerExtended:
             assert perf["total_duration_s"] > 0
 
     def test_trainer_phases_recorded(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)

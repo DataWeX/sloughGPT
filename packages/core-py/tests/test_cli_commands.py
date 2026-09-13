@@ -357,7 +357,7 @@ class TestVMPrograms:
         result = subprocess.run(
             [sys.executable, "-c",
              "import sys; sys.path.insert(0, 'packages/core-py'); "
-             "from domains.shell.vm_programs import PROGRAMS; "
+             "from domain.shell._internal.vm_programs import PROGRAMS; "
              "print(f'Found {len(PROGRAMS)} programs'); "
              "assert 'test_hello' in PROGRAMS; "
              "assert 'hello' in PROGRAMS; "
@@ -384,7 +384,7 @@ class TestVMPrograms:
         result = subprocess.run(
             [sys.executable, "-c",
              "import sys; sys.path.insert(0, 'packages/core-py'); "
-             "from domains.shell.vm_programs import PROGRAMS; "
+             "from domain.shell._internal.vm_programs import PROGRAMS; "
              + "; ".join(
                  f"assert '{name}' in PROGRAMS, 'Missing {name}'"
                  for name in required

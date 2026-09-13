@@ -1,10 +1,10 @@
-"""Coverage tests for domains/shell/kernel_syscall.py."""
+"""Coverage tests for domain.shell._internal.kernel_syscall.py."""
 
 import pytest
 
-import domains.shell.kernel_syscall as ksc
-from domains.shell.kernel_process import Process, ProcessState, Priority
-from domains.shell.kernel_syscall import (
+import domain.shell._internal.kernel_syscall as ksc
+from domain.shell._internal.kernel_process import Process, ProcessState, Priority
+from domain.shell._internal.kernel_syscall import (
     SyscallNumber,
     SyscallResult,
     SyscallTable,

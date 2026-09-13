@@ -7,15 +7,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domains.collections.training_bridge import (
+from domain.collections._internal.training_bridge import (
     TrainingDataConfig,
     TrainingDataAdapter,
     RecordToTrainingSource,
     TrainingDatasetBuilder,
     CollectorTrainingBridge,
 )
-from domains.collections.sources import Record
-from domains.collections.collector import Collector
+from domain.collections._internal.sources import Record
+from domain.collections._internal.collector import Collector
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────

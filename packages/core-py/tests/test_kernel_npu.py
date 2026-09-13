@@ -6,9 +6,9 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
 
-from domains.shell.kernel_npu import NPUDevice
-from domains.shell.kernel_devices import DeviceState
-from domains.shell.kernel_syscall import SyscallResult
+from domain.shell._internal.kernel_npu import NPUDevice
+from domain.shell._internal.kernel_devices import DeviceState
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ class TestModelLoading:
 
     def test_load_numpy(self):
         npu = NPUDevice()
-        with patch("domains.shell.kernel_npu.NPUDevice._load_numpy") as mock_load:
+        with patch("domain.shell._internal.kernel_npu.NPUDevice._load_numpy") as mock_load:
             mock_load.return_value = _make_provider()
             provider = npu.load("/tmp/test.npy", "m1")
             mock_load.assert_called_once_with("/tmp/test.npy", "m1")
@@ -80,7 +80,7 @@ class TestModelLoading:
 
     def test_load_slnc(self):
         npu = NPUDevice()
-        with patch("domains.shell.kernel_npu.NPUDevice._load_slnc") as mock_load:
+        with patch("domain.shell._internal.kernel_npu.NPUDevice._load_slnc") as mock_load:
             mock_load.return_value = _make_provider()
             npu.load("/tmp/model.slnc", "slnc1")
             mock_load.assert_called_once()
@@ -88,14 +88,14 @@ class TestModelLoading:
 
     def test_load_python(self):
         npu = NPUDevice()
-        with patch("domains.shell.kernel_npu.NPUDevice._load_python") as mock_load:
+        with patch("domain.shell._internal.kernel_npu.NPUDevice._load_python") as mock_load:
             mock_load.return_value = {"type": "python"}
             npu.load("/tmp/model.py", "py1")
             assert "py1" in npu._models
 
     def test_load_dataset_csv(self):
         npu = NPUDevice()
-        with patch("domains.shell.kernel_npu.NPUDevice._load_dataset") as mock_load:
+        with patch("domain.shell._internal.kernel_npu.NPUDevice._load_dataset") as mock_load:
             mock_load.return_value = {"type": "dataset"}
             npu.load("/tmp/data.csv", "ds1")
             assert "ds1" in npu._models
@@ -112,7 +112,7 @@ class TestModelLoading:
 
     def test_load_default_name_from_path(self):
         npu = NPUDevice()
-        with patch("domains.shell.kernel_npu.NPUDevice._load_numpy") as mock_load:
+        with patch("domain.shell._internal.kernel_npu.NPUDevice._load_numpy") as mock_load:
             mock_load.return_value = _make_provider()
             npu.load("/tmp/data.npy")
             assert "data.npy" in npu._models
@@ -323,7 +323,7 @@ class TestIoctl:
 
     def test_ioctl_load(self):
         npu = NPUDevice()
-        with patch("domains.shell.kernel_npu.NPUDevice._load_numpy") as mock_load:
+        with patch("domain.shell._internal.kernel_npu.NPUDevice._load_numpy") as mock_load:
             mock_load.return_value = _make_provider()
             result = npu.ioctl("LOAD", "/tmp/test.npy", "m1")
             assert result.success is True
@@ -379,7 +379,7 @@ class TestIoctl:
 
     def test_ioctl_memory(self):
         npu = NPUDevice()
-        with patch("domains.shell.kernel_npu.NPUDevice.memory") as mock_mem:
+        with patch("domain.shell._internal.kernel_npu.NPUDevice.memory") as mock_mem:
             mock_mem.return_value = {"rss_mb": 1.0}
             result = npu.ioctl("MEMORY")
             assert result.success is True

@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from domains.inference.slonet_provider import (
+from domain.inference._internal.slonet_provider import (
     SloNetChatProvider,
     _get_slo_layernorm,
     _split_fused_qkv,

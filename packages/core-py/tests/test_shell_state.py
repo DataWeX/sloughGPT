@@ -12,7 +12,7 @@ Covers:
 import json
 import pytest
 from pathlib import Path
-from domains.shell.state import ShellState, _MAX_HISTORY, set_shell_state_db, reset_shell_state_db
+from domain.shell._internal.state import ShellState, _MAX_HISTORY, set_shell_state_db, reset_shell_state_db
 
 
 @pytest.fixture(autouse=True)

@@ -6,7 +6,7 @@ quality, sync status, and timestamp.
 
 Usage::
 
-    from domains.training.mobile_training_store import get_training_store
+    from domain.training._internal.mobile_training_store import get_training_store
 
     store = get_training_store()
     store.add_pair("hello", "hi there", "s1", quality=1)

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from domains.shared import find_repo_root
-from domains.training.executor import get_training_executor
+from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
@@ -260,7 +260,7 @@ async def recover_job(job_id: str):
     # (skipping partial/corrupt checkpoints — a crash mid-write can leave the
     # newest file unreadable). The loaded bundle is handed to train() so no
     # second load happens in the worker thread.
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     manager = CheckpointManager(checkpoint_dir)
     resume_bundle = None
@@ -345,7 +345,7 @@ async def recover_job(job_id: str):
 
     def run_recovery(job_id_: str = jid):
         try:
-            from domains.training.train_pipeline import SloughGPTTrainer
+            from domain.training._internal.train_pipeline import SloughGPTTrainer
 
             # Reuse the SAME trainer configuration builder as /training/start so
             # the recovered run continues with the original job's hyperparameters
@@ -495,13 +495,13 @@ async def get_recovery_stats():
 
 
 # ── Unified /training/* → core service + infrastructure wrapping ──────────────
-# Business logic: domains.training.service (pure, no HTTP)
+# Business logic: domain.training._internal.service (pure, no HTTP)
 # HTTP wrapping: success_response, error classification, audit logging (this file)
 
 
 @router.get("/training/log")
 async def training_log():
-    from domains.training.service import get_log
+    from domain.training._internal.service import get_log
     from schemas.common import success_response
 
     lines = await get_log()
@@ -521,7 +521,7 @@ async def training_stop():
 
 @router.get("/training/checkpoints")
 async def training_list_checkpoints():
-    from domains.training.service import list_checkpoints
+    from domain.training._internal.service import list_checkpoints
     from schemas.common import success_response
 
     checkpoints = await list_checkpoints()
@@ -530,8 +530,8 @@ async def training_list_checkpoints():
 
 @router.delete("/training/checkpoints/{name}")
 async def training_delete_checkpoint(name: str):
-    from domains.training.service import delete_checkpoint
-    from domains.training.state import VALID_CKPT_NAME
+    from domain.training._internal.service import delete_checkpoint
+    from domain.training._internal.state import VALID_CKPT_NAME
     from schemas.common import safe_audit_log, success_response
 
     if not VALID_CKPT_NAME.match(name):
@@ -544,7 +544,7 @@ async def training_delete_checkpoint(name: str):
 
 @router.post("/training/checkpoints/{name}/load")
 async def training_load_checkpoint(name: str):
-    from domains.training.service import load_checkpoint
+    from domain.training._internal.service import load_checkpoint
     from schemas.common import classify_and_raise, success_response
 
     try:
@@ -556,7 +556,7 @@ async def training_load_checkpoint(name: str):
 
 @router.get("/training/checkpoints/{name}/download")
 async def training_download_checkpoint(name: str):
-    from domains.training.service import download_checkpoint_path
+    from domain.training._internal.service import download_checkpoint_path
     from fastapi.responses import FileResponse
     from schemas.common import raise_error
 
@@ -568,7 +568,7 @@ async def training_download_checkpoint(name: str):
 
 @router.get("/training/checkpoints/{name}/info")
 async def training_checkpoint_info(name: str):
-    from domains.training.service import checkpoint_info
+    from domain.training._internal.service import checkpoint_info
     from schemas.common import classify_and_raise, success_response
 
     try:
@@ -582,7 +582,7 @@ async def training_checkpoint_info(name: str):
 async def training_metrics_export():
     import json as _json
 
-    from domains.training.service import get_all_checkpoint_data
+    from domain.training._internal.service import get_all_checkpoint_data
     from fastapi.responses import Response
 
     checkpoints = await get_all_checkpoint_data()
@@ -619,7 +619,7 @@ async def training_stream(request: Request):
 
     # Get training state for config
     try:
-        from domains.training.service import get_state
+        from domain.training._internal.service import get_state
 
         config = get_state().config or {}
         if not config:
@@ -664,7 +664,7 @@ async def training_from_sessions_stream(request: Request):
     from .sse_stream import build_training_sse_response
 
     try:
-        from domains.training.service import get_state
+        from domain.training._internal.service import get_state
 
         config = get_state().config or {}
         if not config or config.get("method") != "from-sessions":
@@ -721,7 +721,7 @@ async def get_training_recommendation(
     try:
         from pathlib import Path as _P
 
-        from domains.training.training_advisor import get_training_tips, recommend_training_config
+        from domain.training._internal.training_advisor import get_training_tips, recommend_training_config
         
         dataset_size = 0
         avg_quality = None
@@ -801,7 +801,7 @@ async def get_training_trends(
     from schemas.common import success_response
 
     try:
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         outcomes = tracker.load_outcomes()
@@ -928,7 +928,7 @@ async def training_monitor_status():
     Useful for detecting training issues like loss divergence,
     gradient explosion, or resource exhaustion.
     """
-    from domains.training.monitor import get_training_monitor
+    from domain.training._internal.monitor import get_training_monitor
 
     monitor = get_training_monitor()
     return success_response(data=monitor.get_status())
@@ -942,7 +942,7 @@ async def training_monitor_alerts(severity: str | None = None, limit: int = 50):
         severity: Filter by severity (info, warning, error, critical)
         limit: Maximum number of alerts to return
     """
-    from domains.training.monitor import AlertSeverity, get_training_monitor
+    from domain.training._internal.monitor import AlertSeverity, get_training_monitor
 
     monitor = get_training_monitor()
     severity_filter = AlertSeverity(severity) if severity else None
@@ -960,7 +960,7 @@ async def training_monitor_metrics(limit: int = 100):
     Args:
         limit: Maximum number of metrics snapshots to return
     """
-    from domains.training.monitor import get_training_monitor
+    from domain.training._internal.monitor import get_training_monitor
 
     monitor = get_training_monitor()
     metrics = monitor.get_metrics_history(limit=limit)
@@ -973,7 +973,7 @@ async def training_monitor_metrics(limit: int = 100):
 @router.post("/monitor/reset")
 async def training_monitor_reset():
     """Reset training monitor state."""
-    from domains.training.monitor import get_training_monitor
+    from domain.training._internal.monitor import get_training_monitor
 
     monitor = get_training_monitor()
     monitor.reset()
@@ -986,7 +986,7 @@ async def training_monitor_resources():
 
     Returns CPU, memory, and GPU usage with alerts if thresholds exceeded.
     """
-    from domains.training.monitor import get_training_monitor
+    from domain.training._internal.monitor import get_training_monitor
 
     monitor = get_training_monitor()
     resources = monitor.check_resources()

@@ -4,8 +4,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Protocol, runtime_checkable
 
-from domains.collections.registry import CollectionRegistry, get_registry
-from domains.collections.sources import Record
+from domain.collections._internal.registry import CollectionRegistry, get_registry
+from domain.collections._internal.sources import Record
 
 
 @runtime_checkable

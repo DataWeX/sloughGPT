@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from domains.training.gguf_export import (
+from domain.training._internal.gguf_export import (
     ARCHITECTURE_MAPPINGS,
     QUANTIZATION_TYPES,
     MOBILE_RECOMMENDED,

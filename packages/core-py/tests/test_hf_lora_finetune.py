@@ -6,21 +6,21 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloTransformer, SloTransformerBlock, SloMultiHeadAttention,
     SloFeedForward, SloLinear, SloEmbedding, SloRMSNorm,
     Tensor, cross_entropy,
 )
-from domains.training.lora import (
+from domain.training._internal.lora import (
     LoRALinear, LoRAEmbedding, LoRAConfig, LoRAType,
     apply_lora_to_model, get_lora_parameters, count_lora_parameters,
     _walk_slo_tree, _set_nested,
 )
-from domains.training.hf_lora_finetune import (
+from domain.training._internal.hf_lora_finetune import (
     HFLoraConfig, HFLoraTrainer, _LoRADataset,
     load_lora_adapter, merge_lora_adapter,
 )
-from domains.training.trainer_protocol import TrainResult
+from domain.training._internal.trainer_protocol import TrainResult
 
 
 # ============================================================================

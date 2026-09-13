@@ -6,7 +6,7 @@ import os
 import pytest
 from unittest.mock import MagicMock, patch
 
-from domains.shell.repl import ShellREPL, _color, _COLOR_ENABLED
+from domain.shell._internal.repl import ShellREPL, _color, _COLOR_ENABLED
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -41,25 +41,25 @@ def _make_repl():
     repl._aliases = {"q": "exit", "quit": "exit", "h": "help", "?": "help"}
     repl._ext_cmds = {}
 
-    from domains.shell.io import MemoryIO
+    from domain.shell._internal.io import MemoryIO
     repl.io = MemoryIO()
 
-    from domains.shell.console import Console
+    from domain.shell._internal.console import Console
     repl.console = Console(repl.io, has_readline=False)
 
     from domains.logging import ShellLogger, LogLevel
     repl.log = ShellLogger("slo.shell.test", level=LogLevel.DEBUG)
 
-    from domains.shell.log_buffer import get_log_buffer
+    from domain.shell._internal.log_buffer import get_log_buffer
     repl._log_buffer = get_log_buffer()
 
-    from domains.shell.log_display import LineModeLogDisplay
+    from domain.shell._internal.log_display import LineModeLogDisplay
     repl._log_display = LineModeLogDisplay(repl._log_buffer)
 
-    from domains.shell.audit import get_shell_audit_logger
+    from domain.shell._internal.audit import get_shell_audit_logger
     repl._audit = get_shell_audit_logger()
 
-    from domains.shell.permissions import ShellPermissions
+    from domain.shell._internal.permissions import ShellPermissions
     repl._perms = ShellPermissions()
 
     repl.COMMANDS = {}
@@ -182,7 +182,7 @@ class TestUpdateColorState:
         repl = _make_repl()
         repl._env["NO_COLOR"] = "1"
         repl._update_color_state()
-        import domains.shell.repl as mod
+        import domain.shell._internal.repl as mod
         # After update, colors should be empty
         assert mod._C_CYAN == "" or mod._COLOR_ENABLED is False
 

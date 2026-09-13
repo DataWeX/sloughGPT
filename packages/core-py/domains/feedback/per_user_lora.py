@@ -589,7 +589,7 @@ class PerUserLoRAStore:
         # Run eval if enabled
         if self.run_eval:
             try:
-                from domains.feedback.lora_eval import get_lora_evaluator
+                from domain.feedback._internal.lora_eval import get_lora_evaluator
 
                 evaluator = get_lora_evaluator()
                 if not evaluator.available():

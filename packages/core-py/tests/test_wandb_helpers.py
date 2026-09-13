@@ -1,4 +1,4 @@
-"""Tests for domains.training.wandb_helpers: env flags, config flattening, API job tracker."""
+"""Tests for domain.training._internal.wandb_helpers: env flags, config flattening, API job tracker."""
 
 import sys
 import types
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domains.infrastructure.config import get_config
-from domains.training.wandb_helpers import (
+from domain.infrastructure._internal.config import get_config
+from domain.training._internal.wandb_helpers import (
     create_training_tracker_for_api_job,
     default_wandb_project,
     flatten_for_wandb_config,

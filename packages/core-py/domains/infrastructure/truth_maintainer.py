@@ -150,7 +150,7 @@ class TruthMaintainer:
         if not query_texts:
             return 0.0
 
-        from domains.training.slonet import Tensor, SloAdam
+        from domain.training._internal.slonet import Tensor, SloAdam
 
         params = encoder.parameters()
         optimizer = SloAdam(lr=lr)

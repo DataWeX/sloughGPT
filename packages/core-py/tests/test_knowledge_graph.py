@@ -1,7 +1,7 @@
-"""Comprehensive tests for domains.cognitive.knowledge_graph_v2."""
+"""Comprehensive tests for domain.cognitive._internal.knowledge_graph_v2."""
 
 import pytest
-from domains.cognitive.knowledge_graph_v2 import (
+from domain.cognitive._internal.knowledge_graph_v2 import (
     Entity,
     Fact,
     KnowledgeGraph,

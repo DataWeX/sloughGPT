@@ -1,10 +1,10 @@
-"""Tests for domains.cognitive.core — CognitiveCore, enums, and dataclasses."""
+"""Tests for domain.cognitive._internal.core — CognitiveCore, enums, and dataclasses."""
 
 import time
 import pytest
 from dataclasses import fields as dc_fields
 
-from domains.cognitive.core import (
+from domain.cognitive._internal.core import (
     ThinkingMode,
     ReasoningType,
     ThoughtProcess,

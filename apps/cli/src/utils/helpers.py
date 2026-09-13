@@ -141,7 +141,7 @@ def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = 
     def _log_stderr():
         if proc.stderr:
             try:
-                from domains.shell.log_buffer import get_log_buffer, LogEntry
+                from domain.shell._internal.log_buffer import get_log_buffer, LogEntry
                 buf = get_log_buffer()
                 for line in proc.stderr:
                     line = line.rstrip()

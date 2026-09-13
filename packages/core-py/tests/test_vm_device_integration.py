@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domains.shell.vm import (
+from domain.shell._internal.vm import (
     Assembler,
     CPU,
     DeviceBus,
@@ -30,13 +30,13 @@ from domains.shell.vm import (
     set_device_register_map,
     _STANDALONE_DEVICES,
 )
-from domains.shell.kernel_devices import (
+from domain.shell._internal.kernel_devices import (
     DeviceType,
     DeviceDriver,
     DeviceTable,
 )
-from domains.shell.kernel_syscall import SyscallResult
-from domains.shell.ioctl import IoctlCommand
+from domain.shell._internal.kernel_syscall import SyscallResult
+from domain.shell._internal.ioctl import IoctlCommand
 
 
 # =============================================================================
@@ -517,32 +517,32 @@ class TestISADocumentation:
     """Tests that new instructions are documented in OPCODES."""
 
     def test_dev_table_open_documented(self):
-        from domains.shell.vm import OPCODES
+        from domain.shell._internal.vm import OPCODES
         assert "DEV_TABLE_OPEN" in OPCODES
         assert "fd" in OPCODES["DEV_TABLE_OPEN"].lower()
 
     def test_dev_table_call_documented(self):
-        from domains.shell.vm import OPCODES
+        from domain.shell._internal.vm import OPCODES
         assert "DEV_TABLE_CALL" in OPCODES
 
     def test_dev_table_close_documented(self):
-        from domains.shell.vm import OPCODES
+        from domain.shell._internal.vm import OPCODES
         assert "DEV_TABLE_CLOSE" in OPCODES
 
     def test_dev_table_info_documented(self):
-        from domains.shell.vm import OPCODES
+        from domain.shell._internal.vm import OPCODES
         assert "DEV_TABLE_INFO" in OPCODES
 
     def test_dev_reg_read_documented(self):
-        from domains.shell.vm import OPCODES
+        from domain.shell._internal.vm import OPCODES
         assert "DEV_REG_READ" in OPCODES
 
     def test_dev_reg_write_documented(self):
-        from domains.shell.vm import OPCODES
+        from domain.shell._internal.vm import OPCODES
         assert "DEV_REG_WRITE" in OPCODES
 
     def test_all_new_instructions_in_opcode_table(self):
-        from domains.shell.vm import _OPCODE_TABLE
+        from domain.shell._internal.vm import _OPCODE_TABLE
         new_instructions = [
             "DEV_TABLE_OPEN", "DEV_TABLE_CALL", "DEV_TABLE_CLOSE",
             "DEV_TABLE_INFO", "DEV_REG_READ", "DEV_REG_WRITE",

@@ -117,7 +117,7 @@ class TestLoadKnowledgeAdapter:
         assert ki.load_knowledge_adapter(model) is model
 
     def test_merges_delta_into_model(self, adapter_paths):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(vocab_size=64, n_embed=16, n_layer=1, n_head=2,
                                block_size=16, max_seq_len=64)
         facts = [{"content": "some knowledge fact here"}]
@@ -151,7 +151,7 @@ class TestLoadKnowledgeAdapter:
         assert ki.load_knowledge_adapter(model, merge=False) is model
 
     def test_merge_skips_missing_keys(self, adapter_paths):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(vocab_size=64, n_embed=16, n_layer=1, n_head=2,
                                block_size=16, max_seq_len=64)
         delta = ki._DELTA_PATH

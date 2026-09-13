@@ -1,4 +1,4 @@
-"""Tests for domains.shell.file_manager — unified VFS + host FS resolution."""
+"""Tests for domain.shell._internal.file_manager — unified VFS + host FS resolution."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.shell.file_manager import (
+from domain.shell._internal.file_manager import (
     FileManager,
     get_file_manager,
     reset_file_manager,

@@ -8,7 +8,7 @@ class TestConsciousnessManager:
     """Tests for ConsciousnessManager in the context pipeline."""
 
     def _make_manager(self, engine=None):
-        from domains.context.managers import ConsciousnessManager
+        from domain.context._internal.managers import ConsciousnessManager
         return ConsciousnessManager(consciousness_engine=engine)
 
     def test_returns_empty_when_no_engine(self):

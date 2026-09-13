@@ -1,7 +1,7 @@
 """Tests for SessionKVManager — per-session KV cache management."""
 from __future__ import annotations
 
-from domains.inference.session_kv_manager import SessionKVManager
+from domain.inference._internal.session_kv_manager import SessionKVManager
 
 
 class TestSessionKVManager:

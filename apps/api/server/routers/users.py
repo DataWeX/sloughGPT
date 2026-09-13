@@ -14,8 +14,8 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from domains.auth.models import Role, User, UserRole
-from domains.auth.repositories import UserRepository
+from domain.auth._internal.models import Role, User, UserRole
+from domain.auth._internal.repositories import UserRepository
 from infrastructure.auth import get_jwt_auth, require_auth_if_enabled
 from schemas.common import classify_and_raise, endpoint, raise_error, success_response
 

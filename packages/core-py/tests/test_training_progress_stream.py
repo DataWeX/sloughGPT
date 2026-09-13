@@ -28,7 +28,7 @@ class TestTrainingProgressCallbacks:
     """Tests the training progress callback system."""
 
     def test_progress_callback_receives_events(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -42,7 +42,7 @@ class TestTrainingProgressCallbacks:
             assert events[-1]["phase"] == "complete"
 
     def test_progress_callback_has_run_id(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -55,7 +55,7 @@ class TestTrainingProgressCallbacks:
             assert events[0]["run_id"] == result.run_id
 
     def test_progress_callback_has_progress_percentage(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -69,7 +69,7 @@ class TestTrainingProgressCallbacks:
             assert events[-1]["progress"] == 1.0
 
     def test_progress_events_are_monotonic(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -82,7 +82,7 @@ class TestTrainingProgressCallbacks:
             assert progress_values == sorted(progress_values)
 
     def test_multiple_progress_callbacks(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -96,7 +96,7 @@ class TestTrainingProgressCallbacks:
             assert len(events1) == len(events2)
 
     def test_progress_callback_error_does_not_crash(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -120,7 +120,7 @@ class TestSSEEnvelopeIntegration:
     """Tests SSE envelope format for training progress events."""
 
     def test_sse_event_creation(self):
-        from domains.api.sse_envelope import sse_event
+        from domain.api._internal.sse_envelope import sse_event
 
         event = sse_event(
             stream="training",
@@ -133,7 +133,7 @@ class TestSSEEnvelopeIntegration:
         assert "TRAINING" in event
 
     def test_sse_envelope_creation(self):
-        from domains.api.sse_envelope import SSEEnvelope, StreamPhase, StreamStatus
+        from domain.api._internal.sse_envelope import SSEEnvelope, StreamPhase, StreamStatus
 
         env = SSEEnvelope(
             stream="training",
@@ -145,7 +145,7 @@ class TestSSEEnvelopeIntegration:
         assert env.phase == StreamPhase.TRAIN.value
 
     def test_sse_training_event_format(self):
-        from domains.api.sse_envelope import sse_event
+        from domain.api._internal.sse_envelope import sse_event
 
         event = sse_event(
             stream="training",
@@ -192,7 +192,7 @@ class TestProgressStreamingEndToEnd:
     """End-to-end tests for progress streaming through the full pipeline."""
 
     def test_trainer_emits_all_phase_events(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -206,7 +206,7 @@ class TestProgressStreamingEndToEnd:
                 assert phase in phases_seen, f"Missing phase: {phase}"
 
     def test_trainer_progress_includes_phase_durations(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -218,7 +218,7 @@ class TestProgressStreamingEndToEnd:
             assert result.performance["phase_durations"]["training"] > 0
 
     def test_trainer_result_has_all_phases(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)

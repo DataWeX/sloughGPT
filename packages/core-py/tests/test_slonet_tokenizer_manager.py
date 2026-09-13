@@ -6,7 +6,7 @@ import os
 import tempfile
 import pytest
 import numpy as np
-from domains.training.tokenizer_manager import TokenizerManager
+from domain.training._internal.tokenizer_manager import TokenizerManager
 
 
 # ── TokenizerManager ───────────────────────────────────────────────────────

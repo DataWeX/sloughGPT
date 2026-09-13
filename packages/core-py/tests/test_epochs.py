@@ -15,8 +15,8 @@ import math
 import pytest
 import numpy as np
 
-from domains.inference.slo_format import load_soul
-from domains.training.train_pipeline import (
+from domain.inference._internal.slo_format import load_soul
+from domain.training._internal.train_pipeline import (
     SloughGPTTrainer,
     TrainerConfig,
     TextDataset,

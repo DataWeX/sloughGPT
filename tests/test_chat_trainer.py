@@ -95,14 +95,14 @@ class TestVocab:
 
 class TestCrossEntropyLoss:
     def test_perfect_prediction(self):
-        from domains.training.chat_trainer import _cross_entropy_loss
+        from domains.training.distill_gpt2 import _cross_entropy_loss
         logits = np.array([[0.0, 100.0, 0.0], [0.0, 0.0, 100.0]])
         targets = np.array([1, 2])
         loss = _cross_entropy_loss(logits, targets)
         assert loss < 0.01
 
     def test_worse_prediction(self):
-        from domains.training.chat_trainer import _cross_entropy_loss
+        from domains.training.distill_gpt2 import _cross_entropy_loss
         logits = np.array([[100.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
         targets = np.array([1, 2])
         loss = _cross_entropy_loss(logits, targets)

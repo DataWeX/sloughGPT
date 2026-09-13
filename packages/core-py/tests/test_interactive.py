@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from domains.shell.io import MemoryIO
-from domains.shell.interactive import InteractivePrompt, _RawKey, _read_raw_key, _KEY_UP, _KEY_DOWN, _KEY_ENTER, _KEY_ESC, _KEY_BACKSPACE, _KEY_CTRL_C, _KEY_CHAR
+from domain.shell._internal.io import MemoryIO
+from domain.shell._internal.interactive import InteractivePrompt, _RawKey, _read_raw_key, _KEY_UP, _KEY_DOWN, _KEY_ENTER, _KEY_ESC, _KEY_BACKSPACE, _KEY_CTRL_C, _KEY_CHAR
 
 
 def _make_prompt(feeds: list[str] | None = None) -> tuple[InteractivePrompt, MemoryIO]:
@@ -137,7 +137,7 @@ class TestConsoleInteractiveIntegration:
     """Verify Console.select/confirm/ask delegate to InteractivePrompt."""
 
     def test_console_select_uses_interactive(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("2")
         c = Console(io, has_readline=False)
@@ -145,14 +145,14 @@ class TestConsoleInteractiveIntegration:
         assert result == "b"
 
     def test_console_confirm_uses_interactive(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
         assert c.confirm("Go?") is True
 
     def test_console_ask_uses_interactive(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("test input")
         c = Console(io, has_readline=False)
@@ -193,7 +193,7 @@ class TestSelectMultiFallback:
         assert result == ["a"]
 
     def test_console_select_multi(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1,2")
         c = Console(io, has_readline=False)
@@ -242,7 +242,7 @@ class TestSelectWithDetailsFallback:
         assert result == "a"
 
     def test_console_select_with_details(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -279,7 +279,7 @@ class TestConfirmMultiFallback:
         assert result == ["a"]
 
     def test_console_confirm_multi(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -385,14 +385,14 @@ class TestEditFallback:
         assert p.edit("Name:", validator=v) == "123"
 
     def test_console_edit(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("test")
         c = Console(io, has_readline=False)
         assert c.edit("Value:") == "test"
 
     def test_console_edit_with_validator(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("abc")
         c = Console(io, has_readline=False)
@@ -419,7 +419,7 @@ class TestPagerFallback:
         assert len(io._output) == 1
 
     def test_console_pager(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.pager("test content")
@@ -434,7 +434,7 @@ class TestPagerFallback:
 
 class TestTreeMultiConsole:
     def test_tree_multi_does_not_crash(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -443,7 +443,7 @@ class TestTreeMultiConsole:
         assert isinstance(result, list)
 
     def test_tree_multi_renders_tree(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -457,13 +457,13 @@ class TestTreeMultiConsole:
 
 class TestTerminalHelpers:
     def test_terminal_width_returns_int(self):
-        from domains.shell.interactive import _terminal_width
+        from domain.shell._internal.interactive import _terminal_width
         w = _terminal_width()
         assert isinstance(w, int)
         assert w > 0
 
     def test_terminal_height_returns_int(self):
-        from domains.shell.interactive import _terminal_height
+        from domain.shell._internal.interactive import _terminal_height
         h = _terminal_height()
         assert isinstance(h, int)
         assert h > 0
@@ -473,7 +473,7 @@ class TestTerminalHelpers:
 
 class TestPageKeys:
     def test_key_constants_exist(self):
-        from domains.shell.interactive import _KEY_PAGE_UP, _KEY_PAGE_DOWN
+        from domain.shell._internal.interactive import _KEY_PAGE_UP, _KEY_PAGE_DOWN
         assert _KEY_PAGE_UP == "page_up"
         assert _KEY_PAGE_DOWN == "page_down"
 
@@ -526,7 +526,7 @@ class TestDiff:
         assert len(io._output) > 0
 
     def test_console_diff(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.diff("old", ["line1"], "new", ["line2"])
@@ -545,7 +545,7 @@ class TestPasswordFallback:
         assert p.password("Password:") == ""
 
     def test_console_password(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("pass123")
         c = Console(io, has_readline=False)
@@ -572,7 +572,7 @@ class TestConfirmActionFallback:
         assert p.confirm_action("Destroy data", danger=True) is True
 
     def test_console_confirm_action(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -592,7 +592,7 @@ class TestCountdownFallback:
         assert len(io._output) > 0
 
     def test_console_countdown(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         assert c.countdown(1) is True
@@ -627,7 +627,7 @@ class TestBanner:
         assert any("Fallback" in line for line in io._output)
 
     def test_console_banner(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.banner("Console Banner")
@@ -647,7 +647,7 @@ class TestSliderFallback:
         assert isinstance(result, int)
 
     def test_console_slider(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -670,7 +670,7 @@ class TestToggleFallback:
         assert p.toggle("Feature:", default=True) is False
 
     def test_console_toggle(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -695,7 +695,7 @@ class TestTagInputFallback:
         assert result == ["existing"]
 
     def test_console_tag_input(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("x, y")
         c = Console(io, has_readline=False)
@@ -722,7 +722,7 @@ class TestSelectTreeFallback:
         assert p.select_tree("Pick:", {}) is None
 
     def test_console_select_tree(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -752,7 +752,7 @@ class TestSpinWaitFallback:
         assert result is False
 
     def test_console_spin_wait(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         assert c.spin_wait("Done", lambda: True) is True
@@ -782,7 +782,7 @@ class TestConfirmDangerousFallback:
         assert p.confirm_dangerous("Action") is False
 
     def test_console_confirm_dangerous(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("yes, I am sure")
         c = Console(io, has_readline=False)
@@ -803,7 +803,7 @@ class TestFileBrowserFallback:
         assert result is None or isinstance(result, str)
 
     def test_console_file_browser(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -830,7 +830,7 @@ class TestProgressStep:
         assert len(io._output) == 3
 
     def test_console_progress_step(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_step(["Step 1", "Step 2"], 0)
@@ -855,7 +855,7 @@ class TestMultiChoiceFallback:
         assert isinstance(result, list)
 
     def test_console_multi_choice(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -878,7 +878,7 @@ class TestDatePickerFallback:
         assert result == "2025-06-15"
 
     def test_console_date_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -908,7 +908,7 @@ class TestColorPickerRgbFallback:
         assert b == 0xcc
 
     def test_console_color_picker_rgb(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -936,7 +936,7 @@ class TestConfirmTimeoutFallback:
         assert p.confirm_timeout("Go?") is False
 
     def test_console_confirm_timeout(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -967,7 +967,7 @@ class TestSpinUntilFallback:
         assert result == 3
 
     def test_console_spin_until(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         result = c.spin_until("Done", lambda: "ok", lambda x: x == "ok")
@@ -993,7 +993,7 @@ class TestProgressMulti:
         assert len(io._output) == 1
 
     def test_console_progress_multi(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_multi([("A", 10, 20), ("B", 5, 5)])
@@ -1015,7 +1015,7 @@ class TestTimePickerFallback:
         assert result == "03:30 PM"
 
     def test_console_time_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1047,7 +1047,7 @@ class TestProgressETA:
         assert len(io._output) > 0
 
     def test_console_progress_eta(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_eta("Task", 30, 60, elapsed=3.0)
@@ -1073,7 +1073,7 @@ class TestSelectWithSearchFallback:
         assert result == ""
 
     def test_console_select_with_search(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -1099,7 +1099,7 @@ class TestTableSelectFallback:
         assert result == 0
 
     def test_console_table_select(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1122,7 +1122,7 @@ class TestYearPickerFallback:
         assert result == 2025
 
     def test_console_year_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1145,7 +1145,7 @@ class TestMonthPickerFallback:
         assert result == 6
 
     def test_console_month_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1171,7 +1171,7 @@ class TestConfirmListFallback:
         assert isinstance(result, list)
 
     def test_console_confirm_list(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1197,7 +1197,7 @@ class TestTableEditFallback:
         assert result == [["x"]]
 
     def test_console_table_edit(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1225,7 +1225,7 @@ class TestDurationPickerFallback:
         assert result == 0
 
     def test_console_duration_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1253,7 +1253,7 @@ class TestConfirmTextFallback:
         assert p.confirm_text("Proceed?", "go", hint="Type 'go' to proceed") is True
 
     def test_console_confirm_text(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("ok")
         c = Console(io, has_readline=False)
@@ -1278,7 +1278,7 @@ class TestTableSortFallback:
         assert len(result) == 3
 
     def test_console_table_sort(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1316,7 +1316,7 @@ class TestNotify:
         assert len(io._output) > 0
 
     def test_console_notify(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.notify("Info", "test", level="info")
@@ -1338,7 +1338,7 @@ class TestWeekPickerFallback:
         assert result == 20
 
     def test_console_week_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1361,7 +1361,7 @@ class TestQuarterPickerFallback:
         assert result == 3
 
     def test_console_quarter_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1385,7 +1385,7 @@ class TestConfirmDeleteFallback:
         assert p.confirm_delete("files", count=5) is True
 
     def test_console_confirm_delete(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("delete")
         c = Console(io, has_readline=False)
@@ -1404,7 +1404,7 @@ class TestConfirmOverwriteFallback:
         assert p.confirm_overwrite("/path/file.txt") is True
 
     def test_console_confirm_overwrite(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("overwrite")
         c = Console(io, has_readline=False)
@@ -1430,7 +1430,7 @@ class TestProgressRing:
         assert len(io._output) > 0
 
     def test_console_progress_ring(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_ring("Task", 75, 100)
@@ -1451,7 +1451,7 @@ class TestTimezonePickerFallback:
         assert result == "US/Eastern"
 
     def test_console_timezone_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -1474,7 +1474,7 @@ class TestCurrencyPickerFallback:
         assert result == "EUR"
 
     def test_console_currency_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -1497,7 +1497,7 @@ class TestLanguagePickerFallback:
         assert result == "es"
 
     def test_console_language_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -1521,7 +1521,7 @@ class TestConfirmWithPreviewFallback:
         assert p.confirm_with_preview("Apply?", "changes", default=True) is False
 
     def test_console_confirm_with_preview(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -1548,7 +1548,7 @@ class TestSelectWithPreviewFallback:
     def test_console_select_with_preview(self):
         def preview(opt):
             return f"Preview: {opt}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("2")
         c = Console(io, has_readline=False)
@@ -1580,7 +1580,7 @@ class TestProgressBar:
         assert len(io._output) > 0
 
     def test_console_progress_bar(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar("Task", 75, 100)
@@ -1603,7 +1603,7 @@ class TestDateRangePickerFallback:
         assert result[1] == "2025-06-30"
 
     def test_console_date_range_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("2025-03-01")
         io.feed("2025-03-31")
@@ -1627,7 +1627,7 @@ class TestColorPickerFallback:
         assert result == "#ff0000"
 
     def test_console_color_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -1651,7 +1651,7 @@ class TestTimeRangePickerFallback:
         assert result[1] == "18:00"
 
     def test_console_time_range_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("09:00")
         io.feed("17:00")
@@ -1679,7 +1679,7 @@ class TestNumberRangePickerFallback:
         assert result == 25
 
     def test_console_number_range_picker(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -1706,7 +1706,7 @@ class TestConfirmWithDetailsFallback:
         assert p.confirm_with_details("Proceed?", details, default=True) is False
 
     def test_console_confirm_with_details(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -1729,7 +1729,7 @@ class TestSpinnerWithStatusFallback:
         assert "Building" in output
 
     def test_console_spinner_with_status(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_with_status("Working", "in progress")
@@ -1750,7 +1750,7 @@ class TestSelectWithFilterFallback:
         assert result in ["X", "Y"]
 
     def test_console_select_with_filter(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -1780,7 +1780,7 @@ class TestConfirmWithPreviewAndEditFallback:
         assert result[1] in ["original", "edited text"]
 
     def test_console_confirm_with_preview_and_edit(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -1807,7 +1807,7 @@ class TestProgressBarColored:
         assert len(io._output) > 0
 
     def test_console_progress_bar_colored(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_colored("Task", 75, 100)
@@ -1829,7 +1829,7 @@ class TestSpinnerWithProgressFallback:
         assert "Building" in output
 
     def test_console_spinner_with_progress(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_with_progress("Working", 75, 100)
@@ -1852,7 +1852,7 @@ class TestSelectWithIconsFallback:
         assert result in ["Yes", "No"]
 
     def test_console_select_with_icons(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -1877,7 +1877,7 @@ class TestConfirmWithWarningFallback:
         assert p.confirm_with_warning("Continue?", "Caution", default=True) is False
 
     def test_console_confirm_with_warning(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -1903,7 +1903,7 @@ class TestProgressBarETA:
         assert len(io._output) > 0
 
     def test_console_progress_bar_eta(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_eta("Task", 75, 100, 15.0)
@@ -1925,7 +1925,7 @@ class TestSpinnerWithDotsFallback:
         assert "Building" in output
 
     def test_console_spinner_with_dots(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_with_dots("Working")
@@ -1948,7 +1948,7 @@ class TestSelectWithPaginationFallback:
         assert result in options
 
     def test_console_select_with_pagination(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -1978,7 +1978,7 @@ class TestSelectWithSearchAndPreviewFallback:
     def test_console_select_with_search_and_preview(self):
         def preview(opt):
             return f"Info: {opt}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2010,7 +2010,7 @@ class TestProgressBarWithStatus:
         assert len(io._output) > 0
 
     def test_console_progress_bar_with_status(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_with_status("Task", 75, 100, "almost done")
@@ -2037,7 +2037,7 @@ class TestSpinnerWithEtaFallback:
         assert "Working" in output
 
     def test_console_spinner_with_eta(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_with_eta("Task", 3.0, progress=0.25)
@@ -2060,7 +2060,7 @@ class TestSelectWithGroupingFallback:
         assert result in ["X", "Y"]
 
     def test_console_select_with_grouping(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2089,7 +2089,7 @@ class TestMultiSelectWithPreviewFallback:
     def test_console_multi_select_with_preview(self):
         def preview(opt):
             return f"Info: {opt}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -2111,7 +2111,7 @@ class TestProgressBarIndeterminateFallback:
         assert len(io._output) > 0
 
     def test_console_progress_bar_indeterminate(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_indeterminate("Task", "working")
@@ -2134,7 +2134,7 @@ class TestTableWithSearchFallback:
         assert len(result) == 1
 
     def test_console_table_with_search(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -2156,7 +2156,7 @@ class TestSelectWithCountdownFallback:
         assert result in ["X", "Y"]
 
     def test_console_select_with_countdown(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2180,7 +2180,7 @@ class TestConfirmWithCountdownFallback:
         assert p.confirm_with_countdown("Go?", timeout=5, default=True) is False
 
     def test_console_confirm_with_countdown(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -2206,7 +2206,7 @@ class TestProgressBarStripe:
         assert len(io._output) > 0
 
     def test_console_progress_bar_stripe(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_stripe("Task", 75, 100)
@@ -2233,7 +2233,7 @@ class TestSpinnerWithDotsEtaFallback:
         assert "Working" in output
 
     def test_console_spinner_with_dots_eta(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_with_dots_eta("Task", 3.0, progress=0.25)
@@ -2256,7 +2256,7 @@ class TestConfirmWithPhraseFallback:
         assert p.confirm_with_phrase("Confirm:") is False
 
     def test_console_confirm_with_phrase(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("yes")
         c = Console(io, has_readline=False)
@@ -2282,7 +2282,7 @@ class TestProgressBarGradient:
         assert len(io._output) > 0
 
     def test_console_progress_bar_gradient(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_gradient("Task", 75, 100)
@@ -2304,7 +2304,7 @@ class TestSpinnerPulseFallback:
         assert "Building" in output
 
     def test_console_spinner_pulse(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_pulse("Working", duration=0.1)
@@ -2333,7 +2333,7 @@ class TestSelectWithPreviewAndIconsFallback:
     def test_console_select_with_preview_and_icons(self):
         def preview(label):
             return f"Info: {label}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2357,7 +2357,7 @@ class TestMultiConfirmFallback:
         assert all(result.values())
 
     def test_console_multi_confirm(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -2379,7 +2379,7 @@ class TestProgressBarSegmented:
         assert len(io._output) > 0
 
     def test_console_progress_bar_segmented(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_segmented("Task", [("green", 70), ("red", 30)])
@@ -2401,7 +2401,7 @@ class TestSpinnerWaveFallback:
         assert "Building" in output
 
     def test_console_spinner_wave(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_wave("Working", duration=0.1)
@@ -2424,7 +2424,7 @@ class TestSelectWithTagsFallback:
         assert result in ["A", "B"]
 
     def test_console_select_with_tags(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2446,7 +2446,7 @@ class TestSelectWithPreviewAndGroupingFallback:
     def test_console_select_with_preview_and_grouping(self):
         def preview(opt):
             return f"Info: {opt}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2475,7 +2475,7 @@ class TestConfirmListWithPreviewFallback:
     def test_console_confirm_list_with_preview(self):
         def preview(item):
             return f"Preview: {item}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -2497,7 +2497,7 @@ class TestProgressBarMultiSegment:
         assert len(io._output) > 0
 
     def test_console_progress_bar_multi_segment(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_multi_segment("Task", [("a", 30, "green"), ("b", 70, "red")])
@@ -2519,7 +2519,7 @@ class TestSpinnerBounceFallback:
         assert "Building" in output
 
     def test_console_spinner_bounce(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_bounce("Working", duration=0.1)
@@ -2540,7 +2540,7 @@ class TestSelectWithConfirmFallback:
         assert result in ["X", "Y"]
 
     def test_console_select_with_confirm(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2560,7 +2560,7 @@ class TestConfirmWithPreviewAndTimeoutFallback:
         assert p.confirm_with_preview_and_timeout("OK?", "preview", timeout=5) is True
 
     def test_console_confirm_with_preview_and_timeout(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -2586,7 +2586,7 @@ class TestProgressBarAnimated:
         assert len(io._output) > 0
 
     def test_console_progress_bar_animated(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_animated("Task", 75, 100)
@@ -2608,7 +2608,7 @@ class TestSpinnerClockFallback:
         assert "Building" in output
 
     def test_console_spinner_clock(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_clock("Working", duration=0.1)
@@ -2635,7 +2635,7 @@ class TestSelectWithPreviewAndConfirmFallback:
     def test_console_select_with_preview_and_confirm(self):
         def preview(opt):
             return f"Detail: {opt}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2655,7 +2655,7 @@ class TestConfirmWithPreviewAndCountdownFallback:
         assert p.confirm_with_preview_and_countdown("OK?", "preview", timeout=5) is False
 
     def test_console_confirm_with_preview_and_countdown(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -2676,7 +2676,7 @@ class TestProgressBarWithStatusAndEta:
         assert len(io._output) > 0
 
     def test_console_progress_bar_with_status_and_eta(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_with_status_and_eta("Task", 75, 100, "done")
@@ -2698,7 +2698,7 @@ class TestSpinnerWithMessagesFallback:
         assert "Building" in output
 
     def test_console_spinner_with_messages(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_with_messages("Working", ["a", "b"], duration=0.1)
@@ -2725,7 +2725,7 @@ class TestSelectWithFilterAndPreviewFallback:
     def test_console_select_with_filter_and_preview(self):
         def preview(opt):
             return f"Detail: {opt}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2746,7 +2746,7 @@ class TestSelectTableWithPreviewFallback:
     def test_console_select_table_with_preview(self):
         def preview(row):
             return f"Info: {row[0]}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2768,7 +2768,7 @@ class TestConfirmWithPreviewAndEditWithTimeoutFallback:
         assert ok is False
 
     def test_console_confirm_with_preview_and_edit_with_timeout(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -2790,7 +2790,7 @@ class TestProgressBarWithEtaAndStatus:
         assert len(io._output) > 0
 
     def test_console_progress_bar_with_eta_and_status(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_with_eta_and_status("Task", 75, 100, "done", elapsed=5.0)
@@ -2812,7 +2812,7 @@ class TestSpinnerWithDotsAndStatusFallback:
         assert "Building" in output
 
     def test_console_spinner_with_dots_and_status(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_with_dots_and_status("Working", "busy", duration=0.1)
@@ -2839,7 +2839,7 @@ class TestSelectWithPreviewAndCountdownFallback:
     def test_console_select_with_preview_and_countdown(self):
         def preview(opt):
             return f"Detail: {opt}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2861,7 +2861,7 @@ class TestMultiSelectWithFilterFallback:
         assert isinstance(result, list)
 
     def test_console_multi_select_with_filter(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2881,7 +2881,7 @@ class TestConfirmWithCountdownAndPreviewFallback:
         assert p.confirm_with_countdown_and_preview("OK?", "preview", timeout=5) is False
 
     def test_console_confirm_with_countdown_and_preview(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("y")
         c = Console(io, has_readline=False)
@@ -2902,7 +2902,7 @@ class TestProgressBarWithSteps:
         assert len(io._output) > 0
 
     def test_console_progress_bar_with_steps(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.progress_bar_with_steps("Task", ["a", "b", "c"], 2)
@@ -2924,7 +2924,7 @@ class TestSpinnerWithEtaMessageFallback:
         assert "Building" in output
 
     def test_console_spinner_with_eta_message(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         c = Console(io, has_readline=False)
         c.spinner_with_eta_message("Working", 100, duration=0.1)
@@ -2944,7 +2944,7 @@ class TestTableWithSearchAndPreviewFallback:
     def test_console_table_with_search_and_preview(self):
         def preview(row):
             return f"Info: {row[0]}"
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2966,7 +2966,7 @@ class TestSelectWithFilterAndConfirmFallback:
         assert result in ["X", "Y"]
 
     def test_console_select_with_filter_and_confirm(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -2988,7 +2988,7 @@ class TestHistorySearchFallback:
         assert result is None
 
     def test_console_history_search(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -3011,7 +3011,7 @@ class TestProcessManagerFallback:
         assert result is None
 
     def test_console_process_manager(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -3033,7 +3033,7 @@ class TestLogViewerFallback:
         assert result is None
 
     def test_console_log_viewer(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -3056,7 +3056,7 @@ class TestConfigEditorFallback:
         assert result == {}
 
     def test_console_config_editor(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -3078,7 +3078,7 @@ class TestDiffViewerFallback:
         assert result == "same"
 
     def test_console_diff_viewer(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -3102,7 +3102,7 @@ class TestInteractiveSearchFallback:
         assert result in ["x", "y"]
 
     def test_console_interactive_search(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("1")
         c = Console(io, has_readline=False)
@@ -3130,7 +3130,7 @@ class TestWizardFallback:
         assert isinstance(result, dict)
 
     def test_console_wizard(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("val")
         c = Console(io, has_readline=False)
@@ -3153,7 +3153,7 @@ class TestSpreadsheetEditorFallback:
         assert result == [["val"]]
 
     def test_console_spreadsheet_editor(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -3177,7 +3177,7 @@ class TestHierarchicalMenuFallback:
         assert result is None
 
     def test_console_hierarchical_menu(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -3204,7 +3204,7 @@ class TestFormFallback:
         assert isinstance(result, dict)
 
     def test_console_form(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("val")
         c = Console(io, has_readline=False)
@@ -3227,7 +3227,7 @@ class TestPlaylistManagerFallback:
         assert result == []
 
     def test_console_playlist_manager(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -3250,7 +3250,7 @@ class TestKanbanBoardFallback:
         assert result == {"A": [], "B": []}
 
     def test_console_kanban_board(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)
@@ -3272,7 +3272,7 @@ class TestCalendarViewFallback:
         assert result is None
 
     def test_console_calendar_view(self):
-        from domains.shell.console import Console
+        from domain.shell._internal.console import Console
         io = MemoryIO()
         io.feed("")
         c = Console(io, has_readline=False)

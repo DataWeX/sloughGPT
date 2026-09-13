@@ -1,10 +1,10 @@
-"""Tests for domains/inference/semantic_cache.py."""
+"""Tests for domain.inference._internal.semantic_cache.py."""
 
 import time
 
 import pytest
 
-from domains.inference.semantic_cache import (
+from domain.inference._internal.semantic_cache import (
     CacheEntry,
     CachedSoulEngine,
     SemanticCache,

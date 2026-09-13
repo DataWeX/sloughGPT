@@ -483,7 +483,7 @@ class TestNewSDKEndpoints(unittest.TestCase):
 
     def test_get_auto_train_status(self):
         self._client().get_auto_train_status()
-        self._assert_called('GET', '/training/status')
+        self._assert_called('GET', '/settings/training/auto-train/status')
 
     def test_list_auto_train_checkpoints(self):
         self._client().list_auto_train_checkpoints()

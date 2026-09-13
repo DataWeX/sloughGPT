@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.rlhf import (
+from domain.training._internal.rlhf import (
     RLHFMetric,
     RLHFConfig,
     _as_array,
@@ -13,7 +13,7 @@ from domains.training.rlhf import (
     RewardModel,
     ValueHead,
 )
-from domains.training.slonet import Tensor
+from domain.training._internal.slonet import Tensor
 
 
 # ── RLHFMetric ──────────────────────────────────────────────────────────────

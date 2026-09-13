@@ -54,7 +54,7 @@ warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*"
 warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
 
 # ── Structured logging (centralized) ─────────────────────────────────
-from domains.logging.config import setup_logging  # noqa: E402
+from domain.logging._internal.config import setup_logging  # noqa: E402
 
 _log_setup = setup_logging()
 logger = logging.getLogger("slo")
@@ -70,22 +70,6 @@ logger.info(
 from config import ServerConfig  # noqa: E402
 
 cfg = ServerConfig.from_env()
-
-# Wire new typed config system alongside existing config for migration
-try:
-    from domains.infrastructure.config import AppConfig, get_config
-
-    _new_cfg: AppConfig = get_config()
-    logger.info(
-        "Config: %s @ %s:%d (features=%s)",
-        _new_cfg.model.name,
-        _new_cfg.server.host,
-        _new_cfg.server.port,
-        {k: v for k, v in _new_cfg.features.model_dump().items() if not k.startswith("_")},
-        extra={"tag": "START"},
-    )
-except Exception as exc:
-    logger.warning("New config system unavailable: %s", exc, extra={"tag": "START"})
 
 
 # ── Lifespan ────────────────────────────────────────────────────────
@@ -104,6 +88,21 @@ async def lifespan(app_inst: FastAPI):
         orch = StartupOrchestrator(app_inst, cfg, profile=profile)
         await orch.run()
 
+        # Wire new typed config system (deferred from module level)
+        try:
+            from domain.infrastructure._internal.config import get_config
+
+            _new_cfg = get_config()
+            logger.info(
+                "Config: %s @ %s:%d",
+                _new_cfg.model.name,
+                _new_cfg.server.host,
+                _new_cfg.server.port,
+                extra={"tag": "START"},
+            )
+        except Exception as exc:
+            logger.warning("New config system unavailable: %s", exc, extra={"tag": "START"})
+
         # Start PGQ core infra engine (background thread)
         try:
             from domains.infrastructure.pugqeep import PGQ
@@ -115,7 +114,7 @@ async def lifespan(app_inst: FastAPI):
 
         # Start auto-trainer if SLO_AUTO_TRAIN=1
         try:
-            from domains.training.auto_trainer import start_auto_trainer_if_enabled
+            from domain.training._internal.auto_trainer import start_auto_trainer_if_enabled
 
             start_auto_trainer_if_enabled()
         except Exception as e:
@@ -128,7 +127,7 @@ async def lifespan(app_inst: FastAPI):
 
         def _rag_init_and_ingest():
             try:
-                from domains.cognitive.rag_service import get_rag_service
+                from domain.cognitive._internal.rag_service import get_rag_service
 
                 _rag = get_rag_service()
                 if _rag.stats().get("total_chunks", 0) == 0:
@@ -175,7 +174,7 @@ async def lifespan(app_inst: FastAPI):
 
         # Stop auto-trainer
         try:
-            from domains.training.auto_trainer import stop_auto_trainer
+            from domain.training._internal.auto_trainer import stop_auto_trainer
 
             stop_auto_trainer()
         except (ImportError, AttributeError) as e:
@@ -247,11 +246,12 @@ async def export_openapi_spec():
     from fastapi.responses import JSONResponse
     return JSONResponse(content=app.openapi())
 
-# GZip omitted — Starlette GZipMiddleware buffers responses, which kills SSE streaming.
-# /chat/stream and /inference/generate/stream send chunked text/event-stream that must
-# not be buffered. Non-streaming responses (health, models, etc.) are <5KB — compression
-# overhead exceeds bandwidth savings at that size. Add back only if large payload
-# endpoints (/datasets/export, /training/export-text) need it, using per-route config.
+# Selective GZip compression — skips SSE streaming (text/event-stream) and
+# small responses (<500 bytes). Large JSON payloads (/datasets/export,
+# /training/export-text, /training/metrics) get compressed for bandwidth savings.
+from infrastructure.compression import SelectiveGZipMiddleware  # noqa: E402
+
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
 
 # Register structured middleware from the infrastructure package.
 # NOTE: CORSMiddleware is registered LAST (after all other middleware) so it is
@@ -395,7 +395,7 @@ def _start_feedback_workflow() -> None:
 def _start_health_monitor() -> None:
     """Start the model health monitor background thread at server startup."""
     try:
-        from domains.feedback.model_health import get_health_monitor
+        from domain.feedback._internal.model_health import get_health_monitor
 
         enabled = os.environ.get("SLO_HEALTH_MONITOR", "true").lower() == "true"
         if not enabled:
@@ -443,7 +443,7 @@ def _start_watchdog() -> None:
                     return True
                 if server_state.training_active:
                     return True
-                from domains.models.provider import get_provider
+                from domain.models._internal.provider import get_provider
 
                 router = get_provider("default")
                 if router is None:
@@ -720,7 +720,14 @@ if __name__ == "__main__":
         ]
 
     try:
+        import sys as _sys
+        _sys.stderr.write(f"[DEBUG] uvicorn.run host={uvicorn_kw.get('host')} port={uvicorn_kw.get('port')}\n")
+        _sys.stderr.flush()
         uvicorn.run(**uvicorn_kw)
+
+        uvicorn.run(**uvicorn_kw)
+        _sys.stderr.write("[DEBUG] uvicorn.run returned\n")
+        _sys.stderr.flush()
     except KeyboardInterrupt:
         logger.info("Interrupted by user", extra={"tag": "START"})
     except Exception as e:

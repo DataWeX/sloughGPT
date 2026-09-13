@@ -8,6 +8,11 @@
     "./next": "./next.js",
     "./react": "./react.js"
   },
+  "scripts": {
+    "lint": "echo 'No source to lint'",
+    "typecheck": "echo 'No source to typecheck'",
+    "test": "echo 'No tests'"
+  },
   "dependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",

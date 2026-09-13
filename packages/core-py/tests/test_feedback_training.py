@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from domains.feedback.training import (
+from domain.feedback._internal.training import (
     TrainingExample, DPOPair, FeedbackTrainer, create_training_pipeline,
 )
 
@@ -58,14 +58,14 @@ class TestFeedbackTrainer:
             "feedback": self.mock_fb,
         }[name]
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_init(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         trainer = FeedbackTrainer(db_path="/tmp/test.db")
         assert trainer._messages is self.mock_msgs
         assert trainer._feedback is self.mock_fb
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_message_by_id(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         self.mock_msgs.find_one.return_value = {"_id": "m1", "content": "hi"}
@@ -73,14 +73,14 @@ class TestFeedbackTrainer:
         result = trainer._message_by_id("m1")
         assert result["content"] == "hi"
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_message_by_id_not_found(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         self.mock_msgs.find_one.return_value = None
         trainer = FeedbackTrainer()
         assert trainer._message_by_id("nope") is None
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_prompt_for(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         msg = _make_message("m1", "assistant", "response", created_at="2024-01-02")
@@ -88,7 +88,7 @@ class TestFeedbackTrainer:
         trainer = FeedbackTrainer()
         assert trainer._prompt_for(msg) == "user question"
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_prompt_for_empty(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         msg = _make_message("m1", "assistant", "response")
@@ -96,7 +96,7 @@ class TestFeedbackTrainer:
         trainer = FeedbackTrainer()
         assert trainer._prompt_for(msg) == ""
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_get_training_examples_basic(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         fb = _make_feedback("m1", "thumbs_up", 0.9)
@@ -111,14 +111,14 @@ class TestFeedbackTrainer:
         assert examples[0].response == "response"
         assert examples[0].rating == "thumbs_up"
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_get_training_examples_filters_none_rating(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         self.mock_fb.find.return_value = [{"rating": None}]
         trainer = FeedbackTrainer()
         assert trainer.get_training_examples() == []
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_get_training_examples_filters_low_quality(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         fb = _make_feedback("m1", "thumbs_up", 0.3)
@@ -129,7 +129,7 @@ class TestFeedbackTrainer:
         trainer = FeedbackTrainer()
         assert trainer.get_training_examples(min_quality=0.5) == []
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_get_training_examples_filters_non_assistant(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         self.mock_fb.find.return_value = [_make_feedback("m1", "thumbs_up")]
@@ -137,7 +137,7 @@ class TestFeedbackTrainer:
         trainer = FeedbackTrainer()
         assert trainer.get_training_examples() == []
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_get_training_examples_limit(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         fbs = [_make_feedback(f"m{i}", "thumbs_up") for i in range(5)]
@@ -149,7 +149,7 @@ class TestFeedbackTrainer:
         trainer = FeedbackTrainer()
         assert len(trainer.get_training_examples(limit=3)) == 3
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_prepare_dpo_pairs(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         msg_up = _make_message("m1", "assistant", "good response", conv_id="c1")
@@ -167,7 +167,7 @@ class TestFeedbackTrainer:
         assert pairs[0].chosen == "good response"
         assert pairs[0].rejected == "bad response"
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_prepare_dpo_pairs_no_pairs(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         msg = _make_message("m1", "assistant", "r", conv_id="c1")
@@ -176,7 +176,7 @@ class TestFeedbackTrainer:
         trainer = FeedbackTrainer()
         assert trainer.prepare_dpo_pairs() == []
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_prepare_sft_data(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         fb = _make_feedback("m1", "thumbs_up")
@@ -191,7 +191,7 @@ class TestFeedbackTrainer:
         assert sft[0]["prompt"] == "prompt"
         assert sft[0]["response"] == "response"
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_prepare_sft_data_filters_non_positive(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         fb = _make_feedback("m1", "thumbs_down")
@@ -202,7 +202,7 @@ class TestFeedbackTrainer:
         trainer = FeedbackTrainer()
         assert trainer.prepare_sft_data() == []
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_export_for_alignment_dpo(self, MockMogDB, tmp_path):
         MockMogDB.return_value = self.mock_mog
         msg_up = _make_message("m1", "assistant", "good", conv_id="c1")
@@ -219,7 +219,7 @@ class TestFeedbackTrainer:
         assert "dpo" in results
         assert Path(results["dpo"]).exists()
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_export_for_alignment_sft(self, MockMogDB, tmp_path):
         MockMogDB.return_value = self.mock_mog
         fb = _make_feedback("m1", "thumbs_up")
@@ -233,7 +233,7 @@ class TestFeedbackTrainer:
         assert "sft" in results
         assert Path(results["sft"]).exists()
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_export_for_alignment_reward(self, MockMogDB, tmp_path):
         MockMogDB.return_value = self.mock_mog
         fb = _make_feedback("m1", "thumbs_up")
@@ -249,7 +249,7 @@ class TestFeedbackTrainer:
             data = json.loads(f.readline())
         assert data["reward"] == 1.0
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_get_training_stats(self, MockMogDB):
         MockMogDB.return_value = self.mock_mog
         msg_up = _make_message("m1", "assistant", "good", conv_id="c1")
@@ -268,7 +268,7 @@ class TestFeedbackTrainer:
         assert stats["thumbs_up"] == 1
         assert stats["thumbs_down"] == 1
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_export_dpo(self, MockMogDB, tmp_path):
         MockMogDB.return_value = self.mock_mog
         self.mock_msgs.find.return_value = []
@@ -279,7 +279,7 @@ class TestFeedbackTrainer:
         assert count == 0
         assert Path(path).exists()
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_export_sft(self, MockMogDB, tmp_path):
         MockMogDB.return_value = self.mock_mog
         self.mock_fb.find.return_value = []
@@ -296,7 +296,7 @@ class TestFeedbackTrainer:
 
 class TestFactory:
 
-    @patch("domains.feedback.training.MogDB")
+    @patch("domain.feedback._internal.training.MogDB")
     def test_create_training_pipeline(self, MockMogDB):
         trainer = create_training_pipeline()
         assert isinstance(trainer, FeedbackTrainer)

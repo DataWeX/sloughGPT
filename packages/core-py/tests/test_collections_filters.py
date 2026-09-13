@@ -1,11 +1,11 @@
-"""Tests for domains.collections.filters — LengthFilter, DedupFilter, KeywordFilter, RegexFilter, LanguageFilter, SamplerFilter, TransformFilter, TruncateFilter, PrefixFilter, MetadataFilter, FilterChain; domains.collections.sources — Record."""
+"""Tests for domain.collections._internal.filters — LengthFilter, DedupFilter, KeywordFilter, RegexFilter, LanguageFilter, SamplerFilter, TransformFilter, TruncateFilter, PrefixFilter, MetadataFilter, FilterChain; domain.collections._internal.sources — Record."""
 
-from domains.collections.filters import (
+from domain.collections._internal.filters import (
     LengthFilter, DedupFilter, KeywordFilter, RegexFilter, LanguageFilter,
     SamplerFilter, TransformFilter, TruncateFilter, PrefixFilter,
     MetadataFilter, FilterChain, Filter,
 )
-from domains.collections.sources import Record
+from domain.collections._internal.sources import Record
 
 
 def _record(content: str, metadata=None) -> Record:

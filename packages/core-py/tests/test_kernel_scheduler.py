@@ -1,9 +1,9 @@
-"""Coverage tests for domains/shell/kernel_scheduler.py."""
+"""Coverage tests for domain.shell._internal.kernel_scheduler.py."""
 
 import time
 
-from domains.shell.kernel_process import Process, ProcessState, Priority
-from domains.shell.kernel_scheduler import Scheduler
+from domain.shell._internal.kernel_process import Process, ProcessState, Priority
+from domain.shell._internal.kernel_scheduler import Scheduler
 
 
 def _proc(pid, priority=Priority.NORMAL, state=ProcessState.CREATED):

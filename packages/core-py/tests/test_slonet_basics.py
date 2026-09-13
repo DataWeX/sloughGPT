@@ -1,4 +1,4 @@
-"""Tests for domains.training.slonet — Tensor creation helpers, activations,
+"""Tests for domain.training._internal.slonet — Tensor creation helpers, activations,
 broadcast functions, basic math operations.
 
 Covers: zeros/ones/randn/tensor, sigmoid/tanh/relu/gelu/silu, softmax,
@@ -17,7 +17,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor,
     zeros, ones, randn, tensor,
     sigmoid, tanh, relu, gelu_np, gelu, silu_np, silu,

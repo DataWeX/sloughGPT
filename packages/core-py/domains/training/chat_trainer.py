@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
-from domains.training.pair_extractor import extract_pairs_from_sessions
-from domains.training.quality_scorer import score_batch
-from domains.training.slonet import (
+from domain.training._internal.pair_extractor import extract_pairs_from_sessions
+from domain.training._internal.quality_scorer import score_batch
+from domain.training._internal.slonet import (
     SloAdam,
     SloTransformer,
     export_to_sou,
@@ -171,7 +171,7 @@ def _load_resume_state(
         return result
 
     logger.info("Resuming from: %s", path, extra={"tag": "TRAIN"})
-    from domains.training.slonet import import_from_sou
+    from domain.training._internal.slonet import import_from_sou
     model = import_from_sou(path)
     raw = model.metadata if hasattr(model, 'metadata') and model.metadata else {}
 
@@ -461,7 +461,7 @@ def train_chat_model(
     # Record training outcome for adaptive learning
     try:
         import time as _outcome_time
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
         outcome = TrainingOutcome(
             run_id=f"chat_{int(_outcome_time.time() * 1000)}",
             timestamp=_outcome_time.time(),
@@ -623,7 +623,7 @@ def train_from_sessions(
     config = config or ChatTrainConfig()
     pairs = extract_pairs_from_sessions(limit=config.max_pairs, session_ids=config.session_ids)
     if not pairs:
-        from domains.training.pair_extractor import extract_pairs_from_corpus
+        from domain.training._internal.pair_extractor import extract_pairs_from_corpus
         pairs = extract_pairs_from_corpus(limit=config.max_pairs)
     if not pairs:
         raise ValueError("No chat sessions found to train on")

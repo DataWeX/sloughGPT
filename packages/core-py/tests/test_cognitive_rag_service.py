@@ -1,4 +1,4 @@
-"""Comprehensive tests for domains/cognitive/rag_service.py.
+"""Comprehensive tests for domain.cognitive._internal.rag_service.py.
 
 Covers: ProductionRAGWithRealEmbeddings, RAGService (ingestion, query,
 persistence, KG integration, list, clear, stats), KGTrainingPipeline
@@ -17,8 +17,8 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-import domains.cognitive.rag_service as mod
-from domains.cognitive.rag_service import (
+import domain.cognitive._internal.rag_service as mod
+from domain.cognitive._internal.rag_service import (
     KGTrainingPipeline,
     ProductionRAGWithRealEmbeddings,
     RAGService,

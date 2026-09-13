@@ -5,7 +5,7 @@ Uses numpy autograd (SloNet) for gradient computation — no PyTorch required.
 
 Usage::
 
-    from domains.training.hf_lora_finetune import HFLoraTrainer, HFLoraConfig
+    from domain.training._internal.hf_lora_finetune import HFLoraTrainer, HFLoraConfig
 
     config = HFLoraConfig(
         model_path="models/gpt2.slnc",
@@ -30,14 +30,14 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from domains.training.lora import (
+from domain.training._internal.lora import (
     LoRAConfig, LoRALinear, apply_lora_to_model, get_lora_parameters,
     count_lora_parameters,
 )
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloTransformer, Tensor, cross_entropy,
 )
-from domains.training.trainer_protocol import TrainResult
+from domain.training._internal.trainer_protocol import TrainResult
 
 logger = logging.getLogger("slo.hf_lora")
 
@@ -129,7 +129,7 @@ class HFLoraTrainer:
 
     def load_model(self) -> SloTransformer:
         """Load model from .slnc file."""
-        from domains.inference.slonet_provider import SloNetChatProvider
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
 
         model_path = Path(self.config.model_path)
         if not model_path.exists():
@@ -162,7 +162,7 @@ class HFLoraTrainer:
 
     def _prepare_data(self):
         """Load and tokenize training data."""
-        from domains.training.train_pipeline import prepare_data
+        from domain.training._internal.train_pipeline import prepare_data
 
         data_path = self.config.data_path
         if not Path(data_path).exists():
@@ -204,7 +204,7 @@ class HFLoraTrainer:
                 )
 
             # Create optimizer (only LoRA params)
-            from domains.training.slonet import SloAdam
+            from domain.training._internal.slonet import SloAdam
             lora_tensors = [p for p in self.lora_params.values()
                            if hasattr(p, 'data') and hasattr(p, 'requires_grad')]
             optimizer = SloAdam(lr=self.config.learning_rate)
@@ -305,7 +305,7 @@ class HFLoraTrainer:
 
             # Record training outcome for adaptive learning
             try:
-                from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+                from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
                 outcome = TrainingOutcome(
                     run_id=f"hf_lora_{int(time.time() * 1000)}",
                     timestamp=time.time(),
@@ -441,8 +441,8 @@ def merge_lora_adapter(model: SloTransformer) -> SloTransformer:
     The inlined fast path in generate_numpy requires SloLinear (with
     _get_weight_T_contig), so merged layers must be replaced.
     """
-    from domains.training.lora import _walk_slo_tree, _set_nested, LoRAEmbedding
-    from domains.training.slonet import SloLinear
+    from domain.training._internal.lora import _walk_slo_tree, _set_nested, LoRAEmbedding
+    from domain.training._internal.slonet import SloLinear
 
     for path, module in _walk_slo_tree(model, []):
         if isinstance(module, LoRALinear):

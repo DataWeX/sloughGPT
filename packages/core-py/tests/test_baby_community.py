@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from domains.collections.baby_community import (
+from domain.collections._internal.baby_community import (
     CommunityRole, RelationType, CommunityConfig, Relation, Member,
     BabyCommunity, BabyCommunitySystem,
 )

@@ -54,7 +54,6 @@ BR2_PACKAGE_GZIP=y
 BR2_PACKAGE_XZ=y
 
 # System
-BR2_PACKAGE_SYSTEMD=y
 BR2_PACKAGE_DBUS=y
 
 # Python (optional, for Dait shell integration)
@@ -69,7 +68,7 @@ BR2_PACKAGE_IPTABLES=y
 BR2_PACKAGE_BASH_COMPLETION=y
 
 # Root filesystem overlay
-BR2_ROOTFS_OVERLAY="board/soughgpt/overlay"
+BR2_ROOTFS_OVERLAY="../buildroot/overlays"
 
 # Post-build and post-image scripts
 BR2_ROOTFS_POST_BUILD_SCRIPT="post-build.sh"

@@ -6,7 +6,7 @@ import os
 import tempfile
 import pytest
 
-from domains.shell.vm import (
+from domain.shell._internal.vm import (
     BlockDevice,
     DiskDevice,
     FlatFS,

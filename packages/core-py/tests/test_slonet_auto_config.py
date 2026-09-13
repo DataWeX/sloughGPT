@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from domains.training.auto_config import (
+from domain.training._internal.auto_config import (
     DatasetAnalysis,
     TrainingConfig,
 )

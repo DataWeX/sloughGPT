@@ -17,7 +17,7 @@ logger = logging.getLogger("slo.infrastructure.context_core")
 # Lazy import to avoid heavy deps at module load
 def simple_embed(text: str) -> List[float]:
     """Embed text using sentence-transformers (cached model singleton)."""
-    from domains.inference.vector_store import simple_embed as vs_embed
+    from domain.inference._internal.vector_store import simple_embed as vs_embed
     return vs_embed(text)
 
 
@@ -308,7 +308,7 @@ Be concise, accurate, and helpful."""
             # so the RAG layer never injects spurious matches into the frame.
             import asyncio
             try:
-                from domains.learner.knowledge_augmenter import enrich_with_knowledge
+                from domain.learner._internal.knowledge_augmenter import enrich_with_knowledge
                 def _query_aug():
                     result = enrich_with_knowledge(query, auto_search=False, max_facts=self.rag_top_k)
                     return result.get("facts", [])
@@ -541,7 +541,7 @@ def get_context_core() -> ContextCore:
     if _context_core is None:
         with _context_core_lock:
             if _context_core is None:
-                from domains.context.managers import (
+                from domain.context._internal.managers import (
                     PersonalityManager, MemoryManager,
                     StyleManager, TaskManager, ConsciousnessManager,
                 )
@@ -564,7 +564,7 @@ def get_context_core() -> ContextCore:
                 vs_provider = os.environ.get("MAN_VECTOR_STORE", "")
                 if vs_provider:
                     try:
-                        from domains.inference.vector_store import create_vector_store
+                        from domain.inference._internal.vector_store import create_vector_store
                         kwargs = {}
                         if vs_provider == "pinecone":
                             api_key = os.environ.get("MAN_PINECONE_API_KEY", "")

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.training.tokenizer import (
+from domain.training._internal.tokenizer import (
     SloBPE,
     SloUnigram,
     gpt2_pretokenize,
@@ -417,7 +417,7 @@ class TestSloUnigramInit:
     def test_special_token_ids(self):
         tok = SloUnigram()
         assert tok.pad_id == 0
-        assert tok.bos_id == 0
+        assert tok.bos_id == 2
         assert tok.eos_id == 0
 
 

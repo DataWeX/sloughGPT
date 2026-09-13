@@ -1,6 +1,6 @@
-"""Coverage tests for the x86 VM RBAC layer (domains.shell.vm_permissions)."""
+"""Coverage tests for the x86 VM RBAC layer (domain.shell._internal.vm_permissions)."""
 
-from domains.shell.vm_permissions import Permission, Role, X86RBAC
+from domain.shell._internal.vm_permissions import Permission, Role, X86RBAC
 
 
 class TestX86RBAC:

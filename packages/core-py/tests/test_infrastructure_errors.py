@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from domains.infrastructure.errors import (
+from domain.infrastructure._internal.errors import (
     AppError,
     AuthError,
     ConfigError,

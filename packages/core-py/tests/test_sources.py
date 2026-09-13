@@ -12,7 +12,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from domains.collections.sources import (
+from domain.collections._internal.sources import (
     Record, FileSource, UrlSource, RssSource, ApiSource, SseSource,
     WatchSource, GeneratorSource, Source,
 )

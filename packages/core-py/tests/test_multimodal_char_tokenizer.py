@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from domains.multimodal.char_tokenizer import CharTokenizer
+from domain.multimodal._internal.char_tokenizer import CharTokenizer
 
 
 class TestCharTokenizer:

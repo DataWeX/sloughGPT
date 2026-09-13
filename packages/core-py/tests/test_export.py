@@ -1,4 +1,4 @@
-"""Tests for domains/training/export.py (model export utilities).
+"""Tests for domain.training._internal.export.py (model export utilities).
 
 Tests ModelMetadata, configs, GGUF wrappers, SOU export, and format listing.
 """
@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domains.training.export import (
+from domain.training._internal.export import (
     ExportConfig,
     GGUFExportOptions,
     ModelMetadata,

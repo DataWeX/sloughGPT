@@ -13,10 +13,10 @@ Covers:
 import logging
 import pytest
 from unittest.mock import MagicMock
-from domains.logging.base import (
+from domain.logging._internal.base import (
     Logger, LogLevel, LogRecord, ErrorCode, LogTag, TaggedLogger, ChildLogger,
 )
-from domains.logging.bridge import BridgeHandler, _LEVEL_MAP
+from domain.logging._internal.bridge import BridgeHandler, _LEVEL_MAP
 
 
 class TestLogLevel:

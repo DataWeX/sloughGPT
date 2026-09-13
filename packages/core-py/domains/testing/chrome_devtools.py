@@ -4,7 +4,7 @@ ChromeDevTools MCP Integration for UI Journey Testing.
 Provides real browser automation using chrome-devtools MCP tools.
 
 Usage:
-    from domains.testing.chrome_devtools import ChromeDevToolsBrowser
+    from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
     browser = ChromeDevToolsBrowser()
     await browser.setup()

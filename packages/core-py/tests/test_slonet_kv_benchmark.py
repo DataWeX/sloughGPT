@@ -14,7 +14,7 @@ import pytest
 @pytest.fixture
 def tiny_model():
     """Minimal SloTransformer with GQA for benchmarking."""
-    from domains.training.slonet import SloTransformer
+    from domain.training._internal.slonet import SloTransformer
     model = SloTransformer(
         vocab_size=256, n_embed=64, n_layer=2,
         n_head=4, n_kv_head=2, intermediate_size=128,
@@ -287,7 +287,7 @@ class TestSingleTurnGeneration:
         assert r.shape[1] == 25
 
     def test_generate_returns_generate_result(self, tiny_model):
-        from domains.training.slonet import GenerateResult
+        from domain.training._internal.slonet import GenerateResult
         ids = np.array([[10, 20, 30]])
         r = tiny_model.generate_numpy(ids, max_new_tokens=5, temperature=0.0)
         assert isinstance(r, GenerateResult)
@@ -445,7 +445,7 @@ class TestGenerationMetrics:
     """Test GenerateResult metrics and properties."""
 
     def test_result_has_metrics(self, tiny_model):
-        from domains.training.slonet import GenerateResult
+        from domain.training._internal.slonet import GenerateResult
         ids = np.array([[10, 20, 30]])
         r = tiny_model.generate_numpy(ids, max_new_tokens=5, temperature=0.0)
         assert hasattr(r, 'metrics')
@@ -461,7 +461,7 @@ class TestGenerationMetrics:
         assert r.metrics.prompt_tokens == 3
 
     def test_metrics_finalize(self, tiny_model):
-        from domains.training.slonet import GenerationMetrics
+        from domain.training._internal.slonet import GenerationMetrics
         m = GenerationMetrics()
         m.n_tokens = 10
         m.t_start = 0.1
@@ -473,14 +473,14 @@ class TestGenerationMetrics:
         assert m.prefill_ms == 400.0
 
     def test_metrics_total_ms(self, tiny_model):
-        from domains.training.slonet import GenerationMetrics
+        from domain.training._internal.slonet import GenerationMetrics
         m = GenerationMetrics()
         m.t_start = 0.0
         m.t_end = 0.5
         assert m.total_ms == 500.0
 
     def test_metrics_ttft_ms(self, tiny_model):
-        from domains.training.slonet import GenerationMetrics
+        from domain.training._internal.slonet import GenerationMetrics
         m = GenerationMetrics()
         m.t_start = 0.0
         m.t_first_token = 0.1
@@ -538,7 +538,7 @@ class TestStackCrossTurn:
     def stack(self, tiny_model):
         from types import MethodType
         from domains.infrastructure.slonet_server import SloNetServer
-        from domains.inference.slonet_provider import SloNetChatProvider
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
 
         provider = self._StubProvider(tiny_model)
         provider._resolve_session_kv = MethodType(

@@ -16,8 +16,8 @@ import json
 import numpy as np
 import pytest
 
-from domains.shell.memory import EpisodicMemory
-from domains.shell.simulation import (
+from domain.shell._internal.memory import EpisodicMemory
+from domain.shell._internal.simulation import (
     Entity,
     EntityType,
     SimBaby,

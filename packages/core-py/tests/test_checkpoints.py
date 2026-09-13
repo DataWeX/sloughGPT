@@ -11,8 +11,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from domains.training.state import CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR
-from domains.training.checkpoints import (
+from domain.training._internal.state import CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR
+from domain.training._internal.checkpoints import (
     find_checkpoint, load_soul, load_lora_soul, _load_soul_from_path,
     _scan_all_checkpoints, list_checkpoints, delete_checkpoint,
     download_checkpoint_path, checkpoint_info, get_all_checkpoint_data,
@@ -98,7 +98,7 @@ class TestLoadSoul:
 
     def test_load_slo_file(self):
         _make_soul_file(CHECKPOINTS_DIR / "model.slo")
-        with patch("domains.training.checkpoints.read_slo_json_header", return_value=None):
+        with patch("domain.training._internal.checkpoints.read_slo_json_header", return_value=None):
             result = load_soul("model")
         assert result is not None
 
@@ -159,7 +159,7 @@ class TestLoadSoulFromPath:
     def test_load_no_meta(self):
         path = CHECKPOINTS_DIR / "nometa.soul"
         _make_soul_file(path)
-        with patch("domains.training.checkpoints.read_slo_json_header", return_value=None):
+        with patch("domain.training._internal.checkpoints.read_slo_json_header", return_value=None):
             result = _load_soul_from_path(path)
         assert result is not None
         assert result["soul"] == "unknown"

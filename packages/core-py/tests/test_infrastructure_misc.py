@@ -6,8 +6,8 @@ import io
 
 from domains.infrastructure.correlation import get_correlation_id, set_correlation_id
 from domains.infrastructure.session_core import SessionCore
-from domains.logging.base import LogLevel
-from domains.logging.console_logger import ConsoleLogger, _default_color_enabled
+from domain.logging._internal.base import LogLevel
+from domain.logging._internal.console_logger import ConsoleLogger, _default_color_enabled
 
 
 class TestCorrelationId:

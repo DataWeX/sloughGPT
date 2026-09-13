@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
-from domains.multimodal.text_encoder import TextEncoder
+from domain.multimodal._internal.text_encoder import TextEncoder
 
 
 class TestTextEncoderInit:
@@ -283,7 +283,7 @@ class TestTextEncoderStructure:
         assert result.shape[1] == 5
 
     def test_encode_tokens_returns_tensor(self):
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
         enc = TextEncoder(vocab_size=50, embed_dim=16, n_heads=2, n_layers=1, max_seq_len=10)
         token_ids = np.array([[1, 2, 3]], dtype=np.int32)
         result = enc.encode_tokens(token_ids)

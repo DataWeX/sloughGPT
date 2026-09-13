@@ -6,7 +6,7 @@ import os
 import tempfile
 import pytest
 import numpy as np
-from domains.training.tokenizer import SloBPE
+from domain.training._internal.tokenizer import SloBPE
 
 
 # ── SloBPE init ─────────────────────────────────────────────────────────────
@@ -123,13 +123,13 @@ class TestSloBPEBosEos:
 class TestPretokenizeHelpers:
 
     def test_gpt2_pretokenize(self):
-        from domains.training.tokenizer import gpt2_pretokenize
+        from domain.training._internal.tokenizer import gpt2_pretokenize
         result = gpt2_pretokenize("hello world")
         assert isinstance(result, list)
         assert len(result) > 0
 
     def test_default_pretokenize(self):
-        from domains.training.tokenizer import default_pretokenize
+        from domain.training._internal.tokenizer import default_pretokenize
         result = default_pretokenize("hello world")
         assert isinstance(result, list)
         assert len(result) > 0

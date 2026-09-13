@@ -5,7 +5,7 @@ Tests for Config System (config.py).
 import os
 import pytest
 from pydantic import ValidationError
-from domains.infrastructure.config import (
+from domain.infrastructure._internal.config import (
     AppConfig, ModelConfig, ServerConfig, FeaturesConfig,
     AuthConfig, StorageConfig,
     ConfigManager, get_config, get_config_manager,
@@ -61,42 +61,42 @@ class TestEnvOverrides:
     def test_env_override_model_name(self, monkeypatch):
         monkeypatch.setenv("SLO_MODEL__NAME", "gpt2")
         cfg = AppConfig()
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.model.name == "gpt2"
 
     def test_env_override_int(self, monkeypatch):
         monkeypatch.setenv("SLO_SERVER__PORT", "9000")
         cfg = AppConfig()
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.server.port == 9000
 
     def test_env_override_float(self, monkeypatch):
         monkeypatch.setenv("SLO_MODEL__TEMPERATURE", "0.5")
         cfg = AppConfig()
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.model.temperature == 0.5
 
     def test_env_override_bool(self, monkeypatch):
         monkeypatch.setenv("SLO_MODEL__AUTOLOAD", "false")
         cfg = AppConfig()
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.model.autoload is False
 
     def test_env_override_bool_true(self, monkeypatch):
         monkeypatch.setenv("SLO_FEATURES__WATCHDOG", "1")
         cfg = AppConfig()
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.features.watchdog is True
 
     def test_env_override_unknown_key_warns(self, monkeypatch):
         monkeypatch.setenv("SLO_UNKNOWN__KEY", "value")
         cfg = AppConfig()
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         # Should not raise
         _apply_env_overrides(cfg)
 
@@ -104,7 +104,7 @@ class TestEnvOverrides:
         monkeypatch.setenv("PATH", "/usr/bin")
         monkeypatch.setenv("HOME", "/root")
         cfg = AppConfig()
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         result = _apply_env_overrides(cfg)
         assert result == cfg  # no changes
 
@@ -198,14 +198,14 @@ class TestEdgeCases:
     def test_empty_env_no_crash(self, monkeypatch):
         monkeypatch.setenv("SLO_", "")
         cfg = AppConfig()
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)  # Should not crash
         assert cfg.model.name == "Qwen/Qwen2.5-0.5B-Instruct"
 
     def test_type_coercion_failure_falls_back(self, monkeypatch):
         monkeypatch.setenv("SLO_SERVER__PORT", "not-a-number")
         cfg = AppConfig()
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(cfg)
         assert cfg.server.port == 8000  # unchanged
 
@@ -214,21 +214,21 @@ class TestEnvEdgeBranches:
     def test_skip_env_key_ignored(self, monkeypatch):
         monkeypatch.setenv("SLO_AUTOLOAD_MODEL", "gpt2")
         monkeypatch.setenv("SLO_MODEL__NAME", "still-works")
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(AppConfig())
         assert cfg.model.name == "still-works"
 
     def test_rate_limit_env_ignored(self, monkeypatch):
         monkeypatch.setenv("SLO_RATE_LIMIT__MAX", "10")
         monkeypatch.setenv("SLO_MODEL__NAME", "ok")
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(AppConfig())
         assert cfg.model.name == "ok"
 
     def test_bare_slo_env_ignored(self, monkeypatch):
         monkeypatch.setenv("SLO", "1")
         monkeypatch.setenv("SLO_MODEL__NAME", "ok")
-        from domains.infrastructure.config import _apply_env_overrides
+        from domain.infrastructure._internal.config import _apply_env_overrides
         cfg = _apply_env_overrides(AppConfig())
         assert cfg.model.name == "ok"
 

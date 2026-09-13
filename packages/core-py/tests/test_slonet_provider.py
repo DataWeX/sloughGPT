@@ -11,7 +11,7 @@ import time
 import numpy as np
 import pytest
 
-from domains.inference.slonet_provider import (
+from domain.inference._internal.slonet_provider import (
     SloNetChatProvider,
     _CharTokenizer,
     _TreeTokenizer,
@@ -67,7 +67,7 @@ class MockModel:
                 yield layer.weight
 
     def forward_pass(self, input_ids):
-        from domains.inference.forward_pass import ForwardPassResult
+        from domain.inference._internal.forward_pass import ForwardPassResult
         batch, seq_len = input_ids.shape
         logits = np.random.randn(batch, seq_len, self.vocab_size)
         return ForwardPassResult(logits=logits, engine="mock")
@@ -825,5 +825,5 @@ class TestConvertHfToSlonet:
 
 class TestBackwardCompat:
     def test_alias_exists(self):
-        from domains.inference.slonet_provider import SlonetChatProvider
+        from domain.inference._internal.slonet_provider import SlonetChatProvider
         assert SlonetChatProvider is SloNetChatProvider

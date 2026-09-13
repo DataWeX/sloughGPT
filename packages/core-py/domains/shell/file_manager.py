@@ -6,7 +6,7 @@ host filesystem. Components call fm.read_text(path) and the FileManager
 finds the file wherever it lives.
 
 Usage:
-    from domains.shell.file_manager import get_file_manager
+    from domain.shell._internal.file_manager import get_file_manager
     fm = get_file_manager()
     content = fm.read_text("/data/shakespeare.txt")
 """
@@ -30,7 +30,7 @@ class FileManager:
     def _get_vfs(self):
         if self._vfs is None:
             try:
-                from domains.shell.vfs import get_vfs
+                from domain.shell._internal.vfs import get_vfs
                 self._vfs = get_vfs()
             except ImportError:
                 self._vfs = False  # sentinel: VFS unavailable
@@ -113,7 +113,7 @@ class FileManager:
         """Check if path is a file."""
         vfs = self._get_vfs()
         if vfs is not None:
-            from domains.shell.vfs import VFS
+            from domain.shell._internal.vfs import VFS
             if isinstance(vfs, VFS) and vfs.isfile(path):
                 return True
         return os.path.isfile(os.path.expanduser(path))
@@ -122,7 +122,7 @@ class FileManager:
         """Check if path is a directory."""
         vfs = self._get_vfs()
         if vfs is not None:
-            from domains.shell.vfs import VFS
+            from domain.shell._internal.vfs import VFS
             if isinstance(vfs, VFS) and vfs.isdir(path):
                 return True
         return os.path.isdir(os.path.expanduser(path))

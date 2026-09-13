@@ -2,8 +2,8 @@
 
 import pytest
 from pathlib import Path
-from domains.multimodal.char_tokenizer import CharTokenizer
-from domains.multimodal.bpe_tokenizer import BPETokenizer
+from domain.multimodal._internal.char_tokenizer import CharTokenizer
+from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
 
 
 # ── CharTokenizer ──────────────────────────────────────────────────────

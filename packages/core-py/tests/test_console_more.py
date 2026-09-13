@@ -1,4 +1,4 @@
-"""Coverage tests for Console (domains.shell.console)."""
+"""Coverage tests for Console (domain.shell._internal.console)."""
 
 import importlib
 import sys
@@ -6,8 +6,8 @@ import sys
 import pytest
 
 from domains.shell import console as console_mod
-from domains.shell.console import Console, _human_size, _render_inline
-from domains.shell.io import MemoryIO
+from domain.shell._internal.console import Console, _human_size, _render_inline
+from domain.shell._internal.io import MemoryIO
 
 
 def _mk(feeds=None, has_readline=False):

@@ -1,14 +1,14 @@
 """Tests for domains.training — RLHFMetric, RLHFConfig, TrackerBackend, TrackingConfig, LoRAType, LoRAConfig, DataFormat."""
 
-from domains.training.rlhf import RLHFMetric, RLHFConfig
-from domains.training.tracking import TrackerBackend, TrackingConfig
-from domains.training.lora import LoRAType, LoRAConfig
+from domain.training._internal.rlhf import RLHFMetric, RLHFConfig
+from domain.training._internal.tracking import TrackerBackend, TrackingConfig
+from domain.training._internal.lora import LoRAType, LoRAConfig
 from domains.training import DataFormat
 
 
 class TestRLHFMetric:
     def test_all_members(self):
-        assert len(RLHFMetric) == 6
+        assert len(RLHFMetric) == 7
 
     def test_values(self):
         assert RLHFMetric.REWARD.value == "reward"

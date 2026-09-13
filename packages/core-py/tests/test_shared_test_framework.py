@@ -1,7 +1,7 @@
 """Tests for TestFramework — test runner and benchmark utilities."""
 from __future__ import annotations
 
-from domains.shared.test_framework import (
+from domain.shared._internal.test_framework import (
     BenchmarkRunner,
     TestFramework,
     TestResult,

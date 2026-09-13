@@ -1,4 +1,4 @@
-"""Tests for domains/training/chat_trainer.py."""
+"""Tests for domain.training._internal.chat_trainer.py."""
 
 import threading
 
@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pytest
 
-from domains.training.chat_trainer import (
+from domain.training._internal.chat_trainer import (
     ChatTextDataset,
     ChatTrainConfig,
     _build_vocab,
@@ -16,8 +16,8 @@ from domains.training.chat_trainer import (
     train_chat_model,
     train_from_sessions,
 )
-from domains.training.helpers import cross_entropy_loss as _cross_entropy_loss
-from domains.training.pair_extractor import _SESSIONS_DIR
+from domain.training._internal.helpers import cross_entropy_loss as _cross_entropy_loss
+from domain.training._internal.pair_extractor import _SESSIONS_DIR
 
 
 def _pairs(n=6):
@@ -301,8 +301,8 @@ class TestTrainFromSessions:
     def test_no_sessions_raises(self, tmp_path, monkeypatch):
         empty = tmp_path / "empty"
         empty.mkdir()
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", empty)
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", empty)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", empty)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", empty)
         config = _tiny_config(tmp_path)
         with pytest.raises(ValueError, match="No chat sessions"):
             train_from_sessions(config)
@@ -311,7 +311,7 @@ class TestTrainFromSessions:
         """When no sessions exist, captured API conversations are used."""
         empty = tmp_path / "empty"
         empty.mkdir()
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", empty)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", empty)
         corpus = tmp_path / "corpus"
         corpus.mkdir()
         with open(corpus / "corpus.jsonl", "w") as f:
@@ -319,7 +319,7 @@ class TestTrainFromSessions:
                 {"role": "user", "content": "User message number one asking something interesting."},
                 {"role": "assistant", "content": "Assistant responds helpfully with a detailed answer about topic one."},
             ]}) + "\n")
-        monkeypatch.setattr("domains.training.pair_extractor._CAPTURED_DIR", corpus)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._CAPTURED_DIR", corpus)
         config = _tiny_config(tmp_path)
         model, meta = train_from_sessions(config)
         assert meta["num_pairs"] >= 1
@@ -337,7 +337,7 @@ class TestTrainFromSessions:
             ']}',
             encoding="utf-8",
         )
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", sess_dir)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", sess_dir)
         config = _tiny_config(tmp_path)
         model, meta = train_from_sessions(config)
         assert meta["num_pairs"] >= 1
@@ -354,12 +354,12 @@ class TestTrainFromSessions:
             ']}',
             encoding="utf-8",
         )
-        monkeypatch.setattr("domains.training.pair_extractor._SESSIONS_DIR", sess_dir)
+        monkeypatch.setattr("domain.training._internal.pair_extractor._SESSIONS_DIR", sess_dir)
 
         def boom(*a, **k):
             raise RuntimeError("eval exploded")
 
-        import domains.training.chat_trainer as ct
+        import domain.training._internal.chat_trainer as ct
         monkeypatch.setattr(ct, "evaluate_chat_model", boom)
         config = _tiny_config(tmp_path)
         model, meta = train_from_sessions(config)
@@ -389,7 +389,7 @@ class TestCheckpointMetadata:
         ckpt = tmp_path / "meta-test.soul"
         assert ckpt.exists()
 
-        from domains.training.slonet import import_from_sou
+        from domain.training._internal.slonet import import_from_sou
         loaded = import_from_sou(str(ckpt))
         md = loaded.metadata
         assert md is not None
@@ -405,7 +405,7 @@ class TestCheckpointMetadata:
             checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
         )
         _, _ = train_chat_model(self.PAIRS, config=config)
-        from domains.training.slonet import import_from_sou
+        from domain.training._internal.slonet import import_from_sou
         loaded = import_from_sou(str(tmp_path / "vocab-test.soul"))
         stoi = loaded.metadata["stoi"]
         itos = loaded.metadata["itos"]
@@ -422,7 +422,7 @@ class TestCheckpointMetadata:
             checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
         )
         _, _ = train_chat_model(self.PAIRS, config=config)
-        from domains.training.slonet import import_from_sou
+        from domain.training._internal.slonet import import_from_sou
         loaded = import_from_sou(str(tmp_path / "opt-test.soul"))
         opt_state = loaded.metadata.get("optimizer_state")
         assert opt_state is not None
@@ -535,7 +535,7 @@ class TestResumeCheckpoint:
             checkpoint_dir=str(tmp_path), min_pair_quality=0.0,
         )
         _, meta1 = train_chat_model(self.PAIRS_A, config=config)
-        from domains.training.slonet import import_from_sou
+        from domain.training._internal.slonet import import_from_sou
         ckpt1 = import_from_sou(str(tmp_path / "opt-resume.soul"))
         t1 = ckpt1.metadata["optimizer_state"]["t"]
 
@@ -583,7 +583,7 @@ class TestResumeCheckpoint:
         )
         _, returned_meta = train_chat_model(self.PAIRS_A, config=config)
 
-        from domains.training.slonet import import_from_sou
+        from domain.training._internal.slonet import import_from_sou
         loaded = import_from_sou(str(tmp_path / "meta-match.soul"))
         ckpt_meta = loaded.metadata
 
@@ -637,7 +637,7 @@ class TestCorruptedMetadata:
         import json, struct
         import struct as _struct
         from pathlib import Path
-        from domains.training.slonet import export_to_sou, import_from_sou
+        from domain.training._internal.slonet import export_to_sou, import_from_sou
 
         ckpt_path = tmp_path / "corrupt.soul"
         model = import_from_sou(str(ckpt_path))

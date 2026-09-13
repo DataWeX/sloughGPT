@@ -6,12 +6,12 @@ Run: PYTHONPATH=packages/core-py .venv/bin/python -m pytest tests/test_cycles.py
 
 import numpy as np
 import pytest
-from domains.shell.cycles import (
+from domain.shell._internal.cycles import (
     CyclesRenderer, Scene, Camera, Material, Light, BVH, Mesh,
     create_sphere, create_plane, create_cube,
 )
-from domains.shell.cycles_device import CyclesDevice
-from domains.shell.render_neural import RenderNeuralDevice
+from domain.shell._internal.cycles_device import CyclesDevice
+from domain.shell._internal.render_neural import RenderNeuralDevice
 
 
 class TestMeshPrimitives:

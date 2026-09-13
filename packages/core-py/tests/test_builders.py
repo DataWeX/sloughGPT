@@ -2,9 +2,9 @@
 
 import pytest
 from pathlib import Path
-from domains.collections.builders import CollectorBuilder, DataSource, DataSink, DataTransformer
-from domains.collections.sources import Record, GeneratorSource
-from domains.collections.stores import MemoryStore, StatsStore
+from domain.collections._internal.builders import CollectorBuilder, DataSource, DataSink, DataTransformer
+from domain.collections._internal.sources import Record, GeneratorSource
+from domain.collections._internal.stores import MemoryStore, StatsStore
 
 
 # ── CollectorBuilder ───────────────────────────────────────────────────
@@ -29,7 +29,7 @@ class TestCollectorBuilder:
 
         path = str(tmp_path / "out.jsonl")
         # FileStore doesn't accept 'append' kwarg — use store() directly
-        from domains.collections.stores import FileStore
+        from domain.collections._internal.stores import FileStore
         store = FileStore(path)
         collector = CollectorBuilder().generator_source(gen).store(store).build()
         collector.collect()

@@ -26,14 +26,9 @@ class ExperimentCreate(BaseModel):
 
 
 def _get_db():
-    import os
+    from infrastructure.db_pool import get_db
 
-    from mogdb import MogDB
-
-    repo_root = Path(__file__).parent.parent.parent.parent
-    db_path = os.path.join(repo_root, "data", "experiments_mogdb")
-    sync_path = os.path.join(repo_root, "data", "experiments_json")
-    return MogDB(db_path, sync_dir=sync_path)
+    return get_db("experiments_mogdb")
 
 
 class ExperimentsRouter:

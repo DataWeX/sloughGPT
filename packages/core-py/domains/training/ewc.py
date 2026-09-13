@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 import numpy as np
 import logging
 
-from domains.training.slonet import Tensor
+from domain.training._internal.slonet import Tensor
 
 logger = logging.getLogger("slo.ewc")
 

@@ -236,7 +236,7 @@ class VisionProcessor:
         if get_provider(self._provider_name) is not None:
             return True
         try:
-            from domains.multimodal.manager import get_multimodal_manager, initialize_multimodal
+            from domain.multimodal._internal.manager import get_multimodal_manager, initialize_multimodal
             initialize_multimodal()
             mgr = get_multimodal_manager()
             if hasattr(mgr, 'initialize'):
@@ -264,7 +264,7 @@ class VisionProcessor:
             from PIL import Image
             import io
             img = Image.open(io.BytesIO(base64.b64decode(clean))).convert("RGB")
-            from domains.multimodal.manager import get_multimodal_manager
+            from domain.multimodal._internal.manager import get_multimodal_manager
             mgr = get_multimodal_manager()
             return mgr.caption_image(img).text
         except Exception as e:
@@ -684,7 +684,7 @@ class ProviderRouter:
             provider = get_provider("multimodal")
             if provider is None:
                 try:
-                    from domains.multimodal.manager import get_multimodal_manager
+                    from domain.multimodal._internal.manager import get_multimodal_manager
                     mgr = get_multimodal_manager()
                     mgr.initialize(vision_model="slonet")
                     provider = get_provider("multimodal")
@@ -709,7 +709,7 @@ class ProviderRouter:
                 import io
                 clean = arg.split(",")[1] if "," in arg else arg
                 img = Image.open(io.BytesIO(base64.b64decode(clean))).convert("RGB")
-                from domains.multimodal.manager import get_multimodal_manager
+                from domain.multimodal._internal.manager import get_multimodal_manager
                 mgr = get_multimodal_manager()
                 return mgr.caption_image(img).text
             except Exception as e:
@@ -880,7 +880,7 @@ class SloTransformerProvider:
 
         arch = infer_arch_from_state_dict(sd)
 
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
 
         model = SloTransformer(
             vocab_size=arch["vocab_size"],
@@ -985,7 +985,7 @@ def setup_providers(
 
     # Try native C inference engine first (highest priority if enabled)
     try:
-        from domains.shared.feature_flags import is_enabled
+        from domain.shared._internal.feature_flags import is_enabled
         native_on = is_enabled("native_c_inference")
         if native_on or native_slnc_path:
             from domains.inference.native.engine import get_engine, NativeTransformerProvider
@@ -1015,7 +1015,7 @@ def setup_providers(
                     extra={"tag": "MODEL"})
     elif slonet_path:
         try:
-            from domains.inference.slonet_provider import SloNetChatProvider
+            from domain.inference._internal.slonet_provider import SloNetChatProvider
             slonet_provider = SloNetChatProvider.from_slnc(
                 slonet_path,
                 model_id=slonet_hf_id or "gpt2",
@@ -1041,7 +1041,7 @@ def setup_providers(
                            slonet_path, e, extra={"tag": "MODEL"})
     elif slonet_hf_id:
         try:
-            from domains.inference.slonet_provider import SloNetChatProvider
+            from domain.inference._internal.slonet_provider import SloNetChatProvider
             from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
             _cache_dir = _get_model_dir(slonet_hf_id)
             _slnc = _cache_dir / "model.slnc"
@@ -1073,14 +1073,14 @@ def setup_providers(
         # Standalone SloNet mode: auto-detect a cached .slnc model
         try:
             from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
-            from domains.infrastructure.config import get_config
+            from domain.infrastructure._internal.config import get_config
             cfg = get_config()
             default_model = cfg.autoload_model
             if default_model:
                 _cache_dir = _get_model_dir(default_model)
                 _slnc = _cache_dir / "model.slnc"
                 if _slnc.exists():
-                    from domains.inference.slonet_provider import SloNetChatProvider
+                    from domain.inference._internal.slonet_provider import SloNetChatProvider
                     auto_provider = SloNetChatProvider.from_slnc(
                         str(_slnc),
                         model_id=default_model,

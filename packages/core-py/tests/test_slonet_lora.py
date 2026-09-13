@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.lora import (
+from domain.training._internal.lora import (
     LoRALinear,
     LoRAEmbedding,
     LoRAConfig,
@@ -12,7 +12,7 @@ from domains.training.lora import (
     _to_np,
     _to_tensor,
 )
-from domains.training.slonet import Tensor, SloLayer
+from domain.training._internal.slonet import Tensor, SloLayer
 
 
 # ── _to_np / _to_tensor helpers ────────────────────────────────────────────

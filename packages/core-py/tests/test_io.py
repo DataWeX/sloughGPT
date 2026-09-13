@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from domains.shell.io import (
+from domain.shell._internal.io import (
     ConsoleIO, MemoryIO, capture_cmd, capture_output,
 )
 

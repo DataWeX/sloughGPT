@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from domains.shared import find_repo_root
-from domains.training.executor import get_training_executor
+from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
@@ -62,7 +62,7 @@ async def train_from_feedback(
     lora_alpha = req.lora_alpha
 
     try:
-        from domains.feedback.training import FeedbackTrainer
+        from domain.feedback._internal.training import FeedbackTrainer
 
         trainer = FeedbackTrainer()
 
@@ -137,7 +137,7 @@ async def train_from_feedback(
 
         def run_feedback_training(job_id_: str = jid):
             try:
-                from domains.training.train_pipeline import SloughGPTTrainer
+                from domain.training._internal.train_pipeline import SloughGPTTrainer
 
                 trainer = SloughGPTTrainer(
                     data_path=data_path,

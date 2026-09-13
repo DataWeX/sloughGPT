@@ -13,7 +13,7 @@ module.exports = {
       },
       fontFamily: {
         sans: ['var(--font-rubik)', 'system-ui', 'sans-serif'],
-        numeric: ['var(--font-lato)', 'system-ui', 'sans-serif'],
+        numeric: ['var(--font-rubik)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-jetbrains-mono)', 'ui-monospace', 'monospace'],
       },
       colors: {

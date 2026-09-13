@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from domains.training.hf_lora_finetune import (
+from domain.training._internal.hf_lora_finetune import (
     HFLoraConfig,
     HFLoraTrainer,
 )

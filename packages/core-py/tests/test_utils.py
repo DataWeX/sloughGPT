@@ -1,4 +1,4 @@
-"""Tests for domains.shared.utils — utility functions, Cache, Timer, RateLimiter."""
+"""Tests for domain.shared._internal.utils — utility functions, Cache, Timer, RateLimiter."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import time
 import pytest
 from pathlib import Path
 
-from domains.shared.utils import (
+from domain.shared._internal.utils import (
     generate_id,
     hash_string,
     format_size,

@@ -1,10 +1,10 @@
 """Tests for NarrativeGenerator."""
 
 import pytest
-from domains.consciousness.narrative import NarrativeGenerator
-from domains.consciousness.self_model import SelfModel
-from domains.consciousness.qualia import QualiaEngine
-from domains.consciousness.meta_cognition import MetaCognition
+from domain.consciousness._internal.narrative import NarrativeGenerator
+from domain.consciousness._internal.self_model import SelfModel
+from domain.consciousness._internal.qualia import QualiaEngine
+from domain.consciousness._internal.meta_cognition import MetaCognition
 
 
 class TestNarrativeGenerator:

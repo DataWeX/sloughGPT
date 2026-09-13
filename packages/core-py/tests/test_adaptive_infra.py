@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
-from domains.training.adaptive_config import AdaptiveConfigEngine, AdaptiveRecommendation
+from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+from domain.training._internal.adaptive_config import AdaptiveConfigEngine, AdaptiveRecommendation
 from domain.settings._internal.persistent import (
     AppSettings,
     GenerationSettings,
@@ -307,7 +307,7 @@ class TestPersistentSettings:
 class TestAutoConfigureAdaptive:
 
     def test_auto_configure_uses_adaptive_when_history_exists(self, tmp_path):
-        from domains.training.auto_config import auto_configure
+        from domain.training._internal.auto_config import auto_configure
 
         # Create a dataset file
         data_file = tmp_path / "data.txt"
@@ -330,7 +330,7 @@ class TestAutoConfigureAdaptive:
                 converged=True,
             ))
 
-        with patch("domains.training.adaptive_config.AdaptiveConfigEngine") as MockEngine:
+        with patch("domain.training._internal.adaptive_config.AdaptiveConfigEngine") as MockEngine:
             mock_engine = MagicMock()
             mock_engine.recommend.return_value = AdaptiveRecommendation(
                 learning_rate=5e-5,

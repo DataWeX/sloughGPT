@@ -1,12 +1,12 @@
-"""Tests for domains.collections.stores — MemoryStore, FileStore, CallbackStore, etc."""
+"""Tests for domain.collections._internal.stores — MemoryStore, FileStore, CallbackStore, etc."""
 
 from __future__ import annotations
 
 import pytest
 from pathlib import Path
 
-from domains.collections.sources import Record
-from domains.collections.stores import (
+from domain.collections._internal.sources import Record
+from domain.collections._internal.stores import (
     MemoryStore,
     FileStore,
     CallbackStore,

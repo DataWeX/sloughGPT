@@ -6,7 +6,7 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch, PropertyMock
 
-from domains.core.soul import GenerationContext, SloEngine
+from domain.core._internal.soul import GenerationContext, SloEngine
 
 
 # ── GenerationContext ───────────────────────────────────────────────────────

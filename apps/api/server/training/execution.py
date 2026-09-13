@@ -11,8 +11,8 @@ import threading
 import uuid
 from typing import Any
 
-from domains.mobile.notifications import get_notification_service
-from domains.training.executor import get_training_executor
+from domains.mobile import get_notification_service
+from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
@@ -66,7 +66,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
-    from domains.training.dataset_manifest import ManifestError
+    from domain.training._internal.dataset_manifest import ManifestError
 
     try:
         data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
@@ -114,7 +114,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             _raw = ""
 
         if _raw:
-            from domains.training.quality_scorer import compute_data_quality
+            from domain.training._internal.quality_scorer import compute_data_quality
             _quality = await _aio.to_thread(compute_data_quality, _raw)
             _avg = _quality.get("avg_quality", 0)
             _tox = _quality.get("toxicity_rate", 0)
@@ -145,7 +145,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     try:
         import asyncio as _aio
         from pathlib import Path as _PJ
-        from domains.training.train_pipeline import validate_conversation_data
+        from domain.training._internal.train_pipeline import validate_conversation_data
 
         _j_path = _PJ(data_path_str)
         _j_file = None
@@ -282,8 +282,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
         logger.warning("CancelManager registration failed for %s: %s", job_id, e)
 
     def run_training(job_id_: str = jid) -> None:
-        from domains.training.train_pipeline import SloughGPTTrainer
-        from domains.training.wandb_helpers import create_training_tracker_for_api_job
+        from domain.training._internal.train_pipeline import SloughGPTTrainer
+        from domain.training._internal.wandb_helpers import create_training_tracker_for_api_job
 
         tracker = None
         try:

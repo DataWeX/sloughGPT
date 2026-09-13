@@ -1,4 +1,4 @@
-"""Tests for domains.agents.multi — SpecializedAgent, AgentTask, TaskStatus,
+"""Tests for domain.agents._internal.multi — SpecializedAgent, AgentTask, TaskStatus,
 MultiAgentOrchestrator._compute_levels, _simple_plan, _build_dep_context.
 
 Covers: dataclass creation, to_dict, topological sort into parallel levels,
@@ -15,7 +15,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.agents.multi import (
+from domain.agents._internal.multi import (
     SpecializedAgent,
     AgentTask,
     TaskStatus,

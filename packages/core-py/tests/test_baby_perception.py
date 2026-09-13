@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
-from domains.collections.baby_perception import (
+from domain.collections._internal.baby_perception import (
     BabyPerceptionConfig, BabyPerception, BabyAction, BabyLearning,
     BabyPerceptionSystem,
 )
-from domains.collections.perception import WorldPerception, PerceptionEvent, Record
-from domains.collections.sources import Record as SourceRecord
-from domains.shell.simulation import WorldGrid, SimBaby, WorldParams
+from domain.collections._internal.perception import WorldPerception, PerceptionEvent, Record
+from domain.collections._internal.sources import Record as SourceRecord
+from domain.shell._internal.simulation import WorldGrid, SimBaby, WorldParams
 
 
 class FakeBaby:

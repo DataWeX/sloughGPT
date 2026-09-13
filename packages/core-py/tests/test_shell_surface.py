@@ -1,13 +1,13 @@
-"""Tests for domains.shell.surface — surface content rendering."""
+"""Tests for domain.shell._internal.surface — surface content rendering."""
 
 import time
 
 import pytest
-from domains.shell.surface import (
+from domain.shell._internal.surface import (
     strip_ansi, clip, RenderLine, TextSurface, LogSurface,
     STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL,
 )
-from domains.shell.log_buffer import LogBuffer, LogEntry
+from domain.shell._internal.log_buffer import LogBuffer, LogEntry
 
 
 class TestStripAnsi:

@@ -16,31 +16,31 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
-import domains.shell.repl as repl_mod
-from domains.shell.io import MemoryIO, capture_cmd
-from domains.shell.log_buffer import LogEntry
-from domains.shell.permissions import ShellPermissions
-from domains.shell.repl import ShellREPL, _CaptureOutput
-from domains.shell.runtime import DaitRuntime
-from domains.shell.state import ShellState
+import domain.shell._internal.repl as repl_mod
+from domain.shell._internal.io import MemoryIO, capture_cmd
+from domain.shell._internal.log_buffer import LogEntry
+from domain.shell._internal.permissions import ShellPermissions
+from domain.shell._internal.repl import ShellREPL, _CaptureOutput
+from domain.shell._internal.runtime import DaitRuntime
+from domain.shell._internal.state import ShellState
 
 
 @pytest.fixture
 def repl():
     import tempfile
-    from domains.shell.init import reset_init_system
-    from domains.shell.state import set_shell_state_db, reset_shell_state_db
+    from domain.shell._internal.init import reset_init_system
+    from domain.shell._internal.state import set_shell_state_db, reset_shell_state_db
     reset_init_system()
     with tempfile.TemporaryDirectory() as tmp:
         st = Path(tmp) / "sloughgpt"
         st.mkdir(parents=True, exist_ok=True)
         state_db = str(st / "shell_state_mogdb")
         set_shell_state_db(state_db)
-        with patch("domains.shell.runtime._probe_api", return_value={"available": False, "error": "mock"}), \
-             patch("domains.shell.repl.ShellREPL._get_current_model", return_value=""), \
-             patch("domains.shell.repl.ShellREPL._get_current_soul", return_value=""), \
+        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": False, "error": "mock"}), \
+             patch("domain.shell._internal.repl.ShellREPL._get_current_model", return_value=""), \
+             patch("domain.shell._internal.repl.ShellREPL._get_current_soul", return_value=""), \
              patch.object(ShellREPL, "_setup_readline"), \
-             patch("domains.shell.runtime.APIServerProcess.start", return_value={"ok": True, "message": "mocked"}):
+             patch("domain.shell._internal.runtime.APIServerProcess.start", return_value={"ok": True, "message": "mocked"}):
             os = DaitRuntime()
             r = ShellREPL(os)
             r._perms._granted.update(["tee", "xargs", "cp", "mv", "touch", "chmod"])
@@ -531,7 +531,7 @@ class TestCmdTimeTiming:
 
 class TestCmdReadEdges:
     def test_read_with_prompt_and_var(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         mem.feed("hello_value")
         old_io = repl.io
@@ -2425,7 +2425,7 @@ class TestSvcCommands:
 
 class TestTrainCommands:
     def _mock_api_repl(self, repl, monkeypatch):
-        monkeypatch.setattr("domains.shell.runtime._probe_api", lambda *a, **kw: {"available": True, "model_id": "gpt2"})
+        monkeypatch.setattr("domain.shell._internal.runtime._probe_api", lambda *a, **kw: {"available": True, "model_id": "gpt2"})
         return repl
 
     def test_train_usage(self, repl, monkeypatch):
@@ -4316,7 +4316,7 @@ class TestCmdConfirm:
 class TestSetupReadlineHistory:
     def _call_real_setup(self, repl):
         """Call the real _setup_readline, bypassing the fixture's patch."""
-        from domains.shell.repl import ShellREPL as _RealShellREPL
+        from domain.shell._internal.repl import ShellREPL as _RealShellREPL
         import types
         # Get the real method from the original class definition
         real_method = None
@@ -4329,9 +4329,9 @@ class TestSetupReadlineHistory:
                 break
         if real_method is None:
             # Fallback: reload the module and get the method
-            import importlib, domains.shell.repl
-            importlib.reload(domains.shell.repl)
-            real_method = domains.shell.repl.ShellREPL._setup_readline
+            import importlib, domain.shell._internal.repl
+            importlib.reload(domain.shell._internal.repl)
+            real_method = domain.shell._internal.repl.ShellREPL._setup_readline
         real_method(repl)
 
     def test_truncates_large_history(self, repl, tmp_path):
@@ -6016,7 +6016,7 @@ class TestCmdLog:
         assert repl._last_exit_code == 0
 
     def test_log_with_entries(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         import time
         entry = LogEntry(timestamp=time.time(), level="ERROR", source="test", message="boom")
         repl._log_buffer.append(entry)
@@ -6024,7 +6024,7 @@ class TestCmdLog:
         assert repl._last_exit_code == 0
 
     def test_log_level_filter(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         import time
         repl._log_buffer.append(LogEntry(time.time(), "ERROR", "test", "err1"))
         repl._log_buffer.append(LogEntry(time.time(), "INFO", "test", "info1"))
@@ -6032,7 +6032,7 @@ class TestCmdLog:
         assert repl._last_exit_code == 0
 
     def test_log_source_filter(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         import time
         repl._log_buffer.append(LogEntry(time.time(), "ERROR", "api", "err1"))
         repl._cmd_logs("-s api")
@@ -6923,7 +6923,7 @@ class TestCmdVmrunFlags:
         os.environ["MAN_VM_ROLE"] = "admin"
         try:
             with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domains.shell.vm.X86VirtualSystem', MagicMock()):
+                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
                     repl._cmd_vmrun("--admin hello")
         except Exception:
             pass
@@ -6935,7 +6935,7 @@ class TestCmdVmrunFlags:
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domains.shell.vm.X86VirtualSystem', MagicMock()):
+                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
                     repl._cmd_vmrun("--kernel hello")
         except Exception:
             pass
@@ -6951,7 +6951,7 @@ class TestCmdVmrunFlags:
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domains.shell.vm.X86VirtualSystem', MagicMock()):
+                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
                     repl._cmd_vmrun("--debug hello")
         except Exception:
             pass
@@ -6972,7 +6972,7 @@ class TestCmdVmrunFlags:
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domains.shell.vm.X86VirtualSystem', MagicMock()):
+                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
                     repl._cmd_vmrun("hello")
         except Exception:
             pass
@@ -7106,7 +7106,7 @@ class TestCmdAiContext:
 
     def test_ai_with_log_buffer(self, repl):
         from unittest.mock import patch, PropertyMock
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         repl._log_buffer.get.return_value = [
             LogEntry(1000000.0, "ERROR", "test", "something failed"),
@@ -7199,7 +7199,7 @@ class TestCmdVmrunBuiltins:
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domains.shell.vm.X86VirtualSystem', MagicMock()):
+                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
                     repl._cmd_vmrun("count")
         except Exception:
             pass
@@ -7211,7 +7211,7 @@ class TestCmdVmrunBuiltins:
         os.environ["MAN_VM_ROLE"] = "kernel"
         try:
             with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=MagicMock()):
-                with patch('domains.shell.vm.X86VirtualSystem', MagicMock()):
+                with patch('domain.shell._internal.vm.X86VirtualSystem', MagicMock()):
                     repl._cmd_vmrun("counter")
         except Exception:
             pass
@@ -7597,7 +7597,7 @@ class TestCmdTui:
 
 class TestCmdLogsExplain:
     def test_logs_explain_with_errors(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         repl._log_buffer.get.return_value = [
@@ -7617,7 +7617,7 @@ class TestCmdLogsExplain:
         assert repl._last_exit_code == 0
 
     def test_logs_explain_error_result(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         repl._log_buffer.get.return_value = [
@@ -7629,7 +7629,7 @@ class TestCmdLogsExplain:
         assert repl._last_exit_code == 0
 
     def test_logs_explain_non_dict_result(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         repl._log_buffer.get.return_value = [
@@ -7646,7 +7646,7 @@ class TestCmdLogsExplain:
 
 class TestCmdLogsExportV2:
     def test_logs_export(self, repl, tmp_path):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         repl._log_buffer.get.return_value = [
             LogEntry(1000000.0, "INFO", "test", "all good"),
@@ -7675,7 +7675,7 @@ class TestCmdLogsExportV2:
 
 class TestCmdLogsLevels:
     def test_logs_with_entries(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=3)
         repl._log_buffer.get.return_value = [
@@ -7687,7 +7687,7 @@ class TestCmdLogsLevels:
         assert repl._last_exit_code == 0
 
     def test_logs_follow(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         repl._log_buffer.get.return_value = [
@@ -7710,7 +7710,7 @@ class TestCmdLogsLevels:
         assert repl._last_exit_code == 0
 
     def test_logs_stats(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=2)
         repl._log_buffer.get.return_value = [
@@ -8325,7 +8325,7 @@ class TestCmdVmrunExecution:
             mock_vs.scheduler.current = MagicMock()
             mock_vs.cpu._regs = [0]
             with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=mock_vs):
-                with patch('domains.shell.vm.X86VirtualSystem', return_value=mock_vs):
+                with patch('domain.shell._internal.vm.X86VirtualSystem', return_value=mock_vs):
                     repl._cmd_vmrun("hello")
         except Exception:
             pass
@@ -8339,7 +8339,7 @@ class TestCmdVmrunExecution:
             mock_vs = MagicMock()
             mock_vs.spawn.return_value = None
             with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=mock_vs):
-                with patch('domains.shell.vm.X86VirtualSystem', return_value=mock_vs):
+                with patch('domain.shell._internal.vm.X86VirtualSystem', return_value=mock_vs):
                     repl._cmd_vmrun("hello")
             assert repl._last_exit_code == 1
         except Exception:
@@ -8356,7 +8356,7 @@ class TestCmdVmrunExecution:
             mock_vs._syscall._rbac = MagicMock()
             mock_vs.scheduler.current = None
             with patch.object(repl.os, 'vm_system', new_callable=PropertyMock, return_value=mock_vs):
-                with patch('domains.shell.vm.X86VirtualSystem', return_value=mock_vs):
+                with patch('domain.shell._internal.vm.X86VirtualSystem', return_value=mock_vs):
                     repl._cmd_vmrun("hello")
             assert repl._last_exit_code == 1
         except Exception:
@@ -8589,7 +8589,7 @@ class TestCmdEventsExtra:
 
 class TestCmdLogsExplainExtra:
     def test_logs_explain_non_dict_result(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         repl._log_buffer.__len__ = MagicMock(return_value=1)
         entry = LogEntry(1000000.0, "ERROR", "test", "err")
@@ -8600,7 +8600,7 @@ class TestCmdLogsExplainExtra:
         assert repl._last_exit_code == 0
 
     def test_logs_explain_with_api_and_error_entries(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         entry1 = LogEntry(1000000.0, "ERROR", "test", "something broke")
         entry2 = LogEntry(1000001.0, "WARNING", "test", "low memory")
@@ -8612,7 +8612,7 @@ class TestCmdLogsExplainExtra:
         assert repl._last_exit_code == 0
 
     def test_logs_explain_with_api_dict_error(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         entry = LogEntry(1000000.0, "ERROR", "test", "crash")
         repl._log_buffer.get.return_value = [entry]
@@ -8630,7 +8630,7 @@ class TestCmdLogsExplainExtra:
         assert repl._last_exit_code == 0
 
     def test_logs_explain_api_unavailable(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer = MagicMock()
         entry = LogEntry(1000000.0, "ERROR", "test", "err")
         repl._log_buffer.get.return_value = [entry]
@@ -9993,7 +9993,7 @@ class TestPipelineInternals:
             shutil.rmtree(d)
 
     def test_execute_line_permission_denied(self, repl):
-        from domains.shell.permissions import Risk
+        from domain.shell._internal.permissions import Risk
         repl._perms.set_policy(Risk.ELEVATED, "deny")
         repl._perms._granted.discard("rm")
         repl.execute("rm /tmp/test")
@@ -10334,7 +10334,7 @@ class TestCmdReadExtra:
         assert repl._last_exit_code == 1
 
     def test_read_with_prompt(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         mem.feed("test_value")
         old_io = repl.io
@@ -10347,7 +10347,7 @@ class TestCmdReadExtra:
             repl.io = old_io
 
     def test_read_prompt_only(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         mem.feed("val")
         old_io = repl.io
@@ -10360,7 +10360,7 @@ class TestCmdReadExtra:
             repl.io = old_io
 
     def test_read_eof(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         old_io = repl.io
         repl.io = mem
@@ -10655,7 +10655,7 @@ class TestCmdAsmExtra:
 
     def test_asm_vm_fault(self, repl):
         repl._piped_input = "INVALID_OP"
-        with patch('domains.shell.vm.VMRunner') as MockRunner:
+        with patch('domain.shell._internal.vm.VMRunner') as MockRunner:
             MockRunner.return_value.assemble_and_run.side_effect = Exception("VM error")
             repl._cmd_asm("")
         assert repl._last_exit_code == 1
@@ -10939,7 +10939,7 @@ class TestCmdRenderExtraV2:
 
 class TestCmdTutorialExtra:
     def test_tutorial(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         mem.feed("q")
         old_io = repl.io
@@ -11076,14 +11076,14 @@ class TestCmdAsmExecution:
         assert repl._last_exit_code == 0
 
     def test_asm_vm_fault(self, repl):
-        from domains.shell.vm import VMFault
-        with patch("domains.shell.vm.VMRunner") as MockRunner:
+        from domain.shell._internal.vm import VMFault
+        with patch("domain.shell._internal.vm.VMRunner") as MockRunner:
             MockRunner.return_value.assemble_and_run.side_effect = VMFault("bad instruction")
             repl._cmd_asm("")
         assert repl._last_exit_code == 1
 
     def test_asm_generic_exception(self, repl):
-        with patch("domains.shell.vm.VMRunner") as MockRunner:
+        with patch("domain.shell._internal.vm.VMRunner") as MockRunner:
             MockRunner.return_value.assemble_and_run.side_effect = RuntimeError("boom")
             repl._cmd_asm("")
         assert repl._last_exit_code == 1
@@ -11215,7 +11215,7 @@ class TestStreamTrainProgressV2:
             return results[min(idx, len(results)-1)]
 
         with patch("domains.shell.commands._api_get", side_effect=mock_get), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-123")
         assert repl._last_exit_code == 0
 
@@ -11231,7 +11231,7 @@ class TestStreamTrainProgressV2:
             return results[min(idx, len(results)-1)]
 
         with patch("domains.shell.commands._api_get", side_effect=mock_get), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-456")
         assert repl._last_exit_code == 0
 
@@ -11240,7 +11240,7 @@ class TestStreamTrainProgressV2:
             {"status": "error", "progress": 0, "error": "crash"},
         ]
         with patch("domains.shell.commands._api_get", return_value=results[0]), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-789")
         assert repl._last_exit_code == 0
 
@@ -11253,13 +11253,13 @@ class TestStreamTrainProgressV2:
             return {"status": "running", "progress": 10}
 
         with patch("domains.shell.commands._api_get", side_effect=mock_get), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-kbd")
         assert repl._last_exit_code == 0
 
     def test_job_exception(self, repl):
         with patch("domains.shell.commands._api_get", side_effect=RuntimeError("network")), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-err")
         assert repl._last_exit_code == 0
 
@@ -11277,7 +11277,7 @@ class TestStreamTrainProgressV2:
             return results[min(idx, len(results)-1)]
 
         with patch("domains.shell.commands._api_get", side_effect=mock_get), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-stdio")
         repl._stdio = None
         assert repl._last_exit_code == 0
@@ -11294,7 +11294,7 @@ class TestStreamTrainProgressV2:
             return results[min(idx, len(results)-1)]
 
         with patch("domains.shell.commands._api_get", side_effect=mock_get), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._stream_train_progress("job-half")
         assert repl._last_exit_code == 0
 
@@ -11383,7 +11383,7 @@ class TestCmdLoadTrackerV2:
         with patch.object(repl, '_require_api', return_value=True), \
              patch("domains.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
              patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11394,7 +11394,7 @@ class TestCmdLoadTrackerV2:
         with patch.object(repl, '_require_api', return_value=True), \
              patch("domains.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
              patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11405,7 +11405,7 @@ class TestCmdLoadTrackerV2:
         with patch.object(repl, '_require_api', return_value=True), \
              patch("domains.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
              patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11416,7 +11416,7 @@ class TestCmdLoadTrackerV2:
         with patch.object(repl, '_require_api', return_value=True), \
              patch("domains.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
              patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11427,7 +11427,7 @@ class TestCmdLoadTrackerV2:
         with patch.object(repl, '_require_api', return_value=True), \
              patch("domains.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
              patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11438,7 +11438,7 @@ class TestCmdLoadTrackerV2:
         with patch.object(repl, '_require_api', return_value=True), \
              patch("domains.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
              patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domains.shell.repl.time.sleep"):
+             patch("domain.shell._internal.repl.time.sleep"):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
 
@@ -11449,7 +11449,7 @@ class TestCmdLoadTrackerV2:
         with patch.object(repl, '_require_api', return_value=True), \
              patch("domains.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
              patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domains.shell.repl.time.sleep"), \
+             patch("domain.shell._internal.repl.time.sleep"), \
              patch.object(repl.cmds, 'load_model', return_value=None):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
@@ -11461,7 +11461,7 @@ class TestCmdLoadTrackerV2:
         with patch.object(repl, '_require_api', return_value=True), \
              patch("domains.infrastructure.conversion_tracker.get_tracker", return_value=mock_tracker), \
              patch.dict('sys.modules', {'apps.cli.src.utils.progress': MagicMock(ProgressBar=MagicMock(return_value=mock_bar))}), \
-             patch("domains.shell.repl.time.sleep"), \
+             patch("domain.shell._internal.repl.time.sleep"), \
              patch.object(repl.cmds, 'load_model', return_value={"status": "error", "error": "not found"}):
             repl._cmd_load("gpt2")
         assert repl._last_exit_code == 0
@@ -11652,7 +11652,7 @@ class TestCmdReadExtraV2:
         assert repl._last_exit_code == 1
 
     def test_read_prompt_only(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         mem.feed("value")
         old_io = repl.io
@@ -11665,7 +11665,7 @@ class TestCmdReadExtraV2:
             repl.io = old_io
 
     def test_read_with_prompt_and_var(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         mem.feed("hello")
         old_io = repl.io
@@ -11678,7 +11678,7 @@ class TestCmdReadExtraV2:
             repl.io = old_io
 
     def test_read_eof(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         old_io = repl.io
         repl.io = mem
@@ -11959,7 +11959,7 @@ class TestCmdLogsExplainExtraV2:
         assert repl._last_exit_code == 0
 
     def test_logs_explain_with_errors(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         entry = LogEntry(time.time(), "ERROR", "test", "Something failed")
         repl._log_buffer._entries.append(entry)
         with patch.object(repl, '_require_api', return_value=False):
@@ -11967,7 +11967,7 @@ class TestCmdLogsExplainExtraV2:
         assert repl._last_exit_code == 0
 
     def test_logs_explain_api_success(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         entry = LogEntry(time.time(), "ERROR", "test", "Something failed")
         repl._log_buffer._entries.append(entry)
         with patch.object(repl, '_require_api', return_value=True), \
@@ -11976,7 +11976,7 @@ class TestCmdLogsExplainExtraV2:
         assert repl._last_exit_code == 0
 
     def test_logs_explain_api_error(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         entry = LogEntry(time.time(), "WARNING", "test", "Low disk space")
         repl._log_buffer._entries.append(entry)
         with patch.object(repl, '_require_api', return_value=True), \
@@ -11985,7 +11985,7 @@ class TestCmdLogsExplainExtraV2:
         assert repl._last_exit_code == 0
 
     def test_logs_stats(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         for i in range(5):
             repl._log_buffer._entries.append(LogEntry(time.time() + i, "INFO", "test", f"msg {i}"))
         repl._log_buffer._entries.append(LogEntry(time.time(), "ERROR", "other", "err"))
@@ -11997,7 +11997,7 @@ class TestCmdLogsExplainExtraV2:
         assert repl._last_exit_code == 0
 
     def test_logs_export(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer._entries.append(LogEntry(time.time(), "INFO", "test", "export me"))
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".log", delete=False) as f:
@@ -12018,21 +12018,21 @@ class TestCmdLogsExplainExtraV2:
         assert repl._last_exit_code == 0
 
     def test_logs_filter_level(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer._entries.append(LogEntry(time.time(), "ERROR", "test", "err"))
         repl._log_buffer._entries.append(LogEntry(time.time(), "INFO", "test", "info"))
         repl._cmd_logs("-l ERROR")
         assert repl._last_exit_code == 0
 
     def test_logs_filter_source(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         repl._log_buffer._entries.append(LogEntry(time.time(), "INFO", "kernel", "boot"))
         repl._log_buffer._entries.append(LogEntry(time.time(), "INFO", "api", "ready"))
         repl._cmd_logs("-s kernel")
         assert repl._last_exit_code == 0
 
     def test_logs_count(self, repl):
-        from domains.shell.log_buffer import LogEntry
+        from domain.shell._internal.log_buffer import LogEntry
         for i in range(10):
             repl._log_buffer._entries.append(LogEntry(time.time() + i, "INFO", "test", f"msg {i}"))
         repl._cmd_logs("-n 3")
@@ -12668,12 +12668,12 @@ class TestCmdAliasUnaliasExtraV2:
 
 class TestCmdSleepExtraV2:
     def test_sleep_default(self, repl):
-        with patch("domains.shell.repl.time.sleep"):
+        with patch("domain.shell._internal.repl.time.sleep"):
             repl._cmd_sleep("0.01")
         assert repl._last_exit_code == 0
 
     def test_sleep_invalid(self, repl):
-        with patch("domains.shell.repl.time.sleep"):
+        with patch("domain.shell._internal.repl.time.sleep"):
             repl._cmd_sleep("abc")
         assert repl._last_exit_code == 0
 
@@ -13005,7 +13005,7 @@ class TestCmdTuiExtra:
 
 class TestCmdTutorialExecution:
     def test_tutorial_quit_immediately(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         mem.feed("q")
         old_io = repl.io
@@ -13017,7 +13017,7 @@ class TestCmdTutorialExecution:
             repl.io = old_io
 
     def test_tutorial_step_through(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         # Feed empty strings for each step, then 'q' to quit
         for _ in range(15):
@@ -13888,7 +13888,7 @@ class TestCmdReadEdgeCases:
         assert repl._last_exit_code == 1
 
     def test_read_var(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         mem.feed("test_value")
         old_io = repl.io
@@ -13901,7 +13901,7 @@ class TestCmdReadEdgeCases:
             repl.io = old_io
 
     def test_read_with_prompt(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         mem.feed("hello")
         old_io = repl.io
@@ -13982,13 +13982,13 @@ class TestCmdFgEdgeCases:
 
 class TestModuleLevelFunctions:
     def test_color_enabled(self):
-        from domains.shell.repl import _color, _C_CYAN, _C_RESET
+        from domain.shell._internal.repl import _color, _C_CYAN, _C_RESET
         result = _color("test", _C_CYAN)
         assert "test" in result
         assert _C_RESET in result
 
     def test_color_disabled(self):
-        import domains.shell.repl as mod
+        import domain.shell._internal.repl as mod
         old = mod._COLOR_ENABLED
         try:
             mod._COLOR_ENABLED = False
@@ -13998,13 +13998,13 @@ class TestModuleLevelFunctions:
             mod._COLOR_ENABLED = old
 
     def test_fetch_model_names_exception(self):
-        from domains.shell.repl import _fetch_model_names
+        from domain.shell._internal.repl import _fetch_model_names
         with patch('requests.get', side_effect=Exception("network")):
             result = _fetch_model_names()
         assert result == []
 
     def test_fetch_model_names_non_200(self):
-        from domains.shell.repl import _fetch_model_names
+        from domain.shell._internal.repl import _fetch_model_names
         mock_resp = MagicMock()
         mock_resp.status_code = 500
         with patch('requests.get', return_value=mock_resp):
@@ -14012,25 +14012,25 @@ class TestModuleLevelFunctions:
         assert result == []
 
     def test_fetch_soul_names_exception(self):
-        from domains.shell.repl import _fetch_soul_names
+        from domain.shell._internal.repl import _fetch_soul_names
         with patch('requests.get', side_effect=Exception("network")):
             result = _fetch_soul_names()
         assert result == []
 
     def test_fetch_dataset_names_exception(self):
-        from domains.shell.repl import _fetch_dataset_names
+        from domain.shell._internal.repl import _fetch_dataset_names
         with patch('requests.get', side_effect=Exception("network")):
             result = _fetch_dataset_names()
         assert result == []
 
     def test_fetch_checkpoint_names_exception(self):
-        from domains.shell.repl import _fetch_checkpoint_names
+        from domain.shell._internal.repl import _fetch_checkpoint_names
         with patch('requests.get', side_effect=Exception("network")):
             result = _fetch_checkpoint_names()
         assert result == []
 
     def test_fetch_model_names_dict_response(self):
-        from domains.shell.repl import _fetch_model_names
+        from domain.shell._internal.repl import _fetch_model_names
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"models": [{"name": "gpt2"}, {"id": "bert"}]}
@@ -14040,7 +14040,7 @@ class TestModuleLevelFunctions:
         assert "bert" in result
 
     def test_fetch_soul_names_dict_response(self):
-        from domains.shell.repl import _fetch_soul_names
+        from domain.shell._internal.repl import _fetch_soul_names
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"souls": [{"name": "friendly"}]}
@@ -14049,7 +14049,7 @@ class TestModuleLevelFunctions:
         assert "friendly" in result
 
     def test_fetch_dataset_names_dict_response(self):
-        from domains.shell.repl import _fetch_dataset_names
+        from domain.shell._internal.repl import _fetch_dataset_names
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"datasets": [{"name": "shakespeare"}]}
@@ -14058,7 +14058,7 @@ class TestModuleLevelFunctions:
         assert "shakespeare" in result
 
     def test_fetch_checkpoint_names_dict_response(self):
-        from domains.shell.repl import _fetch_checkpoint_names
+        from domain.shell._internal.repl import _fetch_checkpoint_names
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"checkpoints": [{"name": "ckpt1"}]}
@@ -14072,7 +14072,7 @@ class TestModuleLevelFunctions:
 
 class TestCaptureOutput:
     def test_with_repl(self, repl):
-        from domains.shell.io import MemoryIO
+        from domain.shell._internal.io import MemoryIO
         mem = MemoryIO()
         old_io = repl.io
         old_console_io = repl.console._io
@@ -14086,7 +14086,7 @@ class TestCaptureOutput:
             repl.console._io = old_console_io
 
     def test_without_repl(self):
-        from domains.shell.repl import _CaptureOutput
+        from domain.shell._internal.repl import _CaptureOutput
         with _CaptureOutput() as cap:
             print("test output")
         assert "test output" in cap.getvalue()
@@ -14290,17 +14290,17 @@ class TestExpandGlobsV2:
 
 class TestSplitPipe:
     def test_no_pipe(self, repl):
-        from domains.shell.repl import ShellREPL
+        from domain.shell._internal.repl import ShellREPL
         result = ShellREPL._split_pipe("echo hello")
         assert result == ["echo hello"]
 
     def test_simple_pipe(self, repl):
-        from domains.shell.repl import ShellREPL
+        from domain.shell._internal.repl import ShellREPL
         result = ShellREPL._split_pipe("echo hello | cat")
         assert result == ["echo hello", "cat"]
 
     def test_quoted_pipe(self, repl):
-        from domains.shell.repl import ShellREPL
+        from domain.shell._internal.repl import ShellREPL
         result = ShellREPL._split_pipe('echo "a|b" | cat')
         assert len(result) == 2
 
@@ -18298,7 +18298,7 @@ class TestCmdLogsDeeper2:
 
 class TestCmdSvcDeeper2:
     def test_svc_not_booted(self, repl):
-        from domains.shell.init import reset_init_system
+        from domain.shell._internal.init import reset_init_system
         reset_init_system()
         repl.os._init = None
         out = _run_with_io(repl, [], lambda: repl._cmd_svc("list"))
@@ -18686,7 +18686,7 @@ class TestCmdPasteDeeper4:
 class TestCmdSvcMocked:
     def _setup_init(self, repl):
         """Set up a mock init_system."""
-        from domains.shell.init import reset_init_system
+        from domain.shell._internal.init import reset_init_system
         reset_init_system()
         mock_init = MagicMock()
         mock_init.service_table.return_value = "  api  running\n  vfs  stopped"
@@ -18697,7 +18697,7 @@ class TestCmdSvcMocked:
         return mock_init
 
     def test_svc_not_booted(self, repl):
-        from domains.shell.init import reset_init_system
+        from domain.shell._internal.init import reset_init_system
         reset_init_system()
         repl.os._init = None
         out = _run_with_io(repl, [], lambda: repl._cmd_svc("list"))
@@ -18924,7 +18924,7 @@ class TestCmdTuiDeeper2:
     def test_tui_runtime_error(self, repl):
         mock_tui = MagicMock()
         mock_tui.run.side_effect = RuntimeError("display error")
-        with patch("domains.shell.repl.TuiRepl", return_value=mock_tui, create=True):
+        with patch("domain.shell._internal.repl.TuiRepl", return_value=mock_tui, create=True):
             out = _run_with_io(repl, [], lambda: repl._cmd_tui(""))
             assert "TUI error" in out or repl._last_exit_code == 1
 
@@ -19469,7 +19469,7 @@ class TestExecuteBackgroundDeeper:
 
 class TestCmdSvcWithManager:
     def _setup_manager(self, repl):
-        from domains.shell.init import reset_init_system
+        from domain.shell._internal.init import reset_init_system
         reset_init_system()
         mock_init = MagicMock()
         mock_init.service_table.return_value = "  api  running"
@@ -19864,26 +19864,26 @@ class TestCmdBgFgDeeperV2:
 
 class TestCaptureOutput2:
     def test_with_repl(self, repl):
-        from domains.shell.repl import _CaptureOutput
+        from domain.shell._internal.repl import _CaptureOutput
         with _CaptureOutput(repl) as cap:
             repl.io.write("captured text\n")
         out = cap.getvalue()
         assert "captured text" in out
 
     def test_without_repl(self):
-        from domains.shell.repl import _CaptureOutput
+        from domain.shell._internal.repl import _CaptureOutput
         with _CaptureOutput() as cap:
             print("stdout text")
         assert "stdout text" in cap.getvalue()
 
     def test_getvalue_returns_string(self):
-        from domains.shell.repl import _CaptureOutput
+        from domain.shell._internal.repl import _CaptureOutput
         with _CaptureOutput() as cap:
             pass
         assert isinstance(cap.getvalue(), str)
 
     def test_no_repl_returns_empty(self):
-        from domains.shell.repl import _CaptureOutput
+        from domain.shell._internal.repl import _CaptureOutput
         with _CaptureOutput() as cap:
             pass
         result = cap.getvalue()
@@ -22459,12 +22459,12 @@ class TestSafeImportDeeper:
 
 class TestGroupExtCmdsDeeper:
     def test_group_ext_cmds_empty(self, repl):
-        from domains.shell.repl import ShellREPL
+        from domain.shell._internal.repl import ShellREPL
         result = ShellREPL._group_ext_cmds({})
         assert result == {}
 
     def test_group_ext_cmds_multiple(self, repl):
-        from domains.shell.repl import ShellREPL
+        from domain.shell._internal.repl import ShellREPL
         from types import ModuleType
         m1 = ModuleType("m1")
         m1.help = "File ops"

@@ -5,7 +5,7 @@ with SloAdam."""
 import numpy as np
 import pytest
 
-from domains.training.slonet import SloAdam, SloAdamW, Tensor, mse_loss
+from domain.training._internal.slonet import SloAdam, SloAdamW, Tensor, mse_loss
 
 
 class _NamedTensor(Tensor):

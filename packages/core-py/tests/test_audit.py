@@ -1,4 +1,4 @@
-"""Tests for domains.shell.audit — structured JSONL audit logger."""
+"""Tests for domain.shell._internal.audit — structured JSONL audit logger."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from domains.shell.audit import (
+from domain.shell._internal.audit import (
     ShellAuditLogger,
     get_shell_audit_logger,
     _audit,
@@ -20,7 +20,7 @@ from domains.shell.audit import (
 @pytest.fixture(autouse=True)
 def _reset_singleton():
     """Reset global singleton."""
-    import domains.shell.audit as mod
+    import domain.shell._internal.audit as mod
     mod._audit = None
     yield
     mod._audit = None

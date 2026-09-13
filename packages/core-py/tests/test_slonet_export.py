@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.gguf_export import (
+from domain.training._internal.gguf_export import (
     GGUFExportConfig,
     TensorMapping,
     SloughGPTMapping,

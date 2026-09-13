@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockApiGet = vi.fn()
@@ -111,7 +111,9 @@ describe('MembersPage', () => {
   it('shows invite form', async () => {
     render(<MembersPage />)
     await screen.findByText('Members')
-    expect(screen.getAllByText(/invite/i).length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText(/invite/i).length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('shows search input', async () => {

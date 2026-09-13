@@ -33,7 +33,7 @@ class TestOutcomeTrackerExport:
     """Tests for TrainingOutcomeTracker export functionality."""
 
     def test_export_json(self):
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         initial_count = len(tracker.export_json())
@@ -52,7 +52,7 @@ class TestOutcomeTrackerExport:
         assert all("run_id" in o for o in json_data[-5:])
 
     def test_export_json_with_limit(self):
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         for i in range(10):
@@ -68,7 +68,7 @@ class TestOutcomeTrackerExport:
         assert len(json_data) == 3
 
     def test_export_csv(self):
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         for i in range(3):
@@ -88,7 +88,7 @@ class TestOutcomeTrackerExport:
         assert "run_id" in rows[0]
 
     def test_export_csv_with_limit(self):
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         for i in range(10):
@@ -106,14 +106,14 @@ class TestOutcomeTrackerExport:
         assert len(rows) == 6
 
     def test_export_json_empty_tracker(self):
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         json_data = tracker.export_json()
         assert isinstance(json_data, list)
 
     def test_export_csv_empty_tracker(self):
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         csv_str = tracker.export_csv()
@@ -127,27 +127,27 @@ class TestPresetManagement:
     """Tests for training preset management."""
 
     def test_list_presets(self):
-        from domains.training.presets import list_presets
+        from domain.training._internal.presets import list_presets
 
         presets = list_presets()
         assert isinstance(presets, list)
         assert len(presets) > 0
 
     def test_get_preset(self):
-        from domains.training.presets import get_preset
+        from domain.training._internal.presets import get_preset
 
         preset = get_preset("quick-finetune")
         assert preset is not None
         assert preset["name"] == "Quick Fine-Tune"
 
     def test_get_nonexistent_preset(self):
-        from domains.training.presets import get_preset
+        from domain.training._internal.presets import get_preset
 
         preset = get_preset("nonexistent-preset-xyz")
         assert preset is None
 
     def test_apply_preset(self):
-        from domains.training.presets import apply_preset
+        from domain.training._internal.presets import apply_preset
 
         config = apply_preset("quick-finetune")
         assert config is not None
@@ -157,13 +157,13 @@ class TestPresetManagement:
         assert "default_batch_size" in config
 
     def test_apply_nonexistent_preset(self):
-        from domains.training.presets import apply_preset
+        from domain.training._internal.presets import apply_preset
 
         config = apply_preset("nonexistent-preset-xyz")
         assert config is None
 
     def test_preset_has_required_fields(self):
-        from domains.training.presets import list_presets
+        from domain.training._internal.presets import list_presets
 
         presets = list_presets()
         required_fields = ["name", "description", "model", "method", "epochs", "batch_size"]
@@ -172,7 +172,7 @@ class TestPresetManagement:
                 assert field in preset, f"Missing field '{field}' in preset '{preset.get('name')}'"
 
     def test_preset_config_values_are_numeric(self):
-        from domains.training.presets import apply_preset
+        from domain.training._internal.presets import apply_preset
 
         configs = [
             apply_preset("quick-finetune"),
@@ -186,7 +186,7 @@ class TestPresetManagement:
             assert config["default_batch_size"] > 0
 
     def test_all_presets_are_applicable(self):
-        from domains.training.presets import PRESETS, apply_preset
+        from domain.training._internal.presets import PRESETS, apply_preset
 
         for key in PRESETS:
             config = apply_preset(key)
@@ -197,7 +197,7 @@ class TestComprehensiveResultExport:
     """Tests for ComprehensiveResult export capabilities."""
 
     def test_result_summary(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -211,7 +211,7 @@ class TestComprehensiveResultExport:
             assert "Method:" in summary
 
     def test_result_has_required_fields(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -227,7 +227,7 @@ class TestComprehensiveResultExport:
     def test_result_json_serializable(self):
         from dataclasses import asdict
 
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -248,7 +248,7 @@ class TestComprehensiveResultExport:
             assert len(json_str) > 0
 
     def test_result_phases_have_durations(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -264,7 +264,7 @@ class TestExportFileOutput:
     """Tests for writing export data to files."""
 
     def test_export_json_to_file(self):
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         for i in range(3):
@@ -284,7 +284,7 @@ class TestExportFileOutput:
             assert len(data) == 3
 
     def test_export_csv_to_file(self):
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         for i in range(3):
@@ -306,7 +306,7 @@ class TestExportFileOutput:
     def test_result_to_dict_to_file(self):
         from dataclasses import asdict
 
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         def _default(obj):
             if hasattr(obj, "value"):

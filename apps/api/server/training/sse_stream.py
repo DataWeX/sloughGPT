@@ -136,7 +136,7 @@ def build_training_sse_response(
         get_training_runtime().register(task_id, runtime_job, None, dict(config))
 
         # Import service helpers (core layer, zero HTTP deps)
-        from domains.training.service import (
+        from domain.training._internal.service import (
             cleanup_stream_state,
             process_training_completion,
         )
@@ -250,7 +250,7 @@ def stop_all_training() -> dict:
 
     # Also signal service-layer cancel events
     try:
-        from domains.training.service import (
+        from domain.training._internal.service import (
             get_cancel_event,
             get_pgq,
             get_state,
@@ -280,7 +280,7 @@ def stop_all_training() -> dict:
     except Exception as e:
         logger.warning("cancel_all_training failed: %s", e)
         try:
-            from domains.training.service import get_state
+            from domain.training._internal.service import get_state
             get_state().running = False
         except Exception:
             logger.debug("Failed to reset training state after cancel_all failure")
@@ -298,7 +298,7 @@ def cancel_from_sessions() -> dict:
         logger.warning("CancelManager.cancel_all failed: %s", e)
 
     try:
-        from domains.training.service import get_cancel_event, get_state
+        from domain.training._internal.service import get_cancel_event, get_state
 
         ev = get_cancel_event()
         if ev is not None:
@@ -307,7 +307,7 @@ def cancel_from_sessions() -> dict:
     except Exception as e:
         logger.warning("cancel_from_sessions state reset failed: %s", e)
         try:
-            from domains.training.service import get_state
+            from domain.training._internal.service import get_state
             get_state().running = False
         except Exception:
             logger.debug("Failed to reset training state after cancel_from_sessions failure")

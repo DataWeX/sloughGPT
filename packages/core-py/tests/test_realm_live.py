@@ -1,4 +1,4 @@
-"""Tests for packages/core-py/domains/shell/realm_live.py — pure logic only."""
+"""Tests for packages/core-py/domain.shell._internal.realm_live.py — pure logic only."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import argparse
 
 import pytest
 
-from domains.shell.realm_live import _parse_grid, main
+from domain.shell._internal.realm_live import _parse_grid, main
 
 
 # ── _parse_grid ─────────────────────────────────────────────────────────────

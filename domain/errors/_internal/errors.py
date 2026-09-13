@@ -10,7 +10,7 @@ the same exception handlers and EventBus as all other application errors.
 
 from __future__ import annotations
 
-from domains.infrastructure.errors import AppError, ValidationError
+from domain.infrastructure._internal.errors import AppError, ValidationError
 
 
 class SloughGPTDomainError(AppError):

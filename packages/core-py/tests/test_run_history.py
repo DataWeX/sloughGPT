@@ -1,4 +1,4 @@
-"""Tests for domains.agents.run_history — AgentRunStore MogDB persistence.
+"""Tests for domain.agents._internal.run_history — AgentRunStore MogDB persistence.
 
 Covers: start, append_log, set_tasks, complete, fail, get, list_runs, clear,
 pruning, singleton, safe_id validation. Uses temp directory for MogDB.
@@ -15,7 +15,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.agents.run_history import (
+from domain.agents._internal.run_history import (
     AgentRunStore, _new_run_id, set_mogdb_path, reset_mogdb, reset_agent_run_store,
 )
 

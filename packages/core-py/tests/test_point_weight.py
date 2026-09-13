@@ -294,7 +294,7 @@ class TestPointWeight:
 
 class TestSloLinearPointWeight:
     def test_set_point_weight(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(64, 32, name="test")
         w = np.random.randn(32, 64).astype(np.float32)
         pw = PointWeight.from_array(w, identity="test.weight")
@@ -303,7 +303,7 @@ class TestSloLinearPointWeight:
         assert layer.weight.data.shape == (32, 64)
 
     def test_compress_to_point(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(64, 32, name="test")
         pw = layer.compress_to_point(method="cluster")
         assert isinstance(pw, PointWeight)
@@ -311,7 +311,7 @@ class TestSloLinearPointWeight:
         assert layer.get_point_weight() is pw
 
     def test_forward_with_point_weight(self):
-        from domains.training.slonet import SloLinear, Tensor
+        from domain.training._internal.slonet import SloLinear, Tensor
         layer = SloLinear(64, 32, name="test")
         w = layer.weight.data.copy()
         pw = PointWeight.from_array(w, identity="test.weight")
@@ -321,7 +321,7 @@ class TestSloLinearPointWeight:
         assert out.data.shape == (1, 32)
 
     def test_forward_numpy_with_point_weight(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(64, 32, name="test")
         w = layer.weight.data.copy()
         pw = PointWeight.from_array(w, identity="test.weight")
@@ -331,14 +331,14 @@ class TestSloLinearPointWeight:
         assert out.shape == (1, 32)
 
     def test_compress_to_point_function(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(64, 32, name="test")
         pw = layer.compress_to_point(method="function")
         assert isinstance(pw, PointWeight)
         assert pw.accuracy() > 0.0
 
     def test_set_then_get_point_weight(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(32, 16, name="test")
         assert layer.get_point_weight() is None
         w = np.random.randn(16, 32).astype(np.float32)
@@ -347,14 +347,14 @@ class TestSloLinearPointWeight:
         assert layer.get_point_weight() is pw
 
     def test_compress_to_point_auto(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(64, 32, name="test")
         pw = layer.compress_to_point(method="auto")
         assert isinstance(pw, PointWeight)
         assert pw.accuracy() > 0.0
 
     def test_set_point_weight_replaces(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(64, 32, name="test")
         w1 = np.random.randn(32, 64).astype(np.float32)
         w2 = np.random.randn(32, 64).astype(np.float32)
@@ -365,7 +365,7 @@ class TestSloLinearPointWeight:
         assert layer.get_point_weight() is pw2
 
     def test_forward_consistency(self):
-        from domains.training.slonet import SloLinear, Tensor
+        from domain.training._internal.slonet import SloLinear, Tensor
         layer = SloLinear(32, 16, name="test")
         w = layer.weight.data.copy()
         pw = PointWeight.from_array(w, identity="test.weight")
@@ -376,7 +376,7 @@ class TestSloLinearPointWeight:
         np.testing.assert_array_almost_equal(out1.data, out2.data)
 
     def test_numpy_forward_consistency(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(32, 16, name="test")
         w = layer.weight.data.copy()
         pw = PointWeight.from_array(w, identity="test.weight")
@@ -387,12 +387,12 @@ class TestSloLinearPointWeight:
         np.testing.assert_array_almost_equal(out1, out2)
 
     def test_get_point_weight_before_set(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(32, 16, name="test")
         assert layer.get_point_weight() is None
 
     def test_compress_to_point_accuracy_range(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         layer = SloLinear(64, 32, name="test")
         pw = layer.compress_to_point(method="cluster")
         assert 0.0 <= pw.accuracy() <= 1.0
@@ -400,7 +400,7 @@ class TestSloLinearPointWeight:
 
 class TestCompressSloNetToPoints:
     def test_compress_slo_transformer(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=256, n_embed=32, n_layer=2, n_head=2,
             block_size=32, max_seq_len=64, use_rope=False,
@@ -412,7 +412,7 @@ class TestCompressSloNetToPoints:
             assert pw.accuracy() > 0.3
 
     def test_compress_method_function(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=256, n_embed=32, n_layer=2, n_head=2,
             block_size=32, max_seq_len=64, use_rope=False,
@@ -423,7 +423,7 @@ class TestCompressSloNetToPoints:
             assert isinstance(pw, PointWeight)
 
     def test_compress_returns_dict(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=256, n_embed=32, n_layer=2, n_head=2,
             block_size=32, max_seq_len=64, use_rope=False,
@@ -432,7 +432,7 @@ class TestCompressSloNetToPoints:
         assert isinstance(points, dict)
 
     def test_compress_keys_are_strings(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=256, n_embed=32, n_layer=2, n_head=2,
             block_size=32, max_seq_len=64, use_rope=False,
@@ -442,7 +442,7 @@ class TestCompressSloNetToPoints:
             assert isinstance(key, str)
 
     def test_compress_preserves_shapes(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=256, n_embed=32, n_layer=2, n_head=2,
             block_size=32, max_seq_len=64, use_rope=False,
@@ -452,7 +452,7 @@ class TestCompressSloNetToPoints:
             assert len(pw.shape) > 0
 
     def test_compress_nclusters_parameter(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=256, n_embed=32, n_layer=2, n_head=2,
             block_size=32, max_seq_len=64, use_rope=False,
@@ -461,7 +461,7 @@ class TestCompressSloNetToPoints:
         assert len(points) > 0
 
     def test_compress_all_weights_have_points(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=256, n_embed=32, n_layer=2, n_head=2,
             block_size=32, max_seq_len=64, use_rope=False,
@@ -472,7 +472,7 @@ class TestCompressSloNetToPoints:
             assert pw.point.identity == name
 
     def test_compress_small_model(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=32, n_embed=16, n_layer=1, n_head=2,
             block_size=16, max_seq_len=32, use_rope=False,
@@ -481,7 +481,7 @@ class TestCompressSloNetToPoints:
         assert len(points) > 0
 
     def test_compress_auto_method(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=256, n_embed=32, n_layer=2, n_head=2,
             block_size=32, max_seq_len=64, use_rope=False,
@@ -492,7 +492,7 @@ class TestCompressSloNetToPoints:
             assert isinstance(pw, PointWeight)
 
     def test_compress_generate_all(self):
-        from domains.training.slonet import SloTransformer
+        from domain.training._internal.slonet import SloTransformer
         model = SloTransformer(
             vocab_size=256, n_embed=32, n_layer=2, n_head=2,
             block_size=32, max_seq_len=64, use_rope=False,

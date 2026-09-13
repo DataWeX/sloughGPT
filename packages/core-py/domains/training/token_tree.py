@@ -30,7 +30,7 @@ Interface is SloBPE-compatible: ``stoi`` / ``itos`` / ``vocab_size`` /
 ``decode`` / ``merges``.
 
 Usage:
-    from domains.training.token_tree import TokenTree
+    from domain.training._internal.token_tree import TokenTree
 
     tree = TokenTree()
     tree.train(["hello world", "hello there"], vocab_size=64)
@@ -58,7 +58,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 from domains.infrastructure.pugqeep import Point, PointCompressor, PointLibrary
-from domains.training.tokenizer import gpt2_pretokenize, default_pretokenize
+from domain.training._internal.tokenizer import gpt2_pretokenize, default_pretokenize
 
 logger = logging.getLogger("slo.token_tree")
 

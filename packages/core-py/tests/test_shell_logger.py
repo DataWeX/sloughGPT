@@ -6,8 +6,8 @@ from datetime import datetime
 
 import pytest
 
-from domains.logging.base import ErrorCode, LogLevel, LogRecord, LogTag
-from domains.logging.shell_logger import ShellLogger
+from domain.logging._internal.base import ErrorCode, LogLevel, LogRecord, LogTag
+from domain.logging._internal.shell_logger import ShellLogger
 
 
 def _record(
@@ -458,7 +458,7 @@ class TestEdgeCases:
         assert msg in line
 
     def test_colors_none_defaults_to_auto(self):
-        import domains.logging.shell_logger as sh
+        import domain.logging._internal.shell_logger as sh
         log = ShellLogger("slo.shell", colors=None)
         assert log._colors == sh._COLOR_ENABLED
 

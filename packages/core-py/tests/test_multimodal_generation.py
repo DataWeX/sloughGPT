@@ -9,11 +9,11 @@ import sys
 # Add core-py to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from domains.multimodal.vae import SloVAE, SloVAEEncoder, SloVAEDecoder
-from domains.multimodal.diffusion import LatentDiffusionModel, LatentUNet
-from domains.multimodal.text_encoder import TextEncoder
-from domains.multimodal.video import VideoProcessor, TemporalEncoder
-from domains.multimodal.tts import TTSEngine, GriffinLimVocoder
+from domain.multimodal._internal.vae import SloVAE, SloVAEEncoder, SloVAEDecoder
+from domain.multimodal._internal.diffusion import LatentDiffusionModel, LatentUNet
+from domain.multimodal._internal.text_encoder import TextEncoder
+from domain.multimodal._internal.video import VideoProcessor, TemporalEncoder
+from domain.multimodal._internal.tts import TTSEngine, GriffinLimVocoder
 
 
 class TestSloVAE:
@@ -137,7 +137,7 @@ class TestSloVAE:
         """VAE decoder upsample should double spatial dims."""
         dec = SloVAEDecoder(latent_dim=32)
         x = np.random.randn(1, 32, 7, 7).astype(np.float32)
-        from domains.training.slonet import tensor as _tensor
+        from domain.training._internal.slonet import tensor as _tensor
         x_tensor = _tensor(x, requires_grad=False)
         up = dec._upsample(x_tensor)
         assert up.data.shape == (1, 32, 14, 14)
@@ -183,7 +183,7 @@ class TestLatentDiffusion:
         timesteps = np.array([500])
         context = np.random.randn(B, 10, 64).astype(np.float32)
 
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
         x_tensor = Tensor(x, requires_grad=False)
         context_tensor = Tensor(context, requires_grad=False)
 
@@ -270,7 +270,7 @@ class TestLatentDiffusion:
         B = 1
         x = np.random.randn(B, 32, 7, 7).astype(np.float32)
         timesteps = np.array([500])
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
         x_tensor = Tensor(x, requires_grad=False)
         noise_pred = unet.forward(x_tensor, timesteps)
         assert noise_pred.data.shape == (B, 32, 7, 7)
@@ -535,7 +535,7 @@ class TestTTSEngine:
 
     def test_spectrogram_decoder_encode_text(self):
         """Spectrogram decoder should encode text to hidden states."""
-        from domains.multimodal.tts import SpectrogramDecoder
+        from domain.multimodal._internal.tts import SpectrogramDecoder
         decoder = SpectrogramDecoder(vocab_size=256, embed_dim=64, hidden_dim=128, n_mels=40)
         phoneme_ids = np.array([[65, 66, 67]], dtype=np.int32)
         enc_out, h, c = decoder.encode_text(phoneme_ids)
@@ -543,7 +543,7 @@ class TestTTSEngine:
 
     def test_spectrogram_decoder_generate(self):
         """Spectrogram decoder should generate mel spectrogram."""
-        from domains.multimodal.tts import SpectrogramDecoder
+        from domain.multimodal._internal.tts import SpectrogramDecoder
         decoder = SpectrogramDecoder(vocab_size=256, embed_dim=64, hidden_dim=128, n_mels=40)
         phoneme_ids = np.array([[65, 66, 67]], dtype=np.int32)
         mel = decoder.generate(phoneme_ids, max_frames=10)
@@ -552,7 +552,7 @@ class TestTTSEngine:
 
     def test_spectrogram_decoder_parameters(self):
         """Spectrogram decoder should have parameters."""
-        from domains.multimodal.tts import SpectrogramDecoder
+        from domain.multimodal._internal.tts import SpectrogramDecoder
         decoder = SpectrogramDecoder(vocab_size=256, embed_dim=64, hidden_dim=128, n_mels=40)
         params = decoder.parameters()
         assert len(params) > 0

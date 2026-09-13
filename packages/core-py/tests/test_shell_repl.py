@@ -9,7 +9,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 
-from domains.shell.repl import (
+from domain.shell._internal.repl import (
     _color,
     _COLOR_ENABLED,
     _CaptureOutput,
@@ -42,7 +42,7 @@ class TestColor:
 
     def test_color_no_color_env(self):
         with patch.dict(os.environ, {"NO_COLOR": "1"}, clear=False):
-            import domains.shell.repl as mod
+            import domain.shell._internal.repl as mod
             old = mod._COLOR_ENABLED
             mod._COLOR_ENABLED = False
             try:
@@ -77,7 +77,7 @@ class TestCaptureOutput:
 class TestGetFileHandler:
 
     def test_returns_handler(self):
-        import domains.shell.repl as mod
+        import domain.shell._internal.repl as mod
         old = mod._file_handler
         mod._file_handler = None
         try:
@@ -87,7 +87,7 @@ class TestGetFileHandler:
             mod._file_handler = old
 
     def test_caches_handler(self):
-        import domains.shell.repl as mod
+        import domain.shell._internal.repl as mod
         old = mod._file_handler
         mock_handler = MagicMock()
         mock_handler.closed = False
@@ -105,7 +105,7 @@ class TestGetFileHandler:
 class TestGetLogBufferHandler:
 
     def test_returns_handler(self):
-        import domains.shell.repl as mod
+        import domain.shell._internal.repl as mod
         old = mod._buf_handler
         mod._buf_handler = None
         try:
@@ -116,7 +116,7 @@ class TestGetLogBufferHandler:
             mod._buf_handler = old
 
     def test_caches_handler(self):
-        import domains.shell.repl as mod
+        import domain.shell._internal.repl as mod
         old = mod._buf_handler
         mock_handler = MagicMock()
         mock_handler.closed = False
@@ -186,8 +186,8 @@ class TestCommandCacheFetchers:
 class TestAnsiConstants:
 
     def test_color_codes_defined(self):
-        from domains.shell.repl import _C_CYAN, _C_GREEN, _C_YELLOW, _C_RED
-        from domains.shell.repl import _C_DIM, _C_BOLD, _C_RESET
+        from domain.shell._internal.repl import _C_CYAN, _C_GREEN, _C_YELLOW, _C_RED
+        from domain.shell._internal.repl import _C_DIM, _C_BOLD, _C_RESET
         assert isinstance(_C_CYAN, str)
         assert isinstance(_C_RESET, str)
 
@@ -198,5 +198,5 @@ class TestAnsiConstants:
 class TestReadline:
 
     def test_has_readline_defined(self):
-        from domains.shell.repl import _HAS_READLINE
+        from domain.shell._internal.repl import _HAS_READLINE
         assert isinstance(_HAS_READLINE, bool)

@@ -10,6 +10,8 @@ vi.mock('@/lib/time-ago', () => ({ timeAgo: () => '2m ago' }))
 function makeLiveHealth(overrides: Partial<LiveHealthSnapshot> = {}): LiveHealthSnapshot {
   return {
     model_loaded: false, model_loading: false, model_type: null, device: null, soul: null,
+    startup_stage: 'unknown', startup_stage_value: 0, startup_elapsed: 0,
+    startup_model_progress: 0, startup_model_progress_message: '', startup_hooks: {},
     is_inferencing: false, inference_count: 0, uptime_seconds: 0, request_count: 0,
     error_count: 0, tokens_per_sec: 0, avg_latency_ms: 0, p95_latency_ms: 0,
     requests_per_minute: 0, total_tokens: 0, avg_tokens_per_request: 0,

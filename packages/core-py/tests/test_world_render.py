@@ -1,4 +1,4 @@
-"""Tests for domains.shell.world_render — RenderConfig, RenderDiff, RenderHistory, RenderAnalyzer.
+"""Tests for domain.shell._internal.world_render — RenderConfig, RenderDiff, RenderHistory, RenderAnalyzer.
 
 Covers: dataclass defaults, diff computation, history CRUD, series analysis,
 significant change detection, summary, diff summary text. Pure numpy tests,
@@ -16,7 +16,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.shell.world_render import (
+from domain.shell._internal.world_render import (
     RenderConfig,
     RenderDiff,
     RenderHistory,

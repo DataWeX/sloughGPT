@@ -1,11 +1,11 @@
-"""Tests for domains.cognitive.base — CognitiveDomain and CognitiveException."""
+"""Tests for domain.cognitive._internal.base — CognitiveDomain and CognitiveException."""
 
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from domains import DomainException, Thought, ThoughtType, Memory
-from domains.cognitive.base import CognitiveDomain, CognitiveException
+from domain.cognitive._internal.base import CognitiveDomain, CognitiveException
 
 
 # ---------------------------------------------------------------------------

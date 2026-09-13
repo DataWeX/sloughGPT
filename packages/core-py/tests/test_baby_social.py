@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from domains.collections.baby_social import (
+from domain.collections._internal.baby_social import (
     SocialConfig, Message, BabySocial, BabyCultural, BabySocialSystem,
 )
 

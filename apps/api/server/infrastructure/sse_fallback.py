@@ -13,16 +13,16 @@ import json
 from typing import Any
 
 try:
-    from domains.api.sse_envelope import (
+    from domain.api._internal.sse_envelope import (
         sse_complete as _sse_complete,
     )
-    from domains.api.sse_envelope import (
+    from domain.api._internal.sse_envelope import (
         sse_error as _sse_error,
     )
-    from domains.api.sse_envelope import (
+    from domain.api._internal.sse_envelope import (
         sse_event as _sse_event,
     )
-    from domains.api.sse_envelope import (
+    from domain.api._internal.sse_envelope import (
         sse_token as _sse_token,
     )
 

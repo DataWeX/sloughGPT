@@ -1,4 +1,4 @@
-"""Tests for domains/learner/data_filter.py — quality scoring, config, gates."""
+"""Tests for domain.learner._internal.data_filter.py — quality scoring, config, gates."""
 
 import json
 
@@ -6,7 +6,7 @@ import pytest
 
 from domains import learner
 from domains.learner import data_filter as df
-from domains.learner.data_filter import (
+from domain.learner._internal.data_filter import (
     DataFilter,
     DEFAULT_CONFIG,
     _hashed,

@@ -1,4 +1,4 @@
-"""Tests for domains/inference/vector_stores/ package + create_vector_store factory.
+"""Tests for domain.inference._internal.vector_stores/ package + create_vector_store factory.
 
 External providers (ChromaDB, Pinecone) are faked via ``sys.modules`` injection
 since their real clients are heavy and unavailable in the test environment.
@@ -10,17 +10,17 @@ import types
 
 import pytest
 
-from domains.inference.vector_store import (
+from domain.inference._internal.vector_store import (
     InMemoryVectorStore,
     MogDBVectorStore,
     VectorEntry,
     create_vector_store,
 )
-from domains.inference.vector_stores import (
+from domain.inference._internal.vector_stores import (
     ChromaDBVectorStore,
     PineconeVectorStore,
 )
-from domains.inference.vector_stores import chromadb_store, pinecone_store
+from domain.inference._internal.vector_stores import chromadb_store, pinecone_store
 
 
 def test_package_re_exports():

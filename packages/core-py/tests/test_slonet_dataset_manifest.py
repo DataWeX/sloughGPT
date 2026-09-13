@@ -7,7 +7,7 @@ import os
 import tempfile
 import pytest
 from pathlib import Path
-from domains.training.dataset_manifest import (
+from domain.training._internal.dataset_manifest import (
     ManifestError,
     load_manifest,
     resolve_training_data_path,

@@ -23,8 +23,8 @@ import numpy as np
 from domains.infrastructure.arch_config import ArchConfig, build_arch
 from domains.infrastructure.numpy_forward import forward_fast, pre_extract_weights
 from domains.infrastructure.numpy_ops import softmax as _softmax
-from domains.training.helpers import cross_entropy_loss as _cross_entropy_loss
-from domains.training.slonet import (
+from domain.training._internal.helpers import cross_entropy_loss as _cross_entropy_loss
+from domain.training._internal.slonet import (
     SloAdam,
     SloTransformer,
     cross_entropy,
@@ -523,7 +523,7 @@ def distill_gpt2_to_slo(
     if config.resume_checkpoint and Path(config.resume_checkpoint).exists():
         logger.info("Resuming from checkpoint: %s", config.resume_checkpoint,
             extra={"tag": "TRAIN"},)
-        from domains.training.slonet import import_from_sou
+        from domain.training._internal.slonet import import_from_sou
         student = import_from_sou(config.resume_checkpoint)
 
         # Extract training state from checkpoint metadata
@@ -619,7 +619,7 @@ def distill_gpt2_to_slo(
 
             # Normalize to object with .data attribute
             if not hasattr(s_logits, 'data'):
-                from domains.training.slonet import Tensor as _Tensor
+                from domain.training._internal.slonet import Tensor as _Tensor
                 s_logits = _Tensor(np.asarray(s_logits, dtype=np.float32))
 
             # Keep s_logits as Tensor for autograd — reshape to 2D (batch*seq, vocab)
@@ -651,7 +651,7 @@ def distill_gpt2_to_slo(
             soft_loss_val = float(kl_per_token.mean() * (T ** 2))
 
             # Create soft loss Tensor with backward through s_logits_trunc
-            from domains.training.slonet import Tensor as _Tensor
+            from domain.training._internal.slonet import Tensor as _Tensor
             soft_loss = _Tensor(soft_loss_val, requires_grad=True, _children=(s_logits_trunc,))
             if s_logits_trunc.requires_grad:
                 s_logits_trunc._consumers.append(soft_loss)

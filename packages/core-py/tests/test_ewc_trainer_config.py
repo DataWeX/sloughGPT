@@ -1,9 +1,9 @@
-"""Tests for domains.training.ewc — EWCParameters, TaskSnapshot; domains.training.train_pipeline — TrainerConfig."""
+"""Tests for domain.training._internal.ewc — EWCParameters, TaskSnapshot; domain.training._internal.train_pipeline — TrainerConfig."""
 
 import numpy as np
 import pytest
-from domains.training.ewc import EWCParameters, TaskSnapshot
-from domains.training.train_pipeline import TrainerConfig
+from domain.training._internal.ewc import EWCParameters, TaskSnapshot
+from domain.training._internal.train_pipeline import TrainerConfig
 
 
 # ── EWCParameters ────────────────────────────────────────────────────────

@@ -359,37 +359,37 @@ class TestLinuxCmdUtils:
 
 class TestErrorFormatting:
     def test_format_error_connection(self):
-        from domains.shell.error import format_error
+        from domain.shell._internal.error import format_error
         result = format_error(ConnectionError("refused"), "health", color=False)
         assert "Connection failed" in result
 
     def test_format_error_timeout(self):
-        from domains.shell.error import format_error
+        from domain.shell._internal.error import format_error
         result = format_error(TimeoutError("timed out"), "models", color=False)
         assert "timed out" in result.lower() or "Timeout" in result
 
     def test_format_error_permission(self):
-        from domains.shell.error import format_error
+        from domain.shell._internal.error import format_error
         result = format_error(PermissionError("denied"), "rm", color=False)
         assert "Permission denied" in result
 
     def test_format_error_file_not_found(self):
-        from domains.shell.error import format_error
+        from domain.shell._internal.error import format_error
         result = format_error(FileNotFoundError("nope"), "cat", color=False)
         assert "File not found" in result
 
     def test_format_error_generic(self):
-        from domains.shell.error import format_error
+        from domain.shell._internal.error import format_error
         result = format_error(ValueError("oops"), "test", color=False)
         assert "ValueError" in result
 
     def test_format_error_no_cmd(self):
-        from domains.shell.error import format_error
+        from domain.shell._internal.error import format_error
         result = format_error(RuntimeError("fail"), color=False)
         assert "RuntimeError" in result
 
     def test_format_error_with_cmd_prefix(self):
-        from domains.shell.error import format_error
+        from domain.shell._internal.error import format_error
         result = format_error(RuntimeError("fail"), "mycmd", color=False)
         assert "[mycmd]" in result
 

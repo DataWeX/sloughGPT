@@ -38,7 +38,7 @@ class _TTSBackend:
         if self._loaded:
             return True
         try:
-            from domains.multimodal.tts import TTSEngine
+            from domain.multimodal._internal.tts import TTSEngine
 
             self._engine = TTSEngine()
             self._loaded = True

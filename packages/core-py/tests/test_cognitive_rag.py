@@ -1,8 +1,8 @@
-"""Comprehensive tests for domains/cognitive/rag.py — pure logic only."""
+"""Comprehensive tests for domain.cognitive._internal.rag.py — pure logic only."""
 
 import pytest
 import numpy as np
-from domains.cognitive.rag import (
+from domain.cognitive._internal.rag import (
     TextChunk,
     RetrievalResult,
     BM25Indexer,

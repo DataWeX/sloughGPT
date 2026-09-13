@@ -57,9 +57,9 @@ describe('CustomErrorHandler', () => {
   it('toggles detail section', () => {
     render(<CustomErrorHandler error={createError('test')} reset={reset} />)
     fireEvent.click(screen.getByText('Details'))
-    expect(screen.getByText('Error Details')).toBeDefined()
+    expect(screen.getByText('Copy')).toBeDefined()
     fireEvent.click(screen.getByText('Hide'))
-    expect(screen.queryByText('Error Details')).toBeNull()
+    expect(screen.queryByText('Copy')).toBeNull()
   })
 
   it('calls reset on Try again', () => {

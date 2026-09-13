@@ -1,8 +1,8 @@
-"""Tests for domains.shell.console — Console output, TUI-aware methods."""
+"""Tests for domain.shell._internal.console — Console output, TUI-aware methods."""
 
 import pytest
-from domains.shell.console import Console, _TuiSpinner, _Spinner, _Live
-from domains.shell.io import MemoryIO
+from domain.shell._internal.console import Console, _TuiSpinner, _Spinner, _Live
+from domain.shell._internal.io import MemoryIO
 
 
 def _make_console(tui: bool = False) -> tuple[Console, MemoryIO]:

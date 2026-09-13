@@ -8,7 +8,7 @@ import pytest
 
 from domains.shell.addons.neural import NeuralEmbeddingStore
 from domains.shell.addons.neural_bindings import Property, engine
-from domains.shell.kernel import Kernel
+from domain.shell._internal.kernel import Kernel
 
 
 def _booted() -> Kernel:

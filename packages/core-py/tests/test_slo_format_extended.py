@@ -7,7 +7,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from domains.inference.slo_format import (
+from domain.inference._internal.slo_format import (
     SOU_MAGIC,
     SOU_VERSION_V3,
     GenerationParams,

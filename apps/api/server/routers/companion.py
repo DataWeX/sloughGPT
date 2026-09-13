@@ -19,12 +19,9 @@ logger = logging.getLogger("slo.routers.companion")
 
 
 def _get_db():
-    from mogdb import MogDB
+    from infrastructure.db_pool import get_db
 
-    repo_root = Path(__file__).resolve().parents[4]
-    db_path = os.path.join(repo_root, "data", "companion_mogdb")
-    sync_path = os.path.join(repo_root, "data", "companion_json")
-    return MogDB(db_path, sync_dir=sync_path)
+    return get_db("companion_mogdb")
 
 
 class SetPersonalityRequest(BaseModel):

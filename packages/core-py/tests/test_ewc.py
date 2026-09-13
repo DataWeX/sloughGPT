@@ -9,8 +9,8 @@ Covers:
 
 import numpy as np
 import pytest
-from domains.training.slonet import Tensor, SloLinear, SloNet
-from domains.training.ewc import (
+from domain.training._internal.slonet import Tensor, SloLinear, SloNet
+from domain.training._internal.ewc import (
     EWCParameters,
     TaskSnapshot,
     DiagonalFisherEstimator,

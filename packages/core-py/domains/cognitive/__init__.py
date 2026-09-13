@@ -1,15 +1,16 @@
-"""Backward-compatibility shim — re-exports from the local cognitive submodules."""
+"""Backward-compatibility shim — imports from the new ``domain.cognitive`` package."""
 
-from domains.cognitive.base import CognitiveDomain, CognitiveException
-from domains.cognitive.core import (
+from domain.cognitive import (
+    CognitiveDomain,
+    CognitiveException,
     CognitiveCore,
     ThinkingMode,
     ReasoningType,
     ThoughtProcess,
     CreativeIdea,
     ReasoningChain,
+    CognitiveProcessor,
 )
-from domains.cognitive.processor import CognitiveProcessor
 
 __all__ = [
     "CognitiveDomain",

@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from domains.multimodal.german_phoneme_encoder import (
+from domain.multimodal._internal.german_phoneme_encoder import (
     GermanPhonemeEncoder, german_text_to_phonemes,
     GERMAN_ID_TO_PHONEME, BOS, EOS, PAD, SPACE, NUM_GERMAN_PHONEMES,
 )

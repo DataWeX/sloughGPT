@@ -6,8 +6,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from domains.shell.network_device import NetworkDevice
-from domains.shell.kernel_syscall import SyscallResult
+from domain.shell._internal.network_device import NetworkDevice
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 
 @pytest.fixture

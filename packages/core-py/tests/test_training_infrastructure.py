@@ -29,7 +29,7 @@ class TestAdaptiveConfigEngine:
     """Tests for the adaptive config recommendation engine."""
 
     def test_recommend_returns_result(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         rec = engine.recommend(dataset_size=1000, model="gpt2", method="finetune")
@@ -39,21 +39,21 @@ class TestAdaptiveConfigEngine:
         assert hasattr(rec, "confidence")
 
     def test_recommend_confidence_range(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         rec = engine.recommend(dataset_size=1000, model="gpt2", method="finetune")
         assert 0.0 <= rec.confidence <= 1.0
 
     def test_recommend_based_on_runs(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         rec = engine.recommend(dataset_size=1000, model="gpt2", method="finetune")
         assert rec.based_on_runs >= 0
 
     def test_recommend_different_sizes(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         small = engine.recommend(dataset_size=100, model="gpt2", method="finetune")
@@ -62,7 +62,7 @@ class TestAdaptiveConfigEngine:
         assert large is not None
 
     def test_recommend_different_methods(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         sft = engine.recommend(dataset_size=1000, model="gpt2", method="finetune")
@@ -71,14 +71,14 @@ class TestAdaptiveConfigEngine:
         assert rlhf is not None
 
     def test_recommend_has_reason(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         rec = engine.recommend(dataset_size=1000, model="gpt2", method="finetune")
         assert isinstance(rec.reason, str)
 
     def test_recommend_quality_metrics(self):
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
         engine = AdaptiveConfigEngine()
         rec = engine.recommend(dataset_size=1000, model="gpt2", method="finetune")
@@ -91,13 +91,13 @@ class TestTrainingState:
     """Tests for training state management."""
 
     def test_get_state_returns_training_state(self):
-        from domains.training.state import TrainingState, get_state
+        from domain.training._internal.state import TrainingState, get_state
 
         state = get_state()
         assert isinstance(state, TrainingState)
 
     def test_state_has_required_fields(self):
-        from domains.training.state import get_state
+        from domain.training._internal.state import get_state
 
         state = get_state()
         assert hasattr(state, "running")
@@ -106,26 +106,26 @@ class TestTrainingState:
         assert hasattr(state, "student_tokenizer")
 
     def test_state_is_singleton(self):
-        from domains.training.state import get_state
+        from domain.training._internal.state import get_state
 
         state1 = get_state()
         state2 = get_state()
         assert state1 is state2
 
     def test_state_running_default(self):
-        from domains.training.state import get_state
+        from domain.training._internal.state import get_state
 
         state = get_state()
         assert isinstance(state.running, bool)
 
     def test_state_config_is_dict(self):
-        from domains.training.state import get_state
+        from domain.training._internal.state import get_state
 
         state = get_state()
         assert isinstance(state.config, dict)
 
     def test_get_turbo_state(self):
-        from domains.training.state import get_turbo_state
+        from domain.training._internal.state import get_turbo_state
 
         turbo = get_turbo_state()
         assert isinstance(turbo, dict)
@@ -134,7 +134,7 @@ class TestTrainingState:
         assert "progress" in turbo
 
     def test_turbo_state_has_required_fields(self):
-        from domains.training.state import get_turbo_state
+        from domain.training._internal.state import get_turbo_state
 
         turbo = get_turbo_state()
         required = ["status", "job_id", "global_step", "total_steps", "progress", "loss"]
@@ -146,22 +146,22 @@ class TestTrainingConstants:
     """Tests for training constants and configuration."""
 
     def test_checkpoint_dir_exists(self):
-        from domains.training.state import CHECKPOINTS_DIR
+        from domain.training._internal.state import CHECKPOINTS_DIR
 
         assert CHECKPOINTS_DIR.exists()
 
     def test_lora_dir_exists(self):
-        from domains.training.state import LORA_DIR
+        from domain.training._internal.state import LORA_DIR
 
         assert LORA_DIR.exists()
 
     def test_turbo_dir_exists(self):
-        from domains.training.state import TURBO_DIR
+        from domain.training._internal.state import TURBO_DIR
 
         assert TURBO_DIR.exists()
 
     def test_valid_checkpoint_name(self):
-        from domains.training.state import VALID_CKPT_NAME
+        from domain.training._internal.state import VALID_CKPT_NAME
 
         assert VALID_CKPT_NAME.match("my-checkpoint_v1")
         assert VALID_CKPT_NAME.match("checkpoint.001")
@@ -173,7 +173,7 @@ class TestOutcomeTrackerBasics:
     """Tests for TrainingOutcomeTracker core functionality."""
 
     def test_tracker_record_and_load(self):
-        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
         initial = len(tracker.load_outcomes())
@@ -189,7 +189,7 @@ class TestOutcomeTrackerBasics:
         assert after >= initial
 
     def test_outcome_has_required_fields(self):
-        from domains.training.outcome_tracker import TrainingOutcome
+        from domain.training._internal.outcome_tracker import TrainingOutcome
 
         outcome = TrainingOutcome(
             run_id="test_run",
@@ -210,7 +210,7 @@ class TestComprehensiveTrainerIntegration:
     """Integration tests for ComprehensiveTrainer with infrastructure."""
 
     def test_trainer_uses_adaptive_config(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -223,7 +223,7 @@ class TestComprehensiveTrainerIntegration:
             assert result.success
 
     def test_trainer_records_outcome(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -234,7 +234,7 @@ class TestComprehensiveTrainerIntegration:
             assert result.final_loss is not None
 
     def test_trainer_performance_metrics(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)
@@ -248,7 +248,7 @@ class TestComprehensiveTrainerIntegration:
             assert perf["total_duration_s"] > 0
 
     def test_trainer_multiple_methods(self):
-        from domains.training.comprehensive_trainer import ComprehensiveTrainer
+        from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write(DATA_TEXT)

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.distillation import (
+from domain.training._internal.distillation import (
     DistillationConfig,
     DistillationLoss,
     _to_np,
     _to_tensor,
     _size,
 )
-from domains.training.slonet import Tensor
+from domain.training._internal.slonet import Tensor
 
 
 # ── _to_np / _to_tensor / _size helpers ────────────────────────────────────

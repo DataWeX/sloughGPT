@@ -5,7 +5,7 @@ pretokenize, decompose, analyze.
 All domain calls are mocked; only HTTP-level behavior is tested.
 
 Note: the tokenizer router imports get_tokenizer_manager at MODULE level
-(line 14: from domains.training.tokenizer_manager import get_tokenizer_manager),
+(line 14: from domain.training._internal.tokenizer_manager import get_tokenizer_manager),
 so patching 'routers.tokenizer.get_tokenizer_manager' works directly.
 """
 from __future__ import annotations

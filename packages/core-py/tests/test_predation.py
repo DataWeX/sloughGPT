@@ -15,12 +15,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domains.shell.evolution import (
+from domain.shell._internal.evolution import (
     EvolutionEngine,
     Genome,
     benchmark_predation,
 )
-from domains.shell.simulation import (
+from domain.shell._internal.simulation import (
     SimBaby,
     SimScene,
     Simulation,

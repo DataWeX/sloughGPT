@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ def load_module():
     path = Path(__file__).resolve().parents[1] / "packages" / "core-py" / "domains" / "infrastructure" / "training_pipeline.py"
     spec = spec_from_file_location("training_pipeline", path)
     module = module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 

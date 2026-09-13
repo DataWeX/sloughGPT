@@ -50,7 +50,7 @@ def _make_companion(**overrides):
     ns.to_dict = lambda: {"name": ns._traits.get("name", "Friend"), "traits": dict(ns._traits)}
     # generate() async method — checks provider availability
     async def _generate(**kwargs):
-        from domains.models.provider import get_provider
+        from domain.models._internal.provider import get_provider
         if get_provider("default") is None:
             raise RuntimeError("No model loaded")
         return "Hello there!"
@@ -176,7 +176,7 @@ class TestListPresets:
 
 
 class TestChat:
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.models._internal.provider.get_provider")
     @patch(PATCH_GET)
     def test_chat_with_model(self, mock_get, mock_provider_fn):
         comp = _make_companion()
@@ -200,7 +200,7 @@ class TestChat:
     def test_chat_no_model_returns_error_message(self, mock_get):
         comp = _make_companion()
         mock_get.return_value = comp
-        with patch("domains.models.provider.get_provider", return_value=None):
+        with patch("domain.models._internal.provider.get_provider", return_value=None):
             client = TestClient(_app())
             resp = client.post("/companion/chat", json={"message": "Hi"})
         assert resp.status_code == 503
@@ -210,7 +210,7 @@ class TestChat:
     def test_chat_with_mood_adjustment(self, mock_get):
         comp = _make_companion()
         mock_get.return_value = comp
-        with patch("domains.models.provider.get_provider", return_value=None):
+        with patch("domain.models._internal.provider.get_provider", return_value=None):
             client = TestClient(_app())
             resp = client.post("/companion/chat", json={"message": "Hi", "user_mood": "happy"})
         assert resp.status_code == 503

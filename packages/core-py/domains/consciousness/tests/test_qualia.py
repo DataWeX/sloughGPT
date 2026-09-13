@@ -1,7 +1,7 @@
 """Tests for QualiaEngine."""
 
 import pytest
-from domains.consciousness.qualia import QualiaEngine, QualiaState
+from domain.consciousness._internal.qualia import QualiaEngine, QualiaState
 
 
 class TestQualiaState:

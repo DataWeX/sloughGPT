@@ -1,8 +1,8 @@
-"""Tests for domains/training/dataset.py TrainingDataset."""
+"""Tests for domain.training._internal.dataset.py TrainingDataset."""
 
 import pytest
 
-from domains.training.dataset import TrainingDataset
+from domain.training._internal.dataset import TrainingDataset
 
 
 SHORT_TEXT = "tiny"

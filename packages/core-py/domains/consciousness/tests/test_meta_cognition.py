@@ -1,9 +1,9 @@
 """Tests for MetaCognition."""
 
 import pytest
-from domains.consciousness.meta_cognition import MetaCognition, MetaCognitiveReport
-from domains.consciousness.self_model import SelfModel
-from domains.consciousness.qualia import QualiaEngine
+from domain.consciousness._internal.meta_cognition import MetaCognition, MetaCognitiveReport
+from domain.consciousness._internal.self_model import SelfModel
+from domain.consciousness._internal.qualia import QualiaEngine
 
 
 class TestMetaCognitiveReport:

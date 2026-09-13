@@ -1,8 +1,29 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import io
+import pytest
 
 from apps.cli.src.commands.chat import cmd_chat
+
+
+@pytest.fixture(autouse=True)
+def _cli_logger(monkeypatch):
+    """CLI entrypoint calls ``set_global(CLILogger('slo'))`` — reach cmd_chat
+    directly, so install the same logger (wired to an explicit buffer, since
+    pytest's global capture wraps ``sys.stdout`` after construction) and point
+    the chat module at it."""
+    from domains.logging import CLILogger, set_global
+
+    buf = io.StringIO()
+    logger = CLILogger("slo", stream=buf)
+    set_global(logger)
+    import apps.cli.src.commands.chat as chat_mod
+
+    monkeypatch.setattr(chat_mod, "log", logger)
+    return buf
 
 
 class _Resp:
@@ -35,7 +56,7 @@ def _chat_args(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**base)
 
 
-def test_chat_auto_model_calls_models_load_before_prompt(monkeypatch, capsys) -> None:
+def test_chat_auto_model_calls_models_load_before_prompt(monkeypatch, _cli_logger) -> None:
     calls: list[tuple[str, str, dict | None]] = []
 
     def fake_get(url, timeout=0):  # noqa: ANN001
@@ -54,7 +75,7 @@ def test_chat_auto_model_calls_models_load_before_prompt(monkeypatch, capsys) ->
     monkeypatch.setattr("requests.post", fake_post)
 
     cmd_chat(_chat_args(auto_model="gpt2"))
-    out = capsys.readouterr().out
+    out = _cli_logger.getvalue()
 
     assert "Loading: gpt2" in out
     assert "Model ready: gpt2" in out
@@ -64,7 +85,7 @@ def test_chat_auto_model_calls_models_load_before_prompt(monkeypatch, capsys) ->
     assert not any(u.endswith("/generate") for u in post_urls)
 
 
-def test_chat_no_model_response_prints_actionable_hint(monkeypatch, capsys) -> None:
+def test_chat_no_model_response_prints_actionable_hint(monkeypatch, _cli_logger) -> None:
     post_calls = {"count": 0}
 
     def fake_get(_url, timeout=0):  # noqa: ANN001
@@ -86,13 +107,13 @@ def test_chat_no_model_response_prints_actionable_hint(monkeypatch, capsys) -> N
     monkeypatch.setattr("requests.post", fake_post)
 
     cmd_chat(_chat_args())
-    out = capsys.readouterr().out
+    out = _cli_logger.getvalue()
 
     assert post_calls["count"] == 1
     assert "Load a model first:" in out
 
 
-def test_chat_legacy_model_flag_also_autoloads(monkeypatch, capsys) -> None:
+def test_chat_legacy_model_flag_also_autoloads(monkeypatch, _cli_logger) -> None:
     calls: list[tuple[str, str, dict | None]] = []
 
     def fake_get(url, timeout=0):  # noqa: ANN001
@@ -110,13 +131,13 @@ def test_chat_legacy_model_flag_also_autoloads(monkeypatch, capsys) -> None:
     monkeypatch.setattr("requests.post", fake_post)
 
     cmd_chat(_chat_args(model="gpt2"))
-    out = capsys.readouterr().out
+    out = _cli_logger.getvalue()
 
     assert "Loading: gpt2" in out
     assert any(u.endswith("/models/load") for m, u, _ in calls if m == "POST")
 
 
-def test_chat_auto_model_takes_precedence_over_legacy_model(monkeypatch, capsys) -> None:
+def test_chat_auto_model_takes_precedence_over_legacy_model(monkeypatch, _cli_logger) -> None:
     payloads: list[dict | None] = []
 
     def fake_get(_url, timeout=0):  # noqa: ANN001
@@ -133,7 +154,7 @@ def test_chat_auto_model_takes_precedence_over_legacy_model(monkeypatch, capsys)
     monkeypatch.setattr("requests.post", fake_post)
 
     cmd_chat(_chat_args(model="gpt2", auto_model="distilgpt2"))
-    out = capsys.readouterr().out
+    out = _cli_logger.getvalue()
 
     assert "using --auto-model" in out
     assert "Loading: distilgpt2" in out
@@ -142,7 +163,7 @@ def test_chat_auto_model_takes_precedence_over_legacy_model(monkeypatch, capsys)
     assert payloads[0]["device"] == "auto"
 
 
-def test_chat_load_respects_load_mode_and_device(monkeypatch, capsys) -> None:
+def test_chat_load_respects_load_mode_and_device(monkeypatch) -> None:
     payloads: list[dict | None] = []
 
     def fake_get(_url, timeout=0):  # noqa: ANN001

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import numpy as np
 
-from domains.shell.npu_device import NPUDevice
-from domains.shell.kernel_syscall import SyscallResult
+from domain.shell._internal.npu_device import NPUDevice
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 
 def _make_provider():

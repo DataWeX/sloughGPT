@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from controllers.datasets import DatasetsController
-from domains.infrastructure.errors import NotFoundError
+from domain.infrastructure._internal.errors import NotFoundError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from routers.datasets import DatasetsRouter

@@ -19,27 +19,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from PIL import Image
 
-from domains.multimodal.bpe_tokenizer import BPETokenizer
-from domains.multimodal.char_tokenizer import CharTokenizer
-from domains.multimodal.diffusion import (
+from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
+from domain.multimodal._internal.char_tokenizer import CharTokenizer
+from domain.multimodal._internal.diffusion import (
     TimestepEmbedder, LatentDiffusionModel, LatentUNet,
     _group_norm as diffusion_group_norm, _timestep_embedding,
 )
-from domains.multimodal.engine import (
+from domain.multimodal._internal.engine import (
     AudioEncoder, MultimodalEngine, ReplayBuffer, TextDecoder,
     VisionEncoder, augment_image, contrastive_loss, contrastive_step,
     get_multimodal_engine, replay_train_step,
 )
-from domains.multimodal.manager import (
+from domain.multimodal._internal.manager import (
     MultimodalManager, get_multimodal_manager, initialize_multimodal,
 )
-from domains.multimodal.text_encoder import TextEncoder
-from domains.multimodal.vae import (
+from domain.multimodal._internal.text_encoder import TextEncoder
+from domain.multimodal._internal.vae import (
     SloVAE, SloVAEDecoder, SloVAEEncoder, _group_norm as vae_group_norm,
 )
-from domains.multimodal.video import TemporalEncoder, VideoProcessor
-from domains.multimodal.vision import VisionCNN, get_vision_model
-from domains.training.slonet import Tensor, tensor as _tensor
+from domain.multimodal._internal.video import TemporalEncoder, VideoProcessor
+from domain.multimodal._internal.vision import VisionCNN, get_vision_model
+from domain.training._internal.slonet import Tensor, tensor as _tensor
 
 
 def _sample_image() -> np.ndarray:
@@ -733,7 +733,7 @@ class TestMultimodalEngine:
         assert engine._extract_images([{"content": "no image here"}]) == []
 
     def test_causal_mask_shape(self):
-        from domains.multimodal.engine import _causal_mask
+        from domain.multimodal._internal.engine import _causal_mask
         mask = _causal_mask(6)
         assert mask.data.shape == (1, 1, 6, 6)
 
@@ -842,7 +842,7 @@ class TestMultimodalEngine:
         img = np.zeros((8, 8), dtype=np.float32)
         buf.add(img, "a red circle")
         buf.add(img, "a blue square")
-        import domains.multimodal.engine as engine_mod
+        import domain.multimodal._internal.engine as engine_mod
         with patch.object(engine_mod.ReplayBuffer, "sample", return_value=([img], ["bad caption"])):
             with patch.object(engine_mod.TextDecoder, "encode", side_effect=RuntimeError("boom")):
                 assert replay_train_step(engine, buf, batch_size=2) == 0.0
@@ -873,7 +873,7 @@ class TestMultimodalEngine:
         class _Mgr:
             def caption_image(self, img):
                 return _Cap()
-        with patch("domains.multimodal.manager.get_multimodal_manager", return_value=_Mgr()):
+        with patch("domain.multimodal._internal.manager.get_multimodal_manager", return_value=_Mgr()):
             async def _run():
                 async for chunk in engine.chat_stream(
                     [{"role": "user", "content": "data:image/png;base64," + b64}]

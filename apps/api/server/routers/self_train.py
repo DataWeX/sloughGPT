@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 import state as server_state
-from domains.infrastructure.errors import AppError
+from domain.infrastructure._internal.errors import AppError
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field

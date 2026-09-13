@@ -148,7 +148,7 @@ class TestApplyCorrection:
         assert loss == 0.0
 
     def test_runs_and_updates_params(self):
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
 
         rng = np.random.default_rng(7)
         params = [Tensor(rng.standard_normal((1, 4)).astype(np.float64), requires_grad=True)]
@@ -184,7 +184,7 @@ class TestApplyCorrection:
         assert not np.allclose(before, params[0].data)
 
     def test_fallback_tokenizer_path(self):
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
 
         rng = np.random.default_rng(3)
         params = [Tensor(rng.standard_normal((1, 4)).astype(np.float64), requires_grad=True)]
@@ -212,7 +212,7 @@ class TestApplyCorrection:
 
     def test_clips_large_gradients(self, monkeypatch):
         from domains.training import slonet
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
 
         seen = {}
 

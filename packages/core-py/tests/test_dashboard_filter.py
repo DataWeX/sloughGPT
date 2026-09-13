@@ -1,4 +1,4 @@
-"""Tests for packages/core-py/domains/logging/dashboard_filter.py — pure logic only."""
+"""Tests for packages/core-py/domain.logging._internal.dashboard_filter.py — pure logic only."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from domains.logging.dashboard_filter import (
+from domain.logging._internal.dashboard_filter import (
     DashboardFilter,
     _PATTERNS,
     _WATCHED_OPS,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from typing import Any, Dict
 
-from domains.infrastructure.config import get_config
+from domain.infrastructure._internal.config import get_config
 
 
 def wandb_training_enabled_from_env() -> bool:
@@ -68,7 +68,7 @@ def create_training_tracker_for_api_job(
     if not wandb_training_enabled_from_env():
         return None
     try:
-        from domains.training.tracking import ExperimentTracker, TrackerBackend, TrackingConfig
+        from domain.training._internal.tracking import ExperimentTracker, TrackerBackend, TrackingConfig
     except ImportError:
         return None
 

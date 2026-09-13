@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.chat_trainer import (
+from domain.training._internal.chat_trainer import (
     ChatTrainConfig,
     ChatTextDataset,
     _build_vocab,

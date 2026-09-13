@@ -3,7 +3,7 @@
 import threading
 import pytest
 
-from domains.core.database import _MemoryDB, get_db
+from domain.core._internal.database import _MemoryDB, get_db
 
 
 # ---------------------------------------------------------------------------

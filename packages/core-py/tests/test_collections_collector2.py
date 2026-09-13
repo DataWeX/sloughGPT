@@ -1,17 +1,17 @@
-"""Tests for domains.collections.collector — pure logic, no network."""
+"""Tests for domain.collections._internal.collector — pure logic, no network."""
 from __future__ import annotations
 
 import pytest
 
-from domains.collections.collector import BatchCollector, Collector, ParallelCollector
-from domains.collections.filters import (
+from domain.collections._internal.collector import BatchCollector, Collector, ParallelCollector
+from domain.collections._internal.filters import (
     DedupFilter,
     FilterChain,
     KeywordFilter,
     LengthFilter,
 )
-from domains.collections.sources import GeneratorSource, Record
-from domains.collections.stores import MemoryStore
+from domain.collections._internal.sources import GeneratorSource, Record
+from domain.collections._internal.stores import MemoryStore
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ class TestCollector:
         c = Collector(_source([_r("a")]), _store())
         c.collect = lambda: counting_collect(c)
         import unittest.mock
-        with unittest.mock.patch("domains.collections.collector.time.sleep"):
+        with unittest.mock.patch("domain.collections._internal.collector.time.sleep"):
             c.collect_continuous(interval=0, max_rounds=3)
         assert call_count == 3
 
@@ -218,7 +218,7 @@ class TestParallelCollector:
         pc = ParallelCollector([c1])
         pc.collect_threaded = lambda: counting_collect(pc)
         import unittest.mock
-        with unittest.mock.patch("domains.collections.collector.time.sleep"):
+        with unittest.mock.patch("domain.collections._internal.collector.time.sleep"):
             pc.collect_continuous(interval=0, max_rounds=2)
         assert call_count == 2
 

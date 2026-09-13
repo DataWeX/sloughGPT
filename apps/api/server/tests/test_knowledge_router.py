@@ -5,7 +5,7 @@ from test_support import get_test_client
 
 def _cleanup(client):
     """Clear all knowledge items via the singleton's clear_all."""
-    from domains.learner.knowledge import get_knowledge_memory
+    from domain.learner._internal.knowledge import get_knowledge_memory
 
     get_knowledge_memory().clear_all()
 

@@ -1,7 +1,7 @@
 """Meaningful tests for CurriculumLearner, HierarchicalContext, KnowledgeNode/Edge, FisherInformation."""
 
 import numpy as np
-from domains.cognitive.grounding import (
+from domain.cognitive._internal.grounding import (
     CurriculumLearner, HierarchicalContext, KnowledgeNode, KnowledgeEdge,
     FisherInformation, KnowledgeGrounding,
 )

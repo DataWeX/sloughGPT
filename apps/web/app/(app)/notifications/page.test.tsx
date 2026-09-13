@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockApiGet = vi.fn()
@@ -68,9 +68,11 @@ describe('NotificationsPage', () => {
   it('displays KPI stats', async () => {
     render(<NotificationsPage />)
     await screen.findByText('Notifications')
-    expect(screen.getAllByText('Total').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Training').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Members').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText('Total').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Training').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Members').length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('displays notification list', async () => {
@@ -106,7 +108,7 @@ describe('NotificationsPage', () => {
     render(<NotificationsPage />)
     await screen.findByText('Notifications')
 
-    const filterInput = screen.getByPlaceholderText('Filter notifications...')
+    const filterInput = await screen.findByPlaceholderText('Filter notifications...')
     await user.type(filterInput, 'Failed')
 
     expect(screen.getAllByText('Job Failed').length).toBeGreaterThanOrEqual(1)
@@ -131,7 +133,7 @@ describe('NotificationsPage', () => {
     render(<NotificationsPage />)
     await screen.findByText('Notifications')
 
-    const filterInput = screen.getByPlaceholderText('Filter notifications...')
+    const filterInput = await screen.findByPlaceholderText('Filter notifications...')
     await user.type(filterInput, 'zzznonexistent')
 
     expect(screen.getAllByText(/no notifications match/i).length).toBeGreaterThanOrEqual(1)

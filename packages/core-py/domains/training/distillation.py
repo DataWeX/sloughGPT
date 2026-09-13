@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Union
 
 import numpy as np
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     softmax, log_softmax, cross_entropy, mse_loss, kl_div_loss,
     Tensor, SloLinear, no_grad, SloAdam,
 )

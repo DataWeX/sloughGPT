@@ -4,7 +4,7 @@ Every test uses real programmatic inputs only:
 - a hand-built real ``.slnc`` file (per the spec in ``slnc/spec.py``)
 - real tiny transformer weights mapped through ``map_slnc_to_native``
 - the compiled ``libtransformer_forward.so`` via ``bindings.load_lib()``
-- the real shared tokenizer via ``domains.inference.tokenizer``
+- the real shared tokenizer via ``domain.inference._internal.tokenizer``
 
 No mocks, no stubs, no third-party installs.
 """
@@ -32,7 +32,7 @@ from domains.inference.native.engine import (
     sample_token,
 )
 from domains.inference.native.weight_mapper import map_slnc_to_native
-from domains.inference.ct_provider import CTransformProvider
+from domain.inference._internal.ct_provider import CTransformProvider
 
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
 
@@ -403,7 +403,7 @@ class TestNativeEngine:
         assert isinstance(text, str)
 
     def test_detokenize_maps_non_ascii_to_placeholder(self, monkeypatch):
-        import domains.inference.tokenizer as T
+        import domain.inference._internal.tokenizer as T
         monkeypatch.setattr(T, "get_tokenizer",
                             lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
         engine = _loaded_engine()
@@ -457,25 +457,25 @@ class TestNativeEngine:
         assert pieces == []
 
     def test_tokenize_uses_real_tokenizer(self):
-        from domains.inference.tokenizer import get_tokenizer
+        from domain.inference._internal.tokenizer import get_tokenizer
         engine = _loaded_engine()
         assert engine._tokenize_simple("hi") == get_tokenizer().encode("hi")
 
     def test_detokenize_uses_real_tokenizer(self):
-        from domains.inference.tokenizer import get_tokenizer
+        from domain.inference._internal.tokenizer import get_tokenizer
         engine = _loaded_engine()
         ids = engine._tokenize_simple("hi")
         assert engine._detokenize_simple(ids) == get_tokenizer().decode(ids)
 
     def test_tokenize_fallback_when_tokenizer_missing(self, monkeypatch):
-        import domains.inference.tokenizer as T
+        import domain.inference._internal.tokenizer as T
         monkeypatch.setattr(T, "get_tokenizer",
                             lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
         engine = _loaded_engine()
         assert engine._tokenize_simple("hi") == list("hi".encode("utf-8"))
 
     def test_detokenize_fallback_when_tokenizer_missing(self, monkeypatch):
-        import domains.inference.tokenizer as T
+        import domain.inference._internal.tokenizer as T
         monkeypatch.setattr(T, "get_tokenizer",
                             lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
         engine = _loaded_engine()
@@ -491,7 +491,7 @@ class TestTokenizerWiring:
         assert engine._detokenize_simple([72, 105]) == "Hi"
 
     def test_set_tokenizer_none_restores_fallback(self):
-        from domains.inference.tokenizer import get_tokenizer
+        from domain.inference._internal.tokenizer import get_tokenizer
         engine = _loaded_engine()
         engine.set_tokenizer(_FakeTokenizer())
         engine.set_tokenizer(None)
@@ -610,7 +610,7 @@ class TestRealModelEndToEnd:
 class TestNativeProviderWiring:
     @pytest.fixture(autouse=True)
     def _clean_registries(self):
-        import domains.models.provider as mod
+        import domain.models._internal.provider as mod
         mod._providers.clear()
         mod._processors.clear()
         yield
@@ -618,7 +618,7 @@ class TestNativeProviderWiring:
         mod._processors.clear()
 
     def test_setup_providers_native_slnc_path(self, tmp_path):
-        from domains.models.provider import setup_providers, get_provider
+        from domain.models._internal.provider import setup_providers, get_provider
         slnc_path = str(tmp_path / "tiny.slnc")
         _build_slnc(slnc_path, _weights(), _config())
         setup_providers(native_slnc_path=slnc_path)
@@ -630,7 +630,7 @@ class TestNativeProviderWiring:
         assert provider.metadata["loaded"] is True
 
     def test_setup_providers_missing_slnc_degrades_gracefully(self):
-        from domains.models.provider import setup_providers, get_provider
+        from domain.models._internal.provider import setup_providers, get_provider
         setup_providers(native_slnc_path="/nonexistent/model.slnc")
         default = get_provider("default")
         assert default.metadata["text_provider"] is None
@@ -724,7 +724,7 @@ class TestCTransformProvider:
         )
 
     def test_tokenize_detokenize_uses_real_tokenizer(self):
-        from domains.inference.tokenizer import get_tokenizer
+        from domain.inference._internal.tokenizer import get_tokenizer
         engine = _loaded_engine()
         provider = CTransformProvider(engine)
         assert provider._tokenizer is not None
@@ -733,7 +733,7 @@ class TestCTransformProvider:
         assert provider.detokenize(ids) == get_tokenizer().decode(ids)
 
     def test_init_tolerates_missing_tokenizer(self, monkeypatch):
-        import domains.inference.tokenizer as T
+        import domain.inference._internal.tokenizer as T
         monkeypatch.setattr(T, "get_tokenizer",
                             lambda: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
         provider = CTransformProvider(_loaded_engine())

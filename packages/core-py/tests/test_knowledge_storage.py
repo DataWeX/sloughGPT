@@ -1,11 +1,11 @@
-"""Tests for domains.learner.knowledge_storage — KnowledgeStorage adapter."""
+"""Tests for domain.learner._internal.knowledge_storage — KnowledgeStorage adapter."""
 
 from __future__ import annotations
 
 import pytest
 from pathlib import Path
 
-from domains.learner.knowledge_storage import KnowledgeStorage
+from domain.learner._internal.knowledge_storage import KnowledgeStorage
 
 
 @pytest.fixture

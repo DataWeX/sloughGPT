@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import domains.shell as shell_mod
 from domains.shell import get_dait_runtime, DaitRuntime
-from domains.shell.runtime import Resource
+from domain.shell._internal.runtime import Resource
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +276,7 @@ class TestGetDaitRuntime:
     def test_api_is_process_object(self):
         shell_mod._dait_instance = None
         rt = get_dait_runtime()
-        from domains.shell.runtime import APIServerProcess
+        from domain.shell._internal.runtime import APIServerProcess
         assert isinstance(rt.api, APIServerProcess)
         shell_mod._dait_instance = None
 

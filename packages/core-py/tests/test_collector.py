@@ -6,10 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domains.collections.collector import Collector, ParallelCollector, BatchCollector
-from domains.collections.sources import Record
-from domains.collections.filters import LengthFilter, DedupFilter
-from domains.collections.stores import Store
+from domain.collections._internal.collector import Collector, ParallelCollector, BatchCollector
+from domain.collections._internal.sources import Record
+from domain.collections._internal.filters import LengthFilter, DedupFilter
+from domain.collections._internal.stores import Store
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────

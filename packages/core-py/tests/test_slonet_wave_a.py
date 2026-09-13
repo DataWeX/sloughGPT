@@ -14,8 +14,8 @@ import types
 import numpy as np
 import pytest
 
-import domains.training.slonet as slonet
-from domains.training.slonet import (
+import domain.training._internal.slonet as slonet
+from domain.training._internal.slonet import (
     SloAdapterLayer,
     SloBatchNorm2D,
     SloConv2D,
@@ -789,7 +789,7 @@ def test_kernel_import_fallback():
         f"""
         import sys
         sys.path.insert(0, {core_py!r})
-        sys.modules["domains.training.slonet_kernels"] = None
+        sys.modules["domain.training._internal.slonet_kernels"] = None
         from domains.training import slonet
         assert slonet._KERNELS_AVAILABLE is False
         print("KERNELS_FALLBACK_OK")

@@ -1,9 +1,9 @@
-"""Tests for domains.training.status — TrainingStage, CompletionStatus, StageStatus, TrainingCompletionReport; domains.training.auto_config — DatasetAnalysis, TrainingConfig; domains.infrastructure.download_manager — DownloadStatus, DownloadProgress."""
+"""Tests for domain.training._internal.status — TrainingStage, CompletionStatus, StageStatus, TrainingCompletionReport; domain.training._internal.auto_config — DatasetAnalysis, TrainingConfig; domains.infrastructure.download_manager — DownloadStatus, DownloadProgress."""
 
-from domains.training.status import (
+from domain.training._internal.status import (
     TrainingStage, CompletionStatus, StageStatus, TrainingCompletionReport,
 )
-from domains.training.auto_config import DatasetAnalysis, TrainingConfig
+from domain.training._internal.auto_config import DatasetAnalysis, TrainingConfig
 from domains.infrastructure.download_manager import DownloadStatus, DownloadProgress
 
 
@@ -97,7 +97,7 @@ class TestTrainingConfig:
 
 class TestDownloadStatus:
     def test_all_members(self):
-        assert len(DownloadStatus) == 5
+        assert len(DownloadStatus) == 6
     def test_values(self):
         assert DownloadStatus.QUEUED.value == "queued"
         assert DownloadStatus.DOWNLOADING.value == "downloading"

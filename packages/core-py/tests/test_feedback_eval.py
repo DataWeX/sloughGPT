@@ -1,8 +1,8 @@
 """Tests for domains.feedback — WorkflowConfig, OnlineLoRAUpdater config, EvalResult, BLEUScorer, PersonalityScore."""
 
-from domains.feedback.workflow import WorkflowConfig
-from domains.feedback.online_train import LoRAConfig
-from domains.feedback.lora_eval import EvalResult, BLEUScorer, PersonalityScore
+from domain.feedback._internal.workflow import WorkflowConfig
+from domain.feedback._internal.online_train import LoRAConfig
+from domain.feedback._internal.lora_eval import EvalResult, BLEUScorer, PersonalityScore
 
 
 class TestWorkflowConfig:

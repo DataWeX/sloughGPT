@@ -8,9 +8,9 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 import numpy as np
-import domains.inference.vector_store as vs
-from domains.inference.slo_embedder import SloTextEmbedder
-from domains.inference.vector_store import (
+import domain.inference._internal.vector_store as vs
+from domain.inference._internal.slo_embedder import SloTextEmbedder
+from domain.inference._internal.vector_store import (
     InMemoryVectorStore,
     MogDBVectorStore,
     VectorEntry,
@@ -525,7 +525,7 @@ class TestSimpleEmbedRealDeployment:
         vs._slo_embedder_rejected = False
 
     def test_real_trained_embedder_is_adopted_and_used(self):
-        from domains.inference.slo_embedder import train_embedder
+        from domain.inference._internal.slo_embedder import train_embedder
         rng_state = np.random.get_state()
         np.random.seed(0)  # collapse degree varies with init; seed for determinism
         try:
@@ -877,7 +877,7 @@ class TestCreateVectorStore:
                 return True
 
         monkeypatch.setattr(
-            "domains.inference.vector_stores.chromadb_store.ChromaDBVectorStore", FakeChroma
+            "domain.inference._internal.vector_stores.chromadb_store.ChromaDBVectorStore", FakeChroma
         )
         store = await create_vector_store("chromadb", persist_directory="/tmp/x")
         assert calls["kwargs"] == {"persist_directory": "/tmp/x"}
@@ -893,7 +893,7 @@ class TestCreateVectorStore:
                 return True
 
         monkeypatch.setattr(
-            "domains.inference.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
         )
         store = await create_vector_store(
             "pinecone", api_key="k", index="idx", environment="us-west-2", dimension=16
@@ -914,7 +914,7 @@ class TestCreateVectorStore:
                 return True
 
         monkeypatch.setattr(
-            "domains.inference.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
         )
         await create_vector_store("pinecone", api_key="k", index_name="named")
         assert calls["kwargs"]["index_name"] == "named"
@@ -930,7 +930,7 @@ class TestCreateVectorStore:
                 return True
 
         monkeypatch.setattr(
-            "domains.inference.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
         )
         await create_vector_store("pinecone", api_key="k")
         assert calls["kwargs"]["index_name"] == "sloughgpt"
@@ -945,7 +945,7 @@ class TestCreateVectorStore:
                 return False
 
         monkeypatch.setattr(
-            "domains.inference.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
+            "domain.inference._internal.vector_stores.pinecone_store.PineconeVectorStore", FakePinecone
         )
         with pytest.raises(RuntimeError, match="Pinecone connection failed"):
             await create_vector_store("pinecone")

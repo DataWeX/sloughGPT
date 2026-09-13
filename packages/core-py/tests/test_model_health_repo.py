@@ -1,4 +1,4 @@
-"""Tests for domains.feedback.model_health_repo — ModelHealthRepository, HealthSnapshot."""
+"""Tests for domain.feedback._internal.model_health_repo — ModelHealthRepository, HealthSnapshot."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import time
 import pytest
 from pathlib import Path
 
-from domains.feedback.model_health_repo import (
+from domain.feedback._internal.model_health_repo import (
     HealthSnapshot,
     ModelHealthRepository,
 )

@@ -42,6 +42,7 @@ vi.mock('@/lib/toast-store', () => ({
 
 vi.mock('@/hooks/useLiveStatus', () => ({
   useLiveStatus: () => ({ healthLegacy: null }),
+  liveStatusStore: { subscribe: vi.fn() },
 }))
 
 vi.mock('@/hooks/useLocale', () => ({

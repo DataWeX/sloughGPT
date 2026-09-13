@@ -1,7 +1,7 @@
 """Tests for LR scheduler configs."""
 from __future__ import annotations
 
-from domains.training.lr_schedulers import (
+from domain.training._internal.lr_schedulers import (
     BEST_PRACTICES,
     CyclicConfig,
     CosineAnnealingConfig,

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from domains.billing.token_service import MODEL_PRICING, TIER_LIMITS, Tier, TokenAccount, UsageRecord
+from domain.billing._internal.token_service import MODEL_PRICING, TIER_LIMITS, Tier, TokenAccount, UsageRecord
 
 
 class TestTokenAccountDefaults:

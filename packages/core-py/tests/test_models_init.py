@@ -138,22 +138,22 @@ class TestSloughGPTModel:
 class TestAliases:
     def test_rmsnorm_alias(self):
         from domains.models import RMSNorm
-        from domains.training.slonet import SloRMSNorm
+        from domain.training._internal.slonet import SloRMSNorm
         assert RMSNorm is SloRMSNorm
 
     def test_attention_alias(self):
         from domains.models import SloughGPTAttention
-        from domains.training.slonet import SloMultiHeadAttention
+        from domain.training._internal.slonet import SloMultiHeadAttention
         assert SloughGPTAttention is SloMultiHeadAttention
 
     def test_block_alias(self):
         from domains.models import SloughGPTBlock
-        from domains.training.slonet import SloTransformerBlock
+        from domain.training._internal.slonet import SloTransformerBlock
         assert SloughGPTBlock is SloTransformerBlock
 
     def test_swiglu_alias(self):
         from domains.models import SwiGLU
-        from domains.training.slonet import SloFeedForward
+        from domain.training._internal.slonet import SloFeedForward
         assert SwiGLU is SloFeedForward
 
     def test_rotate_half_callable(self):

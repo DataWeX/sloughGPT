@@ -17,6 +17,19 @@ if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 
 
+@pytest.fixture(autouse=True)
+def _in_memory_jobs(monkeypatch):
+    """Training jobs must behave like a plain in-memory dict for these tests.
+
+    The production ``training_jobs`` wrapper persists to MogDB, which is not
+    suitable in a unit-test context (in-place ``.update()`` on the wrapper's
+    returned docs would be lost, and runtime-only fields like ``_cancel_event``
+    are not serializable). Forcing the wrapper's in-memory fallback preserves
+    the dict contract these tests were written against.
+    """
+    monkeypatch.setattr("training.job_store.get_job_store", lambda: None)
+
+
 # ── Schema tests ────────────────────────────────────────────────────────
 
 
@@ -25,9 +38,9 @@ class TestDistillStartRequestSchema:
 
     def test_defaults(self):
         from training.schemas import DistillStartRequest
-        req = DistillStartRequest()
+        req = DistillStartRequest(dataset="shakespeare")
         assert req.teacher_model == "gpt2"
-        assert req.dataset == ""
+        assert req.dataset == "shakespeare"
         assert req.name == "distill-job"
         assert req.temperature == 4.0
         assert req.alpha == 0.5
@@ -67,21 +80,23 @@ class TestDistillStartRequestSchema:
     def test_temperature_must_be_positive(self):
         from pydantic import ValidationError
         from training.schemas import DistillStartRequest
-        # Schema has no GT constraint — negative is allowed (validation at runtime)
-        req = DistillStartRequest(temperature=-1.0)
-        assert req.temperature == -1.0
+        # Schema constrains temperature to >= 0.1.
+        with pytest.raises(ValidationError):
+            DistillStartRequest(dataset="shakespeare", temperature=-1.0)
 
     def test_epochs_must_be_positive(self):
+        from pydantic import ValidationError
         from training.schemas import DistillStartRequest
-        # Schema has no GT constraint — zero is allowed (validation at runtime)
-        req = DistillStartRequest(epochs=0)
-        assert req.epochs == 0
+        # Schema constrains epochs to >= 1.
+        with pytest.raises(ValidationError):
+            DistillStartRequest(dataset="shakespeare", epochs=0)
 
     def test_embed_dim_must_be_positive(self):
+        from pydantic import ValidationError
         from training.schemas import DistillStartRequest
-        # Schema has no GT constraint — zero is allowed (validation at runtime)
-        req = DistillStartRequest(embed_dim=0)
-        assert req.embed_dim == 0
+        # Schema constrains embed_dim to >= 16.
+        with pytest.raises(ValidationError):
+            DistillStartRequest(dataset="shakespeare", embed_dim=0)
 
 
 # ── Route registration ──────────────────────────────────────────────────
@@ -90,15 +105,24 @@ class TestDistillStartRequestSchema:
 class TestDistillRouteRegistered:
     """Verify /training/distill is registered on the training router."""
 
+    @staticmethod
+    def _paths(router, out=None):
+        out = [] if out is None else out
+        for r in router.routes:
+            orig = getattr(r, "original_router", None)
+            if orig is not None:
+                TestDistillRouteRegistered._paths(orig, out)
+            elif getattr(r, "path", None):
+                out.append(r.path)
+        return out
+
     def test_distill_route_exists(self):
         from training.router import router
-        routes = [r.path for r in router.routes]
-        assert "/training/distill" in routes
+        assert "/training/distill" in list(self._paths(router))
 
     def test_distill_jobs_route_exists(self):
         from training.router import router
-        routes = [r.path for r in router.routes]
-        assert "/training/jobs" in routes
+        assert "/training/jobs" in list(self._paths(router))
 
 
 # ── Endpoint error handling ─────────────────────────────────────────────
@@ -128,7 +152,7 @@ class TestDistillEndpointErrors:
         assert resp.status_code >= 400
 
     def test_empty_dataset_returns_error(self, tmp_path):
-        datasets_dir = _REPO_ROOT / "datasets"
+        datasets_dir = _REPO_ROOT / "data"
         ds_dir = datasets_dir / "_test_empty_distill"
         ds_dir.mkdir(parents=True, exist_ok=True)
         (ds_dir / "input.txt").write_text("")
@@ -146,7 +170,7 @@ class TestDistillEndpointErrors:
 
     def test_returns_queued_status(self):
         from training.router import training_jobs
-        datasets_dir = _REPO_ROOT / "datasets"
+        datasets_dir = _REPO_ROOT / "data"
         ds_dir = datasets_dir / "_test_distill_queued"
         ds_dir.mkdir(parents=True, exist_ok=True)
         (ds_dir / "input.txt").write_text("Hello world " * 100)
@@ -200,14 +224,17 @@ class TestDistillSlonetTeacher:
 
         class _Model:
             def forward(self, input_ids, targets=None):
-                return _Logits(np.full((input_ids.shape[0], input_ids.shape[1], 16),
+                # Logits dim is larger than the token vocab so the
+                # [..., :vocab_size] slice in the teacher wrapper is a no-op.
+                return _Logits(np.full((input_ids.shape[0], input_ids.shape[1], 640),
                                        0.5, dtype=np.float32)), None
 
         class _Provider:
             model_id = "gpt2"
 
             def tokenize(self, text):
-                return list(range(1, 201))
+                # >=352 tokens to yield the 10-sample minimum with block=64.
+                return list(range(1, 600))
 
             def _get_model(self):
                 return _Model()
@@ -230,7 +257,7 @@ class TestDistillSlonetTeacher:
 
         from training.router import training_jobs
 
-        datasets_dir = _REPO_ROOT / "datasets"
+        datasets_dir = _REPO_ROOT / "data"
         ds_dir = datasets_dir / "_test_distill_slonet"
         ds_dir.mkdir(parents=True, exist_ok=True)
         (ds_dir / "input.txt").write_text("alpha beta gamma delta epsilon zeta eta theta " * 8)
@@ -260,7 +287,8 @@ class TestDistillSlonetTeacher:
                 assert self._poll(training_jobs, job_id) == "completed"
             job = training_jobs[job_id]
             assert job["status"] == "completed"
-            assert "loss" in job
+            assert "train_loss" in job
+            assert job["train_loss"] >= 0
             assert ckpt.exists()
         finally:
             if job_id:
@@ -274,7 +302,7 @@ class TestDistillSlonetTeacher:
 
         from training.router import training_jobs
 
-        datasets_dir = _REPO_ROOT / "datasets"
+        datasets_dir = _REPO_ROOT / "data"
         ds_dir = datasets_dir / "_test_distill_slonet_missing"
         ds_dir.mkdir(parents=True, exist_ok=True)
         (ds_dir / "input.txt").write_text("alpha beta gamma delta epsilon zeta eta theta " * 8)

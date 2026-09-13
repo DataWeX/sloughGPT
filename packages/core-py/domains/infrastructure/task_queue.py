@@ -174,7 +174,7 @@ class TaskQueue:
         # Event bus integration
         self._event_bus = None
         try:
-            from domains.infrastructure.event_bus import get_event_bus
+            from domain.infrastructure._internal.event_bus import get_event_bus
             self._event_bus = get_event_bus()
         except Exception as e:
             logger.debug("TaskQueue event bus unavailable: %s", e, extra={"tag": "INFRA"})
@@ -286,7 +286,7 @@ class TaskQueue:
             return
         stream_name = task.metadata.get("sse_stream", "auto-train")
         try:
-            from domains.api.sse_envelope import sse_error
+            from domain.api._internal.sse_envelope import sse_error
             if status == TaskStatus.CANCELLED:
                 message = task.error or "Training cancelled"
                 sse_queue.put_nowait(sse_error(stream_name, "CANCELLED", message))

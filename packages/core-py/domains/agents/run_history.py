@@ -6,7 +6,7 @@ and timestamps. Runs are stored in a MogDB collection under
 ``data/mogdb/agent_runs`` so history survives restarts and is queryable.
 
 Usage:
-    from domains.agents.run_history import get_agent_run_store
+    from domain.agents._internal.run_history import get_agent_run_store
 
     store = get_agent_run_store()
     run_id = store.start(goal="Research AI agents", context="")

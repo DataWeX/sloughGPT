@@ -1,7 +1,7 @@
 """Tests for training runtime protocol — registration and stub."""
 from __future__ import annotations
 
-from domains.training.runtime_protocol import (
+from domain.training._internal.runtime_protocol import (
     _NoOpRuntime,
     get_training_runtime,
     set_training_runtime,

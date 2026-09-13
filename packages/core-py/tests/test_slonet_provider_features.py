@@ -102,7 +102,7 @@ class MockModel:
 @pytest.fixture
 def mock_provider():
     """Create a SloNetChatProvider with mocked internals."""
-    from domains.inference.slonet_provider import SloNetChatProvider
+    from domain.inference._internal.slonet_provider import SloNetChatProvider
 
     provider = SloNetChatProvider.__new__(SloNetChatProvider)
     provider._hf_model_id = "test-model"

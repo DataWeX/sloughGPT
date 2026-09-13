@@ -1,7 +1,7 @@
 """Tests for backward pass optimizations: _copy=False + in-place gradient accumulation."""
 import numpy as np
 import pytest
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloLinear, SloEmbedding, SloLayerNorm, SloDropout,
     SloTransformer, SloAdamW, cross_entropy,
     _add, _mul, _neg, _pow, _matmul, _transpose, _reshape, _slice,
@@ -69,7 +69,7 @@ class TestCopyFalseGradientAssignment:
         assert x.grad is not None and w.grad is not None and b.grad is not None
 
     def test_rmsnorm_grad(self):
-        from domains.training.slonet import _rmsnorm
+        from domain.training._internal.slonet import _rmsnorm
         x = Tensor(np.random.randn(2, 4), requires_grad=True)
         w = Tensor(np.ones(4), requires_grad=True)
         out = _rmsnorm(x, w)

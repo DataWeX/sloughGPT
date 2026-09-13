@@ -1,4 +1,4 @@
-"""Tests for domains.collections.stores — pure logic, no network."""
+"""Tests for domain.collections._internal.stores — pure logic, no network."""
 from __future__ import annotations
 
 import json
@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from domains.collections.sources import Record
-from domains.collections.stores import (
+from domain.collections._internal.sources import Record
+from domain.collections._internal.stores import (
     CallbackStore,
     ChainedStore,
     FileStore,

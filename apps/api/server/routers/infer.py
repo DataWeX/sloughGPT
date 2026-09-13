@@ -18,7 +18,7 @@ import logging
 import time as _time
 from collections.abc import AsyncGenerator, AsyncIterator
 
-from domains.infrastructure.errors import AppError
+from domain.infrastructure._internal.errors import AppError
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
@@ -219,7 +219,7 @@ class InferRouter:
         except ImportError as exc:
             logger.debug("Memory pressure guard unavailable: %s", exc)
 
-        from domains.models.provider import get_provider
+        from domain.models._internal.provider import get_provider
 
         if self._get_model() is None:
             raise_error("Model still loading — please wait.", "E_BAD_REQUEST", status_code=503)
@@ -327,7 +327,7 @@ class InferRouter:
 
             async def generate() -> AsyncIterator[str]:
                 """generate."""
-                from domains.models.provider import get_provider
+                from domain.models._internal.provider import get_provider
 
                 provider = get_provider("default")
                 if provider is None:
@@ -390,7 +390,7 @@ class InferRouter:
                             )
                             return
                 except Exception as e:
-                    from domains.infrastructure.errors import classify_exception, emit_error_event
+                    from domain.infrastructure._internal.errors import classify_exception, emit_error_event
 
                     err = classify_exception(e)
                     emit_error_event(err, source="infer_stream")
@@ -466,7 +466,7 @@ class InferRouter:
             # Fallback: n-gram TF-IDF embedder
             try:
                 import numpy as np
-                from domains.inference.vector_store import _ngram_embed
+                from domain.inference._internal.vector_store import _ngram_embed
 
                 vec = _ngram_embed(req.text)
                 if isinstance(vec, np.ndarray):

@@ -1,11 +1,11 @@
-"""Coverage tests for AI device nodes (domains.shell.devices)."""
+"""Coverage tests for AI device nodes (domain.shell._internal.devices)."""
 
 import builtins
 from unittest.mock import patch
 
 import pytest
 
-from domains.shell.devices import (
+from domain.shell._internal.devices import (
     AIDevice,
     DeviceManager,
     EmbeddingDevice,

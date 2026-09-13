@@ -18,9 +18,9 @@ def cmd_vm(args):
     log.header("x86 Virtual Machine")
 
     try:
-        from domains.shell.vm import X86CPU, X86Assembler
-        from domains.shell.vm_engine import VMEngine
-        from domains.shell.vm_permissions import X86RBAC, Role
+        from domain.shell._internal.vm import X86CPU, X86Assembler
+        from domain.shell._internal.vm_engine import VMEngine
+        from domain.shell._internal.vm_permissions import X86RBAC, Role
 
         log.section("Status")
         log.key_value("Engine", "Available")
@@ -86,7 +86,7 @@ def cmd_vm_run(args):
     # Check if source is a built-in program name
     if not file_path and not source.strip().startswith(('[', 'mov', 'push', 'pop', 'jmp', 'call', 'ret', 'int', 'nop')):
         try:
-            from domains.shell.vm_programs import PROGRAMS
+            from domain.shell._internal.vm_programs import PROGRAMS
             if source.strip().lower() in PROGRAMS:
                 source = PROGRAMS[source.strip().lower()]
                 log.info(f"Running built-in program: {source.strip().lower()}")
@@ -94,8 +94,8 @@ def cmd_vm_run(args):
             pass
 
     try:
-        from domains.shell.vm import X86CPU, X86Assembler
-        from domains.shell.vm_engine import VMEngine
+        from domain.shell._internal.vm import X86CPU, X86Assembler
+        from domain.shell._internal.vm_engine import VMEngine
 
         engine = VMEngine()
         engine.load_source(source)
@@ -129,7 +129,7 @@ def cmd_vm_list(args):
     log.header("VM Programs")
 
     try:
-        from domains.shell.vm_programs import PROGRAMS
+        from domain.shell._internal.vm_programs import PROGRAMS
 
         for name, program in PROGRAMS.items():
             log.key_value(name, program.description)
@@ -142,8 +142,8 @@ def cmd_vm_info(args):
     log.header("VM Details")
 
     try:
-        from domains.shell.vm import X86CPU, MEM_SIZE, NUM_REGS
-        from domains.shell.vm_permissions import X86RBAC, Role
+        from domain.shell._internal.vm import X86CPU, MEM_SIZE, NUM_REGS
+        from domain.shell._internal.vm_permissions import X86RBAC, Role
 
         log.section("Memory")
         log.key_value("Size", f"{MEM_SIZE} bytes")
@@ -248,7 +248,7 @@ def cmd_vm_debug(args):
     log.header("VM Debugger")
 
     try:
-        from domains.shell.vm_debugger import Debugger
+        from domain.shell._internal.vm_debugger import Debugger
 
         debugger = Debugger()
 

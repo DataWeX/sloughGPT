@@ -3,10 +3,10 @@ from __future__ import annotations
 import pytest
 from collections.abc import Iterator
 
-from domains.collections.pipeline import CollectionPipeline
-from domains.collections.sources import Record, Source
-from domains.collections.stores import MemoryStore
-from domains.collections.filters import LengthFilter, KeywordFilter
+from domain.collections._internal.pipeline import CollectionPipeline
+from domain.collections._internal.sources import Record, Source
+from domain.collections._internal.stores import MemoryStore
+from domain.collections._internal.filters import LengthFilter, KeywordFilter
 
 
 class StubSource:

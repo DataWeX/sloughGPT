@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from domains.shell.device_decorators import add_ioctl_command, with_ioctl
+from domain.shell._internal.device_decorators import add_ioctl_command, with_ioctl
 
 
 class TestWithIoctl:

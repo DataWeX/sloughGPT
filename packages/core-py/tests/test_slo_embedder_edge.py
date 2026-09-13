@@ -14,38 +14,38 @@ pytestmark = pytest.mark.unit
 
 class TestAugmentText:
     def test_empty_string(self):
-        from domains.inference.slo_embedder import _augment_text
+        from domain.inference._internal.slo_embedder import _augment_text
         rng = np.random.RandomState(0)
         assert _augment_text("", rng) == ""
 
     def test_single_word(self):
-        from domains.inference.slo_embedder import _augment_text
+        from domain.inference._internal.slo_embedder import _augment_text
         rng = np.random.RandomState(0)
         result = _augment_text("hello", rng)
         # Single word → tokens has length 1, no branch triggers → returned as-is
         assert result == "hello"
 
     def test_only_stopwords(self):
-        from domains.inference.slo_embedder import _augment_text
+        from domain.inference._internal.slo_embedder import _augment_text
         rng = np.random.RandomState(0)
         # All tokens get stripped by _tokenize_simple → empty token list → returns original
         result = _augment_text("the a an is are was", rng)
         assert result == "the a an is are was"
 
     def test_whitespace_only(self):
-        from domains.inference.slo_embedder import _augment_text
+        from domain.inference._internal.slo_embedder import _augment_text
         rng = np.random.RandomState(0)
         assert _augment_text("   ", rng) == "   "
 
     def test_two_words(self):
-        from domains.inference.slo_embedder import _augment_text
+        from domain.inference._internal.slo_embedder import _augment_text
         rng = np.random.RandomState(42)
         # 2 tokens → no branch triggers (all require len > 3 or > 4)
         result = _augment_text("hello world", rng)
         assert result == "hello world"
 
     def test_four_words_drop_threshold(self):
-        from domains.inference.slo_embedder import _augment_text
+        from domain.inference._internal.slo_embedder import _augment_text
         rng = np.random.RandomState(42)
         # Exactly 4 tokens: "drop" needs > 3, so it can trigger
         # but "shuffle" also needs > 3, and "crop" needs > 4
@@ -57,7 +57,7 @@ class TestAugmentText:
         assert len(results) >= 1
 
     def test_unicode_text(self):
-        from domains.inference.slo_embedder import _augment_text
+        from domain.inference._internal.slo_embedder import _augment_text
         rng = np.random.RandomState(0)
         # Unicode letters are matched by [a-z0-9']+ only if lowercase ascii
         # Non-ascii chars get stripped → may produce empty token list
@@ -65,7 +65,7 @@ class TestAugmentText:
         assert isinstance(result, str)
 
     def test_punctuation_heavy(self):
-        from domains.inference.slo_embedder import _augment_text
+        from domain.inference._internal.slo_embedder import _augment_text
         rng = np.random.RandomState(0)
         result = _augment_text("hello... world!!!, foo; bar:", rng)
         assert isinstance(result, str)
@@ -77,20 +77,20 @@ class TestAugmentText:
 
 class TestPerturbText:
     def test_empty_string(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         assert _perturb_text("") == ""
 
     def test_single_word(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         assert _perturb_text("hello") == "hello"
 
     def test_at_min_keep_boundary(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         # len(tokens) == min_keep (default 3) → returned unchanged
         assert _perturb_text("a b c") == "a b c"
 
     def test_one_above_min_keep(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         # 4 tokens, min_keep=3 → one word gets dropped
         result = _perturb_text("a b c d")
         kept = result.split()
@@ -98,14 +98,14 @@ class TestPerturbText:
         assert set(kept) <= {"a", "b", "c", "d"}
 
     def test_drop_frac_zero(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         text = "one two three four five six"
         result = _perturb_text(text, drop_frac=0.0)
         # n_drop = max(1, round(6 * 0.0)) = max(1, 0) = 1 → still drops 1
         assert len(result.split()) == 5
 
     def test_drop_frac_one(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         text = "one two three four five six seven eight"
         result = _perturb_text(text, drop_frac=1.0)
         kept = result.split()
@@ -113,27 +113,27 @@ class TestPerturbText:
         assert len(kept) >= 3
 
     def test_min_keep_one(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         text = "one two three four five"
         result = _perturb_text(text, min_keep=1)
         kept = result.split()
         assert len(kept) >= 1
 
     def test_deterministic(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         text = "the quick brown fox jumps over lazy dog"
         a = _perturb_text(text)
         b = _perturb_text(text)
         assert a == b
 
     def test_same_words_subset(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         text = "alpha beta gamma delta epsilon zeta eta theta"
         result = _perturb_text(text)
         assert set(result.split()) <= set(text.split())
 
     def test_large_drop_frac_many_words(self):
-        from domains.inference.slo_embedder import _perturb_text
+        from domain.inference._internal.slo_embedder import _perturb_text
         text = " ".join([f"w{i}" for i in range(100)])
         result = _perturb_text(text, drop_frac=0.9)
         kept = result.split()
@@ -146,7 +146,7 @@ class TestPerturbText:
 
 class TestContrastiveLoss:
     def test_batch_size_one(self):
-        from domains.inference.slo_embedder import _contrastive_loss
+        from domain.inference._internal.slo_embedder import _contrastive_loss
         z = np.random.randn(1, 32).astype(np.float32)
         z = z / (np.linalg.norm(z, axis=1, keepdims=True) + 1e-10)
         loss, constraint = _contrastive_loss(z, z)
@@ -155,7 +155,7 @@ class TestContrastiveLoss:
         assert loss < 0.5
 
     def test_zero_vectors(self):
-        from domains.inference.slo_embedder import _contrastive_loss
+        from domain.inference._internal.slo_embedder import _contrastive_loss
         B, D = 4, 16
         z_i = np.zeros((B, D), dtype=np.float32)
         z_j = np.zeros((B, D), dtype=np.float32)
@@ -164,7 +164,7 @@ class TestContrastiveLoss:
         assert np.isfinite(loss)
 
     def test_identical_vectors_batch(self):
-        from domains.inference.slo_embedder import _contrastive_loss
+        from domain.inference._internal.slo_embedder import _contrastive_loss
         B, D = 8, 32
         z = np.random.randn(B, D).astype(np.float32)
         z = z / (np.linalg.norm(z, axis=1, keepdims=True) + 1e-10)
@@ -173,7 +173,7 @@ class TestContrastiveLoss:
         assert loss < 1.0
 
     def test_orthogonal_vectors(self):
-        from domains.inference.slo_embedder import _contrastive_loss
+        from domain.inference._internal.slo_embedder import _contrastive_loss
         B, D = 4, 16
         z_i = np.eye(B, D, dtype=np.float32)
         z_j = np.eye(B, D, dtype=np.float32)
@@ -182,7 +182,7 @@ class TestContrastiveLoss:
         assert loss > 0.0
 
     def test_very_high_temperature(self):
-        from domains.inference.slo_embedder import _contrastive_loss
+        from domain.inference._internal.slo_embedder import _contrastive_loss
         B, D = 4, 16
         z = np.random.randn(B, D).astype(np.float32)
         z = z / (np.linalg.norm(z, axis=1, keepdims=True) + 1e-10)
@@ -190,7 +190,7 @@ class TestContrastiveLoss:
         assert np.isfinite(loss)
 
     def test_very_low_temperature(self):
-        from domains.inference.slo_embedder import _contrastive_loss
+        from domain.inference._internal.slo_embedder import _contrastive_loss
         B, D = 4, 16
         z = np.random.randn(B, D).astype(np.float32)
         z = z / (np.linalg.norm(z, axis=1, keepdims=True) + 1e-10)
@@ -198,7 +198,7 @@ class TestContrastiveLoss:
         assert np.isfinite(loss)
 
     def test_with_matching_labels_and_meaning_tags(self):
-        from domains.inference.slo_embedder import _contrastive_loss
+        from domain.inference._internal.slo_embedder import _contrastive_loss
 
         class FakeTags:
             def __init__(self, dim):
@@ -225,7 +225,7 @@ class TestContrastiveLoss:
         assert loss > 0.0
 
     def test_constraint_with_unknown_label(self):
-        from domains.inference.slo_embedder import _contrastive_loss
+        from domain.inference._internal.slo_embedder import _contrastive_loss
 
         class FakeTags:
             def get(self, name):
@@ -245,32 +245,32 @@ class TestContrastiveLoss:
 
 class TestTokenizeSimple:
     def test_numbers(self):
-        from domains.inference.slo_embedder import _tokenize_simple
+        from domain.inference._internal.slo_embedder import _tokenize_simple
         tokens = _tokenize_simple("123 456 789")
         assert "123" in tokens
 
     def test_mixed_case(self):
-        from domains.inference.slo_embedder import _tokenize_simple
+        from domain.inference._internal.slo_embedder import _tokenize_simple
         tokens = _tokenize_simple("Hello WORLD test")
         # Lowercased before matching
         assert "hello" in tokens
         assert "world" in tokens
 
     def test_apostrophes(self):
-        from domains.inference.slo_embedder import _tokenize_simple
+        from domain.inference._internal.slo_embedder import _tokenize_simple
         tokens = _tokenize_simple("don't can't won't")
         assert "don't" in tokens
         assert "can't" in tokens
 
     def test_single_char_tokens(self):
-        from domains.inference.slo_embedder import _tokenize_simple
+        from domain.inference._internal.slo_embedder import _tokenize_simple
         tokens = _tokenize_simple("a b c x y z")
         # "a" is a stopword → filtered; "b", "c", "x", "y", "z" are not
         assert "a" not in tokens
         assert "b" in tokens
 
     def test_all_stopwords(self):
-        from domains.inference.slo_embedder import _tokenize_simple
+        from domain.inference._internal.slo_embedder import _tokenize_simple
         tokens = _tokenize_simple("the and or but if")
         assert tokens == []
 
@@ -281,7 +281,7 @@ class TestTokenizeSimple:
 
 class TestBuildVocab:
     def test_empty_corpus(self):
-        from domains.inference.slo_embedder import _build_vocab
+        from domain.inference._internal.slo_embedder import _build_vocab
         vocab, itos = _build_vocab([], vocab_size=100)
         # Should still have special tokens
         assert "<PAD>" in vocab
@@ -289,20 +289,20 @@ class TestBuildVocab:
         assert len(vocab) == 4  # just the specials
 
     def test_vocab_size_exactly_four(self):
-        from domains.inference.slo_embedder import _build_vocab
+        from domain.inference._internal.slo_embedder import _build_vocab
         # vocab_size=4 → only special tokens, no room for words
         vocab, itos = _build_vocab(["hello world"], vocab_size=4)
         assert len(vocab) == 4
         assert "hello" not in vocab
 
     def test_vocab_size_one(self):
-        from domains.inference.slo_embedder import _build_vocab
+        from domain.inference._internal.slo_embedder import _build_vocab
         vocab, itos = _build_vocab(["hello world"], vocab_size=1)
         # Still gets the 4 specials (they're inserted first unconditionally)
         assert "<PAD>" in vocab
 
     def test_large_corpus(self):
-        from domains.inference.slo_embedder import _build_vocab
+        from domain.inference._internal.slo_embedder import _build_vocab
         texts = [f"word{i} common shared" for i in range(1000)]
         vocab, itos = _build_vocab(texts, vocab_size=50)
         assert len(vocab) <= 50
@@ -310,19 +310,19 @@ class TestBuildVocab:
         assert "shared" in vocab
 
     def test_duplicate_texts(self):
-        from domains.inference.slo_embedder import _build_vocab
+        from domain.inference._internal.slo_embedder import _build_vocab
         vocab, _ = _build_vocab(["hello world"] * 100, vocab_size=100)
         assert "hello" in vocab
         assert "world" in vocab
 
     def test_inverse_mapping(self):
-        from domains.inference.slo_embedder import _build_vocab
+        from domain.inference._internal.slo_embedder import _build_vocab
         vocab, itos = _build_vocab(["test foo bar"], vocab_size=50)
         for word, idx in vocab.items():
             assert itos[idx] == word
 
     def test_all_stopwords_corpus(self):
-        from domains.inference.slo_embedder import _build_vocab
+        from domain.inference._internal.slo_embedder import _build_vocab
         vocab, itos = _build_vocab(["the a an is are"], vocab_size=100)
         # All words are stopwords → only specials
         assert len(vocab) == 4
@@ -334,14 +334,14 @@ class TestBuildVocab:
 
 class TestEncodeTokens:
     def test_empty_text(self):
-        from domains.inference.slo_embedder import _encode_tokens, _build_vocab
+        from domain.inference._internal.slo_embedder import _encode_tokens, _build_vocab
         vocab, _ = _build_vocab(["hello world"], vocab_size=50)
         ids = _encode_tokens("", vocab, max_len=8)
         assert ids.shape == (8,)
         assert np.all(ids == 0)  # all PAD
 
     def test_all_unknown_words(self):
-        from domains.inference.slo_embedder import _encode_tokens, _build_vocab
+        from domain.inference._internal.slo_embedder import _encode_tokens, _build_vocab
         vocab, _ = _build_vocab(["hello world"], vocab_size=50)
         ids = _encode_tokens("xyz qwerty nonexistent", vocab, max_len=8)
         assert ids.shape == (8,)
@@ -350,7 +350,7 @@ class TestEncodeTokens:
         assert all(x == 3 for x in non_pad)
 
     def test_max_len_one(self):
-        from domains.inference.slo_embedder import _encode_tokens, _build_vocab
+        from domain.inference._internal.slo_embedder import _encode_tokens, _build_vocab
         vocab, _ = _build_vocab(["hello world"], vocab_size=50)
         ids = _encode_tokens("hello world", vocab, max_len=1)
         assert ids.shape == (1,)
@@ -362,28 +362,28 @@ class TestEncodeTokens:
 
 class TestSampleProbes:
     def test_empty_corpus(self):
-        from domains.inference.slo_embedder import _sample_probes
+        from domain.inference._internal.slo_embedder import _sample_probes
         assert _sample_probes([]) == []
 
     def test_single_text(self):
-        from domains.inference.slo_embedder import _sample_probes
+        from domain.inference._internal.slo_embedder import _sample_probes
         result = _sample_probes(["only one"])
         assert result == ["only one"]
 
     def test_fewer_than_max(self):
-        from domains.inference.slo_embedder import _sample_probes
+        from domain.inference._internal.slo_embedder import _sample_probes
         texts = [f"text{i}" for i in range(5)]
         result = _sample_probes(texts, max_probes=10)
         assert len(result) == 5
 
     def test_exactly_max(self):
-        from domains.inference.slo_embedder import _sample_probes
+        from domain.inference._internal.slo_embedder import _sample_probes
         texts = [f"text{i}" for i in range(24)]
         result = _sample_probes(texts, max_probes=24)
         assert len(result) == 24
 
     def test_many_texts(self):
-        from domains.inference.slo_embedder import _sample_probes
+        from domain.inference._internal.slo_embedder import _sample_probes
         texts = [f"document{i}" for i in range(200)]
         result = _sample_probes(texts, max_probes=24)
         assert len(result) <= 24
@@ -391,14 +391,14 @@ class TestSampleProbes:
         assert result[0] == texts[0]
 
     def test_max_probes_one(self):
-        from domains.inference.slo_embedder import _sample_probes
+        from domain.inference._internal.slo_embedder import _sample_probes
         texts = [f"t{i}" for i in range(10)]
         result = _sample_probes(texts, max_probes=1)
         assert len(result) == 1
         assert result[0] == texts[0]
 
     def test_deterministic(self):
-        from domains.inference.slo_embedder import _sample_probes
+        from domain.inference._internal.slo_embedder import _sample_probes
         texts = [f"doc{i}" for i in range(50)]
         a = _sample_probes(texts, max_probes=10)
         b = _sample_probes(texts, max_probes=10)
@@ -411,14 +411,14 @@ class TestSampleProbes:
 
 class TestLSEEdgeCases:
     def test_lse_pair_negative_inf(self):
-        from domains.inference.slo_embedder import _lse_pair
+        from domain.inference._internal.slo_embedder import _lse_pair
         a = np.array([-np.inf])
         b = np.array([0.0])
         result = _lse_pair(a, b)
         assert np.isfinite(result[0])
 
     def test_lse_pair_both_same(self):
-        from domains.inference.slo_embedder import _lse_pair
+        from domain.inference._internal.slo_embedder import _lse_pair
         a = np.array([5.0, 5.0])
         b = np.array([5.0, 5.0])
         result = _lse_pair(a, b)
@@ -426,21 +426,21 @@ class TestLSEEdgeCases:
         assert np.allclose(result, expected, atol=1e-5)
 
     def test_lse_tree_odd_length(self):
-        from domains.inference.slo_embedder import _lse_tree
+        from domain.inference._internal.slo_embedder import _lse_tree
         x = np.array([[1.0, 2.0, 3.0]])
         result = _lse_tree(x, axis=1)
         expected = np.log(np.exp(1.0) + np.exp(2.0) + np.exp(3.0))
         assert np.allclose(result[0], expected, atol=1e-4)
 
     def test_lse_tree_length_4(self):
-        from domains.inference.slo_embedder import _lse_tree
+        from domain.inference._internal.slo_embedder import _lse_tree
         x = np.array([[1.0, 2.0, 3.0, 4.0]])
         result = _lse_tree(x, axis=1)
         expected = np.log(np.exp(1.0) + np.exp(2.0) + np.exp(3.0) + np.exp(4.0))
         assert np.allclose(result[0], expected, atol=1e-4)
 
     def test_lse_tree_large_values(self):
-        from domains.inference.slo_embedder import _lse_tree
+        from domain.inference._internal.slo_embedder import _lse_tree
         x = np.full((1, 8), 500.0)
         result = _lse_tree(x, axis=1)
         assert np.isfinite(result[0])
@@ -448,7 +448,7 @@ class TestLSEEdgeCases:
         assert abs(result[0] - (500.0 + np.log(8))) < 0.01
 
     def test_lse_tree_mixed_sign(self):
-        from domains.inference.slo_embedder import _lse_tree
+        from domain.inference._internal.slo_embedder import _lse_tree
         x = np.array([[-100.0, 0.0, 100.0]])
         result = _lse_tree(x, axis=1)
         assert abs(result[0] - 100.0) < 0.01
@@ -460,7 +460,7 @@ class TestLSEEdgeCases:
 
 class TestEmbedEdgeCases:
     def _make_embedder(self):
-        from domains.inference.slo_embedder import SloTextEmbedder, _build_encoder, _build_vocab
+        from domain.inference._internal.slo_embedder import SloTextEmbedder, _build_encoder, _build_vocab
         texts = [f"training sentence {i} about topic" for i in range(20)]
         vocab, itos = _build_vocab(texts, vocab_size=128)
         encoder = _build_encoder(128, 32, 16, 2, 1)
@@ -499,7 +499,7 @@ class TestEmbedEdgeCases:
         assert len(vec) == 32
 
     def test_with_embed_mean(self):
-        from domains.inference.slo_embedder import SloTextEmbedder, _build_encoder, _build_vocab
+        from domain.inference._internal.slo_embedder import SloTextEmbedder, _build_encoder, _build_vocab
         texts = [f"training text {i}" for i in range(20)]
         vocab, _ = _build_vocab(texts, vocab_size=128)
         encoder = _build_encoder(128, 32, 16, 2, 1)
@@ -526,22 +526,22 @@ class TestEmbedEdgeCases:
         assert np.allclose(v1, v2, atol=1e-5)
 
     def test_acceptable_no_quality(self):
-        from domains.inference.slo_embedder import SloTextEmbedder
+        from domain.inference._internal.slo_embedder import SloTextEmbedder
         embedder = SloTextEmbedder(None, {}, quality={})
         assert not embedder.acceptable()
 
     def test_acceptable_boundary_degenerate(self):
-        from domains.inference.slo_embedder import SloTextEmbedder, QUALITY_DEGENERATE_MAX
+        from domain.inference._internal.slo_embedder import SloTextEmbedder, QUALITY_DEGENERATE_MAX
         q = {"probes": 24, "degenerate_fraction": QUALITY_DEGENERATE_MAX, "mean_cosine": 0.0, "nn_agreement": 0.5}
         assert not SloTextEmbedder(None, {}, quality=q).acceptable()
 
     def test_acceptable_boundary_cosine(self):
-        from domains.inference.slo_embedder import SloTextEmbedder, QUALITY_MEAN_COSINE_MAX
+        from domain.inference._internal.slo_embedder import SloTextEmbedder, QUALITY_MEAN_COSINE_MAX
         q = {"probes": 24, "degenerate_fraction": 0.0, "mean_cosine": QUALITY_MEAN_COSINE_MAX, "nn_agreement": 0.5}
         assert not SloTextEmbedder(None, {}, quality=q).acceptable()
 
     def test_acceptable_just_below_boundary(self):
-        from domains.inference.slo_embedder import SloTextEmbedder, QUALITY_DEGENERATE_MAX, QUALITY_MEAN_COSINE_MAX
+        from domain.inference._internal.slo_embedder import SloTextEmbedder, QUALITY_DEGENERATE_MAX, QUALITY_MEAN_COSINE_MAX
         q = {
             "probes": 24,
             "degenerate_fraction": QUALITY_DEGENERATE_MAX - 0.01,
@@ -557,7 +557,7 @@ class TestEmbedEdgeCases:
 
 class TestNnAgreement:
     def test_two_probes(self):
-        from domains.inference.slo_embedder import _nn_agreement
+        from domain.inference._internal.slo_embedder import _nn_agreement
         trained = np.random.randn(2, 16).astype(np.float32)
         reference = np.random.randn(2, 16).astype(np.float32)
         # P=2, k clamped to min(k, P-1)=1
@@ -565,21 +565,21 @@ class TestNnAgreement:
         assert 0.0 <= result <= 1.0
 
     def test_single_probe(self):
-        from domains.inference.slo_embedder import _nn_agreement
+        from domain.inference._internal.slo_embedder import _nn_agreement
         trained = np.random.randn(1, 16).astype(np.float32)
         reference = np.random.randn(1, 16).astype(np.float32)
         result = _nn_agreement(trained, reference)
         assert result == 0.0
 
     def test_identical_spaces(self):
-        from domains.inference.slo_embedder import _nn_agreement
+        from domain.inference._internal.slo_embedder import _nn_agreement
         x = np.random.randn(10, 16).astype(np.float32)
         x = x / (np.linalg.norm(x, axis=1, keepdims=True) + 1e-10)
         result = _nn_agreement(x, x, k=3)
         assert result == 1.0
 
     def test_k_larger_than_probes(self):
-        from domains.inference.slo_embedder import _nn_agreement
+        from domain.inference._internal.slo_embedder import _nn_agreement
         x = np.random.randn(5, 16).astype(np.float32)
         x = x / (np.linalg.norm(x, axis=1, keepdims=True) + 1e-10)
         result = _nn_agreement(x, x, k=100)
@@ -593,14 +593,14 @@ class TestNnAgreement:
 
 class TestComputeEmbedMean:
     def test_empty_texts(self):
-        from domains.inference.slo_embedder import _compute_embed_mean, _build_encoder, _build_vocab
+        from domain.inference._internal.slo_embedder import _compute_embed_mean, _build_encoder, _build_vocab
         vocab, _ = _build_vocab(["dummy"], vocab_size=32)
         encoder = _build_encoder(32, 16, 8, 2, 1)
         result = _compute_embed_mean([], encoder, vocab, 8)
         assert result.size == 0
 
     def test_returns_correct_dim(self):
-        from domains.inference.slo_embedder import _compute_embed_mean, _build_encoder, _build_vocab
+        from domain.inference._internal.slo_embedder import _compute_embed_mean, _build_encoder, _build_vocab
         texts = [f"sample {i}" for i in range(10)]
         vocab, _ = _build_vocab(texts, vocab_size=64)
         encoder = _build_encoder(64, 32, 16, 2, 1)
@@ -614,12 +614,12 @@ class TestComputeEmbedMean:
 
 class TestLabelByMeaning:
     def test_none_points_store(self):
-        from domains.inference.slo_embedder import _label_by_meaning
+        from domain.inference._internal.slo_embedder import _label_by_meaning
         result = _label_by_meaning("hello", points_store=None)
         assert result is None
 
     def test_empty_text(self):
-        from domains.inference.slo_embedder import _label_by_meaning
+        from domain.inference._internal.slo_embedder import _label_by_meaning
         class FakeStore:
             dimension = 128
             def classify(self, vec):

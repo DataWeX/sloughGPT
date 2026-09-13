@@ -36,7 +36,7 @@ class CloudTrainingRouter:
     async def list_jobs(self, limit: int = 10) -> dict:
         """List recent cloud training jobs."""
         try:
-            from domains.training.cloud import get_provider
+            from domain.training._internal.cloud import get_provider
             provider = get_provider("local")
             jobs = provider.list_jobs(limit)
             return success_response(data={
@@ -63,7 +63,7 @@ class CloudTrainingRouter:
     ) -> dict:
         """Submit a cloud training job."""
         try:
-            from domains.training.cloud import get_provider, CloudTrainingConfig
+            from domain.training._internal.cloud import get_provider, CloudTrainingConfig
             p = get_provider(provider)
             config = CloudTrainingConfig(provider=provider)
             job_id = p.submit_job(config, dataset_id, "train.py", {})
@@ -80,7 +80,7 @@ class CloudTrainingRouter:
     async def job_status(self, job_id: str) -> dict:
         """Get status of a cloud training job."""
         try:
-            from domains.training.cloud import get_provider
+            from domain.training._internal.cloud import get_provider
             provider = get_provider("local")
             status = provider.get_status(job_id)
             return success_response(data={
@@ -101,7 +101,7 @@ class CloudTrainingRouter:
     ) -> dict:
         """Cancel a cloud training job."""
         try:
-            from domains.training.cloud import get_provider
+            from domain.training._internal.cloud import get_provider
             provider = get_provider("local")
             cancelled = provider.cancel_job(job_id)
             safe_audit_log("cloud_training.cancel", resource=job_id)

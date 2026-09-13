@@ -135,7 +135,7 @@ class EmbeddingDevice(AIDevice):
             return self._embed_fn(text)
         # Use the project's real embedder (sentence-transformers or n-gram fallback)
         try:
-            from domains.inference.vector_store import simple_embed
+            from domain.inference._internal.vector_store import simple_embed
             return simple_embed(text)
         except Exception as e:
             import logging
@@ -205,7 +205,7 @@ class VisionDevice(AIDevice):
             return f"  File not found: {path}"
         # Delegate to VisionCNN if available
         try:
-            from domains.multimodal.vision import VisionCNN
+            from domain.multimodal._internal.vision import VisionCNN
             cnn = VisionCNN()
             from PIL import Image
             img = Image.open(path).convert("RGB")

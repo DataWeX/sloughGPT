@@ -3,7 +3,7 @@
 import time
 import threading
 import pytest
-from domains.inference.session_kv_manager import SessionKVManager
+from domain.inference._internal.session_kv_manager import SessionKVManager
 
 
 class TestSessionKVManager:

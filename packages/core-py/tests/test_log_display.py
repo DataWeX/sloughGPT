@@ -1,12 +1,12 @@
-"""Tests for domains.shell.log_display — LineModeLogDisplay."""
+"""Tests for domain.shell._internal.log_display — LineModeLogDisplay."""
 
 from __future__ import annotations
 
 import time
 import pytest
 
-from domains.shell.log_buffer import LogEntry, LogBuffer
-from domains.shell.log_display import LineModeLogDisplay, _LEVEL_LABELS, _LEVEL_COLORS
+from domain.shell._internal.log_buffer import LogEntry, LogBuffer
+from domain.shell._internal.log_display import LineModeLogDisplay, _LEVEL_LABELS, _LEVEL_COLORS
 
 
 def _make_entry(level="INFO", source="slo.test", message="test message"):

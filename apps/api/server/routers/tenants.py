@@ -13,8 +13,8 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from domains.auth.models import Role, Tenant, User, UserRole
-from domains.auth.repositories import TenantRepository, UserRepository
+from domain.auth._internal.models import Role, Tenant, User, UserRole
+from domain.auth._internal.repositories import TenantRepository, UserRepository
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import classify_and_raise, endpoint, raise_error, success_response
 

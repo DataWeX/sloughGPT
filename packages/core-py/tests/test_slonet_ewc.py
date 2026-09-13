@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.ewc import (
+from domain.training._internal.ewc import (
     EWCParameters,
     TaskSnapshot,
     DiagonalFisherEstimator,
@@ -14,7 +14,7 @@ from domains.training.ewc import (
     _batch_size,
     _unpack_batch,
 )
-from domains.training.slonet import Tensor, SloLinear, SloNet
+from domain.training._internal.slonet import Tensor, SloLinear, SloNet
 
 
 # ── _as_array / _scalar / _batch_size / _unpack_batch helpers ──────────────

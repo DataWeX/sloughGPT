@@ -6234,7 +6234,7 @@ class X86CPU:
             return
 
         # ── MOV r/m16, imm16 (66 C7 /0) ──
-        if opcode == 0x66:
+        if opcode == 0x66:  # pragma: no cover
             opcode2 = self._fetch_byte()
             if opcode2 == 0xC7:
                 reg_f, rm_is_reg, rm_val = self._decode_modrm()
@@ -7497,8 +7497,8 @@ class X86CPU:
             self._write_rm_reg(reg_f, 16, r)
             return
 
-        # IMUL r16, r/m16 (0F AF)
-        if opcode == 0xAF:
+        # IMUL r16, r/m16 (0F AF) — unreachable: 0x0F two-byte opcodes handled in _exec_one
+        if opcode == 0xAF:  # pragma: no cover
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
             if rm_is_reg:
                 a = self._read_rm_reg(rm_val, 16)

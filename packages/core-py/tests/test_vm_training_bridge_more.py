@@ -1,9 +1,9 @@
-"""Coverage tests for VMTrainingBridge (domains.shell.vm_training_bridge)."""
+"""Coverage tests for VMTrainingBridge (domain.shell._internal.vm_training_bridge)."""
 
 import requests
 
 from domains.shell import vm_training_bridge
-from domains.shell.vm_training_bridge import VMTrainingBridge
+from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
 
 class _FakeResp:

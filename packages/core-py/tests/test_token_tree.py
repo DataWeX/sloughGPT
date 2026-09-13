@@ -6,7 +6,7 @@ import os
 import tempfile
 import pytest
 import numpy as np
-from domains.training.token_tree import TokenTree, TrieNode, SPECIAL_TOKENS
+from domain.training._internal.token_tree import TokenTree, TrieNode, SPECIAL_TOKENS
 
 
 # ── TrieNode ────────────────────────────────────────────────────────────────

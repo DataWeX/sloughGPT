@@ -10,7 +10,7 @@ Provides endpoints to:
 
 import logging
 
-from domains.infrastructure.errors import AppError
+from domain.infrastructure._internal.errors import AppError
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
@@ -92,7 +92,7 @@ class CollectionsRouter:
     ) -> dict:
         """Create and register a new collection pipeline."""
         try:
-            from domains.collections.registry import get_registry
+            from domain.collections._internal.registry import get_registry
 
             registry = get_registry()
             pipeline = registry.create_pipeline(
@@ -139,7 +139,7 @@ class CollectionsRouter:
 
         try:
             _t0 = _time.monotonic()
-            from domains.collections.registry import get_registry
+            from domain.collections._internal.registry import get_registry
 
             registry = get_registry()
             count = registry.collect(name)
@@ -220,7 +220,7 @@ class CollectionsRouter:
     @endpoint("collections.get_stats")
     async def get_stats(self) -> dict:
         """Get overall collection stats."""
-        from domains.collections.registry import get_registry
+        from domain.collections._internal.registry import get_registry
 
         registry = get_registry()
         stats = registry.stats()
@@ -228,7 +228,7 @@ class CollectionsRouter:
     @endpoint("collections.get_pipeline")
     async def get_pipeline(self, pipeline_id: str) -> dict:
         """Get details of a specific pipeline."""
-        from domains.collections.registry import get_registry
+        from domain.collections._internal.registry import get_registry
 
         registry = get_registry()
         pipeline = registry.get_pipeline(pipeline_id)
@@ -249,7 +249,7 @@ class CollectionsRouter:
     ) -> dict:
         """Delete a pipeline from the registry."""
         try:
-            from domains.collections.registry import get_registry
+            from domain.collections._internal.registry import get_registry
 
             registry = get_registry()
             removed = registry.remove_pipeline(pipeline_id)
@@ -268,7 +268,7 @@ class CollectionsRouter:
     ) -> dict:
         """Run collection for a specific pipeline."""
         try:
-            from domains.collections.registry import get_registry
+            from domain.collections._internal.registry import get_registry
 
             registry = get_registry()
             pipeline = registry.get_pipeline(pipeline_id)
@@ -297,7 +297,7 @@ class CollectionsRouter:
     ) -> dict:
         """Get records from a pipeline's store."""
         try:
-            from domains.collections.registry import get_registry
+            from domain.collections._internal.registry import get_registry
 
             registry = get_registry()
             pipeline = registry.get_pipeline(pipeline_id)
@@ -323,7 +323,7 @@ class CollectionsRouter:
 
 def _build_source(source_type: str, config: dict):
     """Build a Source from type and config."""
-    from domains.collections.sources import (
+    from domain.collections._internal.sources import (
         ApiSource,
         FileSource,
         GeneratorSource,
@@ -351,7 +351,7 @@ def _build_source(source_type: str, config: dict):
 
 def _build_store(store_type: str, config: dict):
     """Build a Store from type and config."""
-    from domains.collections.stores import (
+    from domain.collections._internal.stores import (
         CallbackStore,
         ChainedStore,
         FileStore,
@@ -375,7 +375,7 @@ def _build_store(store_type: str, config: dict):
 
 def _build_filter(config: dict):
     """Build a Filter from config dict."""
-    from domains.collections.filters import (
+    from domain.collections._internal.filters import (
         DedupFilter,
         KeywordFilter,
         LanguageFilter,

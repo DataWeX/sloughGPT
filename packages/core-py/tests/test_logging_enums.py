@@ -1,10 +1,10 @@
-"""Tests for domains.logging.base — LogLevel, ErrorCode, LogTag, LogRecord."""
+"""Tests for domain.logging._internal.base — LogLevel, ErrorCode, LogTag, LogRecord."""
 
 import time
 
 import pytest
 
-from domains.logging.base import LogLevel, ErrorCode, LogTag, LogRecord
+from domain.logging._internal.base import LogLevel, ErrorCode, LogTag, LogRecord
 
 
 class TestLogLevel:

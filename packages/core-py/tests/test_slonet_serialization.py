@@ -7,7 +7,7 @@ import json
 import tempfile
 import pytest
 import numpy as np
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor,
     SloNet,
     SloTransformer,
@@ -133,7 +133,7 @@ class TestSloTransformerStateDict:
 class TestExportImportRoundtrip:
 
     def test_sou_roundtrip(self):
-        from domains.training.slonet import export_to_sou, import_from_sou
+        from domain.training._internal.slonet import export_to_sou, import_from_sou
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test.soul")
             model = SloTransformer(

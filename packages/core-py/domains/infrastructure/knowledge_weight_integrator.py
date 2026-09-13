@@ -94,7 +94,7 @@ def _train_native(
 
     Returns the mean loss over the last epoch.
     """
-    from domains.training.slonet import SloAdam
+    from domain.training._internal.slonet import SloAdam
 
     optimizer = SloAdam(
         lr=learning_rate, b1=0.9, b2=0.999, eps=1e-8,

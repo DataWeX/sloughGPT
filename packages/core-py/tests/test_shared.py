@@ -5,7 +5,7 @@ import time
 import pytest
 from pathlib import Path
 
-from domains.shared.utils import (
+from domain.shared._internal.utils import (
     generate_id,
     hash_string,
     format_size,
@@ -23,13 +23,13 @@ from domains.shared.utils import (
     find_available_port,
     find_server_python,
 )
-from domains.shared.feature_flags import (
+from domain.shared._internal.feature_flags import (
     FlagStatus,
     FeatureFlag,
     FeatureFlags,
     is_enabled,
 )
-from domains.shared.test_framework import (
+from domain.shared._internal.test_framework import (
     TestResult,
     TestSuite,
     TestFramework,

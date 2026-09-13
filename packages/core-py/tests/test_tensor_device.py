@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 import numpy as np
 
-from domains.shell.tensor_device import TensorDevice
-from domains.shell.kernel_syscall import SyscallResult
+from domain.shell._internal.tensor_device import TensorDevice
+from domain.shell._internal.kernel_syscall import SyscallResult
 
 
 # ── TensorDevice ───────────────────────────────────────────────────────────

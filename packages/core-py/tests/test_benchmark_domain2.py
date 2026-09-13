@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.benchmark.domain import (
+from domain.benchmark._internal.domain import (
     BenchmarkDomain,
     BenchmarkResult,
     _RESPONSES_DIR,

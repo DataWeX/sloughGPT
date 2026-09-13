@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from domains.cognitive.grounding import (
+from domain.cognitive._internal.grounding import (
     Document,
     RAGGrounder,
     HierarchicalContext,

@@ -6,7 +6,7 @@ import pytest
 import time
 import tempfile
 import os
-from domains.training.auto_trainer import AutoTrainer
+from domain.training._internal.auto_trainer import AutoTrainer
 
 
 # ── AutoTrainer ─────────────────────────────────────────────────────────────

@@ -227,28 +227,28 @@ class TestSloughGPTConfig:
     """Tests for sloughGPT-specific config."""
 
     def test_sloughgpt_site_config(self):
-        from domains.testing.sloughgpt import SLOUGHPGPT_SITE
+        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         assert SLOUGHPGPT_SITE.name == "sloughGPT"
         assert SLOUGHPGPT_SITE.base_url == "http://localhost:3000"
         assert len(SLOUGHPGPT_SITE.pages) > 0
 
     def test_sloughgpt_pages(self):
-        from domains.testing.sloughgpt import SLOUGHPGPT_PAGES
+        from domain.testing._internal.sloughgpt import SLOUGHPGPT_PAGES
 
         assert "training" in SLOUGHPGPT_PAGES
         assert "chat" in SLOUGHPGPT_PAGES
         assert "datasets" in SLOUGHPGPT_PAGES
 
     def test_sloughgpt_training_pages(self):
-        from domains.testing.sloughgpt import SLOUGHPGPT_TRAINING_PAGES
+        from domain.testing._internal.sloughgpt import SLOUGHPGPT_TRAINING_PAGES
 
         assert "queue" in SLOUGHPGPT_TRAINING_PAGES
         assert "runs" in SLOUGHPGPT_TRAINING_PAGES
         assert "presets" in SLOUGHPGPT_TRAINING_PAGES
 
     def test_sloughgpt_journey(self):
-        from domains.testing.sloughgpt import SloughGPTJourney
+        from domain.testing._internal.sloughgpt import SloughGPTJourney
 
         journey = SloughGPTJourney()
         assert journey.config.name == "sloughGPT"
@@ -258,24 +258,24 @@ class TestPrebuiltJourneys:
     """Tests for pre-built journey tests."""
 
     def test_page_journey(self):
-        from domains.testing.journeys import PageJourney
-        from domains.testing.sloughgpt import SLOUGHPGPT_SITE
+        from domain.testing._internal.journeys import PageJourney
+        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         journey = PageJourney(SLOUGHPGPT_SITE)
         result = journey.test_page("training")
         assert result.passed
 
     def test_navigation_journey(self):
-        from domains.testing.journeys import NavigationJourney
-        from domains.testing.sloughgpt import SLOUGHPGPT_SITE
+        from domain.testing._internal.journeys import NavigationJourney
+        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         journey = NavigationJourney(SLOUGHPGPT_SITE)
         result = journey.test_sidebar_navigation()
         assert result.passed
 
     def test_full_suite(self):
-        from domains.testing.journeys import FullSuiteJourney
-        from domains.testing.sloughgpt import SLOUGHPGPT_SITE
+        from domain.testing._internal.journeys import FullSuiteJourney
+        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         suite = FullSuiteJourney(SLOUGHPGPT_SITE)
         results = suite.run_all()
@@ -286,27 +286,27 @@ class TestChromeDevTools:
     """Tests for ChromeDevTools integration."""
 
     def test_browser_creation(self):
-        from domains.testing.chrome_devtools import ChromeDevToolsBrowser
+        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
         assert browser.base_url == "http://localhost:3000"
 
     def test_browser_state(self):
-        from domains.testing.chrome_devtools import BrowserState
+        from domain.testing._internal.chrome_devtools import BrowserState
 
         state = BrowserState()
         assert state.page_id is None
         assert state.url == ""
 
     def test_browser_commands(self):
-        from domains.testing.chrome_devtools import ChromeDevToolsBrowser
+        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser()
         commands = browser.get_commands()
         assert isinstance(commands, list)
 
     def test_browser_report(self):
-        from domains.testing.chrome_devtools import ChromeDevToolsBrowser
+        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
         report = browser.report()

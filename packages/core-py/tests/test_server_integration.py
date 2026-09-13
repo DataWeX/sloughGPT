@@ -22,7 +22,7 @@ from domains.infrastructure.model_registry import get_model_registry, ModelRegis
 from domains.infrastructure.model_server import (
     ModelServer, ModelStatus, CircuitBreakerState, PriorityRequestQueue, Priority,
 )
-from domains.infrastructure.event_bus import get_event_bus, set_event_bus
+from domain.infrastructure._internal.event_bus import get_event_bus, set_event_bus
 
 
 # ── Mock model (torch-free) ──────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import time
 from domain.soul._internal.cognitive import RelationshipMemory
-from domains.cognitive.rag import BM25Indexer, HybridRetriever, TextChunk, RetrievalResult
+from domain.cognitive._internal.rag import BM25Indexer, HybridRetriever, TextChunk, RetrievalResult
 
 
 # ── RelationshipMemory ────────────────────────────────────────────────

@@ -6,7 +6,7 @@ qualia richness, and self-reflection depth.
 
 Usage::
 
-    from domains.consciousness.evaluation import ConsciousnessEvaluator
+    from domain.consciousness._internal.evaluation import ConsciousnessEvaluator
 
     evaluator = ConsciousnessEvaluator()
     report = evaluator.evaluate(episodes, beliefs, qualia_history)

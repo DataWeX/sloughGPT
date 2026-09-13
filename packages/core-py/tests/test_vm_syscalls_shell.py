@@ -11,8 +11,8 @@ import types
 
 import pytest
 
-import domains.shell.vm as vm
-from domains.shell.vm import (
+import domain.shell._internal.vm as vm
+from domain.shell._internal.vm import (
     BlockDevice,
     FlatFS,
     PageFrameAllocator,
@@ -42,7 +42,7 @@ def _standalone_handler(memory_size=0x100000, filesystem=None):
 def _install_fake_bridge(monkeypatch, bridge):
     if "requests" not in sys.modules:
         monkeypatch.setitem(sys.modules, "requests", types.ModuleType("requests"))
-    mod = importlib.import_module("domains.shell.vm_training_bridge")
+    mod = importlib.import_module("domain.shell._internal.vm_training_bridge")
     monkeypatch.setattr(mod, "get_bridge", lambda: bridge)
     return mod
 

@@ -28,7 +28,7 @@ def mock_log(monkeypatch):
 
 class TestDistillConfig:
     def test_config_defaults(self):
-        from domains.training.distill_gpt2 import DistillConfig
+        from domain.training._internal.distill_gpt2 import DistillConfig
         c = DistillConfig()
         assert c.n_embed == 128
         assert c.n_layer == 4
@@ -40,13 +40,13 @@ class TestDistillConfig:
         assert c.resume_checkpoint is None
 
     def test_config_resume(self):
-        from domains.training.distill_gpt2 import DistillConfig
+        from domain.training._internal.distill_gpt2 import DistillConfig
         c = DistillConfig(resume_checkpoint="test.soul", resume_epoch=5)
         assert c.resume_checkpoint == "test.soul"
         assert c.resume_epoch == 5
 
     def test_config_custom_values(self):
-        from domains.training.distill_gpt2 import DistillConfig
+        from domain.training._internal.distill_gpt2 import DistillConfig
         c = DistillConfig(n_embed=64, n_layer=2, n_head=2, epochs=3, lr=1e-3)
         assert c.n_embed == 64
         assert c.n_layer == 2
@@ -54,7 +54,7 @@ class TestDistillConfig:
         assert c.lr == 1e-3
 
     def test_config_temperature(self):
-        from domains.training.distill_gpt2 import DistillConfig
+        from domain.training._internal.distill_gpt2 import DistillConfig
         c = DistillConfig(temperature=2.0)
         assert c.temperature == 2.0
 
@@ -212,7 +212,7 @@ class TestCmdTrainNative:
 
     def test_token_tree_tokenizer_trains_and_passes_tree(self, tmp_path):
         from commands.train import cmd_train_native
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
         corpus = tmp_path / "corpus.txt"
         corpus.write_text(
             "the quick brown fox jumps over the lazy dog. " * 40,

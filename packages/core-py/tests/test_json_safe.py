@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from domains.api.sse_envelope import (
+from domain.api._internal.sse_envelope import (
     _json_safe,
     sse_event,
     sse_error,

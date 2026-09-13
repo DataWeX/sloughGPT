@@ -2,8 +2,8 @@
 
 import numpy as np
 import pytest
-from domains.training.slonet import Tensor, tensor as _tensor
-from domains.multimodal.vae import (
+from domain.training._internal.slonet import Tensor, tensor as _tensor
+from domain.multimodal._internal.vae import (
     _group_norm,
     SloVAEEncoder,
     SloVAEDecoder,
@@ -630,7 +630,7 @@ class TestSloVAEExtended:
 
     def test_vae_parameters_are_tensors(self):
         vae = SloVAE(latent_dim=8)
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
         for p in vae.parameters():
             assert isinstance(p, Tensor)
 

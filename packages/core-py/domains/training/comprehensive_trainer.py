@@ -6,7 +6,7 @@ auto-training, online updates, EWC, distillation, and outcome tracking
 into a single cohesive lifecycle.
 
 Usage:
-    from domains.training.comprehensive_trainer import ComprehensiveTrainer
+    from domain.training._internal.comprehensive_trainer import ComprehensiveTrainer
 
     trainer = ComprehensiveTrainer()
     result = trainer.run_full_cycle(
@@ -158,8 +158,8 @@ class ComprehensiveTrainer:
     """
 
     def __init__(self, data_dir: Path | None = None):
-        from domains.training.outcome_tracker import TrainingOutcomeTracker
-        from domains.training.state import get_state
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+        from domain.training._internal.state import get_state
 
         self.state = get_state()
         self.tracker = TrainingOutcomeTracker()
@@ -228,7 +228,7 @@ class ComprehensiveTrainer:
                     error=f"Data too short: {len(text)} chars (min 200)",
                 )
 
-            from domains.training.quality_scorer import compute_data_quality
+            from domain.training._internal.quality_scorer import compute_data_quality
 
             quality = compute_data_quality(text)
             avg_q = quality.get("avg_quality", 0)
@@ -258,14 +258,14 @@ class ComprehensiveTrainer:
             final_config = config.to_dict()
 
             if config.auto_config:
-                from domains.training.auto_config import auto_configure
+                from domain.training._internal.auto_config import auto_configure
 
                 auto = auto_configure(str(self.data_dir))
                 final_config.update(auto)
                 logger.info("Auto-config applied: %s", list(auto.keys()))
 
             if config.adaptive:
-                from domains.training.adaptive_config import AdaptiveConfigEngine
+                from domain.training._internal.adaptive_config import AdaptiveConfigEngine
 
                 engine = AdaptiveConfigEngine(self.tracker)
                 rec = engine.recommend(
@@ -315,7 +315,7 @@ class ComprehensiveTrainer:
 
             if not pairs:
                 try:
-                    from domains.training.pair_extractor import (
+                    from domain.training._internal.pair_extractor import (
                         extract_pairs_from_logs,
                         extract_pairs_from_sessions,
                     )
@@ -355,7 +355,7 @@ class ComprehensiveTrainer:
         return self._run_phase(TrainingPhase.TRAINING, run)
 
     def _train_sft(self, data_path: str, config: dict) -> PhaseResult:
-        from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
+        from domain.training._internal.train_pipeline import SloughGPTTrainer, TrainerConfig
 
         tcfg = TrainerConfig(
             n_embed=config.get("n_embed", 128),
@@ -392,7 +392,7 @@ class ComprehensiveTrainer:
         )
 
     def _train_rlhf(self, data_path: str, config: dict) -> PhaseResult:
-        from domains.training.rlhf import PPOTrainer, RewardModel, RLHFConfig
+        from domain.training._internal.rlhf import PPOTrainer, RewardModel, RLHFConfig
 
         rlhf_cfg = RLHFConfig(
             ppo_epochs=config.get("ppo_epochs", 4),
@@ -444,7 +444,7 @@ class ComprehensiveTrainer:
         )
 
     def _train_lora(self, data_path: str, config: dict) -> PhaseResult:
-        from domains.training.lora import LoRAConfig
+        from domain.training._internal.lora import LoRAConfig
 
         lora_cfg = LoRAConfig(
             rank=config.get("lora_rank", 8),
@@ -465,7 +465,7 @@ class ComprehensiveTrainer:
         )
 
     def _train_turbo(self, data_path: str, config: dict) -> PhaseResult:
-        from domains.training.turbo import turbo_train
+        from domain.training._internal.turbo import turbo_train
 
         result = turbo_train(data_path=data_path, config=config)
         return PhaseResult(
@@ -476,7 +476,7 @@ class ComprehensiveTrainer:
         )
 
     def _train_distillation(self, data_path: str, config: dict) -> PhaseResult:
-        from domains.training.distillation import DistillationConfig
+        from domain.training._internal.distillation import DistillationConfig
 
         distill_cfg = DistillationConfig(
             temperature=config.get("distill_temperature", 2.0),
@@ -505,7 +505,7 @@ class ComprehensiveTrainer:
                     data={"skipped": True, "reason": "EWC disabled"},
                 )
 
-            from domains.training.ewc import EWCRegularizer
+            from domain.training._internal.ewc import EWCRegularizer
 
             EWCRegularizer(lambda_=config.get("ewc_lambda", 100.0))
             return PhaseResult(
@@ -522,7 +522,7 @@ class ComprehensiveTrainer:
         self, run_id: str, config: dict, train_data: dict, phases: list[PhaseResult]
     ) -> PhaseResult:
         def run():
-            from domains.training.outcome_tracker import TrainingOutcome
+            from domain.training._internal.outcome_tracker import TrainingOutcome
 
             loss = train_data.get("final_loss", 0)
             if loss is None:

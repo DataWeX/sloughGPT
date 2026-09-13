@@ -249,7 +249,7 @@ def _slo_worker_main(
     provider = None
 
     try:
-        from domains.inference.slonet_provider import SloNetChatProvider
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
 
         provider = SloNetChatProvider.from_slnc(
             slnc_path,
@@ -416,8 +416,8 @@ def _slo_worker_main(
         if not target_modules:
             target_modules = ["W_q", "W_k", "W_v", "W_o"]
 
-        from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
-        from domains.training.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
+        from domain.training._internal.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
+        from domain.training._internal.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
 
         model = provider._model
         lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
@@ -451,7 +451,7 @@ def _slo_worker_main(
         model = provider._model
 
         # SloNet named_modules() doesn't recurse — use _walk_slo_tree instead
-        from domains.training.lora import _walk_slo_tree
+        from domain.training._internal.lora import _walk_slo_tree
         has_lora = False
         try:
             for _path, mod in _walk_slo_tree(model, []):
@@ -468,7 +468,7 @@ def _slo_worker_main(
         if slnc_path is None:
             raise RuntimeError("Cannot determine base model path.")
 
-        from domains.inference.slonet_provider import SloNetChatProvider
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
         base_provider = SloNetChatProvider.from_slnc(slnc_path, model_id="base")
         provider._model = base_provider._model
 

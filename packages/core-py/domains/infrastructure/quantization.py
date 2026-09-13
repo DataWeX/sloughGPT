@@ -52,7 +52,7 @@ def walk_slo_linears(model) -> dict:
     Returns:
         dict of ``{name: SloLinear_layer}``.
     """
-    from domains.training.slonet import SloLinear
+    from domain.training._internal.slonet import SloLinear
 
     layers = {}
 

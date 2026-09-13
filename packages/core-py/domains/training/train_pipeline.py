@@ -5,7 +5,7 @@ SloughGPT Training Pipeline (SloNet-native)
 Trains :class:`domains.models.SloughGPTModel` on pure NumPy via SloNet. There is
 no external framework dependency anywhere in the training path: the optimizer is
 ``SloAdamW`` (decoupled weight decay), scheduling is
-``domains.training.lr_schedulers``, and checkpoints are ``.soul``
+``domain.training._internal.lr_schedulers``, and checkpoints are ``.soul``
 (self-contained weights + vocab + training state) with a ``.npz`` fallback.
 
 Features:
@@ -35,17 +35,17 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 if TYPE_CHECKING:
-    from domains.training.tracking import ExperimentTracker
+    from domain.training._internal.tracking import ExperimentTracker
 
 try:
     from domains.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
-from domains.training.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
-from domains.training.lora import LoRAConfig, apply_lora_to_model
-from domains.training.quality_scorer import compute_data_quality
-from domains.training.slonet import load_checkpoint_npz
-from domains.training.trainer_protocol import TrainResult
+from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
+from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
+from domain.training._internal.quality_scorer import compute_data_quality
+from domain.training._internal.slonet import load_checkpoint_npz
+from domain.training._internal.trainer_protocol import TrainResult
 
 logger = logging.getLogger("slo.trainer")
 
@@ -417,7 +417,7 @@ def _load_soul_checkpoint(path: str) -> Optional[Dict[str, Any]]:
         Dict with keys: model_state_dict, step, epoch, optimizer_state_dict (optional),
         scheduler_state_dict (optional), accumulation_step (optional).
     """
-    from domains.inference.slo_format import load_soul
+    from domain.inference._internal.slo_format import load_soul
 
     soul_profile, state_dict = load_soul(path)
     result: Dict[str, Any] = {
@@ -714,7 +714,7 @@ class SloughGPTTrainer:
     """
     Unified trainer for SloughGPTModel (pure NumPy / SloNet).
 
-    Satisfies :class:`domains.training.trainer_protocol.TrainerProtocol` structurally (``train()``).
+    Satisfies :class:`domain.training._internal.trainer_protocol.TrainerProtocol` structurally (``train()``).
 
     Features:
     - Gradient accumulation
@@ -948,7 +948,7 @@ class SloughGPTTrainer:
         # Initialize EWC if enabled (prevents catastrophic forgetting)
         self._ewc = None
         if self.config.use_ewc:
-            from domains.training.ewc import EwcContinualLearner, EWCParameters
+            from domain.training._internal.ewc import EwcContinualLearner, EWCParameters
             ewc_params = EWCParameters(
                 lambda_ewc=self.config.ewc_lambda,
                 num_samples=self.config.ewc_num_samples,
@@ -961,7 +961,7 @@ class SloughGPTTrainer:
 
     def _create_optimizer(self):
         """Create SloAdamW optimizer with decoupled weight decay."""
-        from domains.training.slonet import SloAdamW
+        from domain.training._internal.slonet import SloAdamW
 
         return SloAdamW(
             lr=self.config.learning_rate,
@@ -970,7 +970,7 @@ class SloughGPTTrainer:
 
     def _create_scheduler(self):
         """Create learning rate scheduler with adaptive defaults."""
-        from domains.training.lr_schedulers import create_scheduler
+        from domain.training._internal.lr_schedulers import create_scheduler
 
         if self.config.max_steps:
             total_steps = self.config.max_steps
@@ -1263,7 +1263,7 @@ class SloughGPTTrainer:
             resume_path: Optional checkpoint path (.soul or .npz). Accepts full
                 ``CheckpointManager`` bundles (model + optimizer + scheduler + step/epoch) and
                 **weights-only** bundles (``model_state_dict`` or flat tensors) as normalized
-                by :func:`domains.training.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
+                by :func:`domain.training._internal.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
                 and scheduler load are best-effort.
             resume_checkpoint: Optional pre-loaded checkpoint bundle to restore
                 from, bypassing all disk I/O. Takes precedence over
@@ -1619,7 +1619,7 @@ class SloughGPTTrainer:
 
         # Record training outcome for adaptive learning
         try:
-            from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+            from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
             import time as _outcome_time
             outcome = TrainingOutcome(
                 run_id=f"train_{int(_outcome_time.time() * 1000)}",
@@ -1844,7 +1844,7 @@ class SloughGPTTrainer:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
         from domains.inference import create_soul_profile, save_soul
-        from domains.inference.slo_format import PersonalityCore
+        from domain.inference._internal.slo_format import PersonalityCore
 
         # Honest metadata: only claim a loss that was actually observed. A save
         # before any training step has neither a train loss nor an eval loss,
@@ -1931,7 +1931,7 @@ class SloughGPTTrainer:
 
         # Auto-compress checkpoint into pugqeep Points for efficient inference
         try:
-            from domains.training.executor import compress_checkpoint
+            from domain.training._internal.executor import compress_checkpoint
             result = compress_checkpoint(output_path, n_clusters=16)
             if result:
                 logger.info(

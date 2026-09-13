@@ -1,9 +1,9 @@
-"""Coverage tests for the Cycles path tracer (domains.shell.cycles)."""
+"""Coverage tests for the Cycles path tracer (domain.shell._internal.cycles)."""
 
 import numpy as np
 import pytest
 
-from domains.shell.cycles import (
+from domain.shell._internal.cycles import (
     BVH, Camera, CyclesRenderer, Light, Material, Mesh, Scene,
     create_cube, create_plane, create_sphere,
     _refract, _normalize, _reflect,

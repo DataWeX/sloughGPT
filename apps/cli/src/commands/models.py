@@ -82,7 +82,7 @@ def cmd_models(args):
 def _cmd_models_info(args):
     """Show .soul checkpoint info."""
     import numpy as np
-    from domains.training.slonet import import_from_sou
+    from domain.training._internal.slonet import import_from_sou
 
     model_path = Path(args.model)
     if not model_path.exists():
@@ -168,8 +168,8 @@ def _interactive_download_select():
     model_list.sort(key=lambda x: x[2], reverse=True)
 
     # Build formatted options for InteractivePrompt
-    from domains.shell.interactive import InteractivePrompt
-    from domains.shell.io import ConsoleIO
+    from domain.shell._internal.interactive import InteractivePrompt
+    from domain.shell._internal.io import ConsoleIO
 
     io = ConsoleIO()
     prompt = InteractivePrompt(io)
@@ -418,7 +418,7 @@ def _cmd_models_personalities(args):
 def cmd_export_cli(args):
     """Export a .soul model to different formats."""
     import numpy as np
-    from domains.training.export import export_model, list_export_formats, ExportConfig
+    from domain.training._internal.export import export_model, list_export_formats, ExportConfig
 
     log.header("Model Export")
 
@@ -435,7 +435,7 @@ def cmd_export_cli(args):
 
     log.blank()
     log.step(f"Loading: {args.model}")
-    from domains.training.slonet import import_from_sou
+    from domain.training._internal.slonet import import_from_sou
     net = import_from_sou(str(model_path))
     metadata = dict(getattr(net, "metadata", None) or {})
     metadata.setdefault("name", getattr(net, "soul_name", "SloughGPT"))
@@ -463,7 +463,7 @@ def cmd_export_cli(args):
     if args.soul_name:
         meta_with_name["name"] = args.soul_name
 
-    from domains.training.export import ExportConfig
+    from domain.training._internal.export import ExportConfig
 
     config = ExportConfig(
         input_path=args.model,
@@ -529,7 +529,7 @@ def cmd_soul(args):
         return
 
     if args.info:
-        from domains.inference.slo_format import SouParser
+        from domain.inference._internal.slo_format import SouParser
 
         try:
             soul = SouParser.load(args.info)
@@ -552,8 +552,8 @@ def cmd_soul(args):
         return
 
     if args.create:
-        from domains.inference.slo_format import create_soul_profile, SouParser
-        from domains.training.slonet import export_to_sou, import_from_sou
+        from domain.inference._internal.slo_format import create_soul_profile, SouParser
+        from domain.training._internal.slonet import export_to_sou, import_from_sou
 
         soul = create_soul_profile(
             name=args.name or "SloughGPT-Slo",
@@ -585,8 +585,8 @@ def cmd_benchmark(args):
     import time
     import statistics
     import numpy as np
-    from domains.training.slonet import _get_accelerator
-    from domains.inference.slonet_provider import SloNetChatProvider
+    from domain.training._internal.slonet import _get_accelerator
+    from domain.inference._internal.slonet_provider import SloNetChatProvider
 
     acc = _get_accelerator()
     backend = acc.name if acc is not None else "cpu"
@@ -690,8 +690,8 @@ def _cmd_models_select(args):
     log.success(f"Found {len(model_list)} models")
 
     # Build formatted options for InteractivePrompt
-    from domains.shell.interactive import InteractivePrompt
-    from domains.shell.io import ConsoleIO
+    from domain.shell._internal.interactive import InteractivePrompt
+    from domain.shell._internal.io import ConsoleIO
 
     io = ConsoleIO()
     prompt = InteractivePrompt(io)

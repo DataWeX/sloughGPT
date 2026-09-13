@@ -5,7 +5,7 @@ import json
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from domains.context.managers import (
+from domain.context._internal.managers import (
     TraitWeightsConfig,
     PersonalityManager,
     MemoryManager,
@@ -657,5 +657,5 @@ class TestTaskManager:
 class TestResetTraitConfig:
     def test_reset_clears_singleton(self):
         reset_trait_config()
-        from domains.context.managers import _trait_config
+        from domain.context._internal.managers import _trait_config
         assert _trait_config is None

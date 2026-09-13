@@ -1,4 +1,4 @@
-"""Tests for domains.feedback.training — TrainingExample, DPOPair, FeedbackTrainer."""
+"""Tests for domain.feedback._internal.training — TrainingExample, DPOPair, FeedbackTrainer."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.feedback.training import (
+from domain.feedback._internal.training import (
     TrainingExample,
     DPOPair,
     FeedbackTrainer,

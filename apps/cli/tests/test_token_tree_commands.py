@@ -66,28 +66,28 @@ class TestResolveCorpus:
 class TestResolveToken:
     def test_numeric_id(self):
         from commands.token_tree import _resolve_token
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
         tree = TokenTree()
         tree.stoi = {"a": 7}
         assert _resolve_token(tree, "7") == 7
 
     def test_word_resolves_to_suffixed_form(self):
         from commands.token_tree import _resolve_token
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
         tree = TokenTree()
         tree.stoi = {"quick</w>": 3, " quick</w>": 5}
         assert _resolve_token(tree, "quick") == 3
 
     def test_special_token_whole(self):
         from commands.token_tree import _resolve_token
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
         tree = TokenTree()
         tree.stoi = {"<PAD>": 0, "pad</w>": 1}
         assert _resolve_token(tree, "<PAD>") == 0
 
     def test_unknown_exits(self):
         from commands.token_tree import _resolve_token
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
         tree = TokenTree()
         tree.stoi = {"a</w>": 1}
         with pytest.raises(SystemExit):
@@ -263,8 +263,8 @@ class TestCmdMatrix:
 class TestCmdCompare:
     def _save_two(self, tmp_path, monkeypatch):
         """Train and save two distinct trees in a temp save dir."""
-        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
-        from domains.training.token_tree_manager import get_token_tree_manager
+        monkeypatch.setattr("domain.training._internal.token_tree_manager._SAVE_DIR", tmp_path)
+        from domain.training._internal.token_tree_manager import get_token_tree_manager
         mgr = get_token_tree_manager()
         mgr.train(["alpha alpha beta gamma gamma delta"], vocab_size=32, min_frequency=1)
         mgr.save("tree-a")
@@ -338,8 +338,8 @@ class TestCmdMerges:
 
 class TestCmdSavedTrees:
     def _save_one(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
-        from domains.training.token_tree_manager import get_token_tree_manager
+        monkeypatch.setattr("domain.training._internal.token_tree_manager._SAVE_DIR", tmp_path)
+        from domain.training._internal.token_tree_manager import get_token_tree_manager
         mgr = get_token_tree_manager()
         mgr.train(["alpha alpha beta gamma gamma"], vocab_size=32, min_frequency=1)
         mgr.save("tree-a")
@@ -352,14 +352,14 @@ class TestCmdSavedTrees:
         assert any("Saved token trees" in str(c) for c in mock_log.header.call_args_list)
 
     def test_saved_empty(self, tmp_path, monkeypatch, mock_log):
-        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.token_tree_manager._SAVE_DIR", tmp_path)
         from commands.token_tree import cmd_token_tree_saved
         cmd_token_tree_saved(MagicMock())
         assert any("No saved token trees" in str(c) for c in mock_log.info.call_args_list)
 
     def test_save_uses_existing_current_tree(self, tmp_path, monkeypatch, mock_log):
-        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
-        from domains.training.token_tree_manager import get_token_tree_manager
+        monkeypatch.setattr("domain.training._internal.token_tree_manager._SAVE_DIR", tmp_path)
+        from domain.training._internal.token_tree_manager import get_token_tree_manager
         mgr = get_token_tree_manager()
         mgr.train(["alpha alpha beta beta"], vocab_size=32, min_frequency=1)
         from commands.token_tree import cmd_token_tree_save
@@ -382,8 +382,8 @@ class TestCmdSavedTrees:
         tree_args.output = str(tmp_path / "trained")
         cmd_token_tree_train(tree_args)
 
-        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path / "save")
-        from domains.training.token_tree_manager import get_token_tree_manager
+        monkeypatch.setattr("domain.training._internal.token_tree_manager._SAVE_DIR", tmp_path / "save")
+        from domain.training._internal.token_tree_manager import get_token_tree_manager
         mgr = get_token_tree_manager()
         args = MagicMock()
         args.name = "adopted"
@@ -393,7 +393,7 @@ class TestCmdSavedTrees:
         assert "adopted" in names
 
     def test_save_invalid_name_exits(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.token_tree_manager._SAVE_DIR", tmp_path)
         from commands.token_tree import cmd_token_tree_save
         args = MagicMock()
         args.name = "../evil"
@@ -403,7 +403,7 @@ class TestCmdSavedTrees:
         assert exc.value.code == 2
 
     def test_save_missing_tree_path_exits(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
+        monkeypatch.setattr("domain.training._internal.token_tree_manager._SAVE_DIR", tmp_path)
         from commands.token_tree import cmd_token_tree_save
         args = MagicMock()
         args.name = "mine"

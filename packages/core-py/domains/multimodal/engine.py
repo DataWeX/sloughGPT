@@ -14,7 +14,7 @@ import numpy as np
 
 logger = logging.getLogger("slo.multimodal.engine")
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloLinear,
     SloEmbedding, SloLayerNorm, SloTransformerBlock, SloCrossAttention,
     SloMultiHeadAttention, SloFeedForward, SloRMSNorm, SloDropout, SloLayer,
@@ -112,7 +112,7 @@ class MultimodalEngine:
 
     @property
     def capabilities(self):
-        from domains.models.provider import ModelCapabilities
+        from domain.models._internal.provider import ModelCapabilities
         return ModelCapabilities(chat=True, streaming=False, embedding=True, vision=True)
 
     def _extract_images(self, messages: list) -> list:
@@ -460,7 +460,7 @@ class MultimodalEngine:
         if text_tokens is None:
             raise ValueError("text_tokens is required")
         # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
         try:
@@ -521,7 +521,7 @@ class MultimodalEngine:
         if not samples:
             return 0.0
 
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
         try:
@@ -590,7 +590,7 @@ class MultimodalEngine:
         _saved_rng = np.random.get_state()
         np.random.seed(42)
         # Disable GPU accelerator for deterministic inference (Metal can be non-deterministic)
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
         embed, patches, _ = self._concat_modalities(image_np, audio_np, audio_patches)
@@ -738,7 +738,7 @@ class MultimodalEngine:
         self.eval()
         _saved_rng = np.random.get_state()
         np.random.seed(42)
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
 
@@ -1397,7 +1397,7 @@ def contrastive_step(engine: MultimodalEngine, img_np: np.ndarray, buffer: Repla
         return 0.0
 
     # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
-    import domains.training.slonet as _slonet_mod
+    import domain.training._internal.slonet as _slonet_mod
     _saved_accel = _slonet_mod._ACCELERATOR
     _slonet_mod._ACCELERATOR = "none"
     try:

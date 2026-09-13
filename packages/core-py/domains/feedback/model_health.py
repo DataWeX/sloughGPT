@@ -127,7 +127,7 @@ class ModelHealthMonitor:
         Returns a HealthSnapshot with PPL, loss, and sentence count.
         """
         import numpy as np
-        from domains.training.slonet import tensor, SloLSTM
+        from domain.training._internal.slonet import tensor, SloLSTM
 
         net = self._model
         tok = self._tokenizer

@@ -618,7 +618,7 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
     global _slo_embedder, _slo_embedder_rejected
     if _slo_embedder is None and not _slo_embedder_rejected:
         try:
-            from domains.inference.slo_embedder import SloTextEmbedder
+            from domain.inference._internal.slo_embedder import SloTextEmbedder
             candidate = SloTextEmbedder.load()
             if candidate is not None and not candidate.acceptable():
                 logger.info(

@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from domains.shell.permissions import ShellPermissions, Risk, set_permissions_db, reset_permissions_db
+from domain.shell._internal.permissions import ShellPermissions, Risk, set_permissions_db, reset_permissions_db
 
 
 @pytest.fixture(autouse=True)

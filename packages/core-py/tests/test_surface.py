@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domains.shell.surface import (
+from domain.shell._internal.surface import (
     TextSurface,
     LogSurface,
     RenderLine,

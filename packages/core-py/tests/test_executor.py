@@ -1,4 +1,4 @@
-"""Comprehensive tests for domains.training.executor."""
+"""Comprehensive tests for domain.training._internal.executor."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ _repo_root = str(Path(__file__).resolve().parents[3])
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-from domains.training.executor import (
+from domain.training._internal.executor import (
     JobInfo,
     JobStatus,
     TrainingExecutor,
@@ -49,7 +49,7 @@ PC_PATCH = "domains.infrastructure.pugqeep.PointCompressor"
 
 @pytest.fixture(autouse=True)
 def _reset_singleton():
-    import domains.training.executor as exec_mod
+    import domain.training._internal.executor as exec_mod
     old = exec_mod._instance
     exec_mod._instance = None
     yield
@@ -366,7 +366,7 @@ class TestTrainingExecutorShutdown:
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_shutdown_resets_singleton(self, _mock_rm):
         """A dead singleton must not be reused after shutdown."""
-        import domains.training.executor as exec_mod
+        import domain.training._internal.executor as exec_mod
 
         exec_mod._instance = None
         ex = get_training_executor()
@@ -500,7 +500,7 @@ class TestGetTrainingExecutor:
 
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_returns_same_instance(self, _mock_rm):
-        import domains.training.executor as exec_mod
+        import domain.training._internal.executor as exec_mod
         exec_mod._instance = None
         a = get_training_executor()
         b = get_training_executor()
@@ -510,7 +510,7 @@ class TestGetTrainingExecutor:
 
     @patch(RM_PATCH, side_effect=_rm_factory)
     def test_thread_safe(self, _mock_rm):
-        import domains.training.executor as exec_mod
+        import domain.training._internal.executor as exec_mod
         exec_mod._instance = None
         instances = []
 

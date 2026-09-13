@@ -339,7 +339,7 @@ class SlonetDevice(Device):
         input_ids = np.asarray(token_ids, dtype=np.int64)
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
-        from domains.training.slonet import Tensor as _Tensor
+        from domain.training._internal.slonet import Tensor as _Tensor
         inp = _Tensor(input_ids, requires_grad=False)
         logits, _ = self._provider._model.forward(inp)
         return logits.data
@@ -515,7 +515,7 @@ class SlonetTrainingDevice(Device):
 
     def _ensure_model(self):
         if self._model is None:
-            from domains.training.slonet import SloTransformer
+            from domain.training._internal.slonet import SloTransformer
             self._model = SloTransformer(**self._model_config)
 
     def call(self, method, *args):
@@ -526,7 +526,7 @@ class SlonetTrainingDevice(Device):
 
     def _load_dataset(self, path: str, max_seq_len: int):
         try:
-            from domains.shell.file_manager import get_file_manager
+            from domain.shell._internal.file_manager import get_file_manager
             fm = get_file_manager()
             content = fm.read_text(path)
         except ImportError:
@@ -551,7 +551,7 @@ class SlonetTrainingDevice(Device):
                batch_size=8, max_seq_len=128, save_interval=0):
         self._ensure_model()
 
-        from domains.training.slonet import (
+        from domain.training._internal.slonet import (
             SloAdam, clip_grad_norm_, Tensor, export_to_sou
         )
 
@@ -569,7 +569,7 @@ class SlonetTrainingDevice(Device):
 
         warmup_steps = min(self._train_config["warmup_steps"], max(1, total_steps // 4))
         try:
-            from domains.training.slonet import WarmupCosineScheduler
+            from domain.training._internal.slonet import WarmupCosineScheduler
             scheduler = WarmupCosineScheduler(optimizer, warmup_steps=warmup_steps,
                                               total_steps=total_steps, min_lr=lr * 0.1)
             has_scheduler = True
@@ -635,7 +635,7 @@ class SlonetTrainingDevice(Device):
     def _eval(self, dataset_path="", max_seq_len=128, num_batches=50):
         self._ensure_model()
 
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
 
         data = self._load_dataset(dataset_path, max_seq_len)
         if data is None:
@@ -666,7 +666,7 @@ class SlonetTrainingDevice(Device):
 
     def _save(self, path=""):
         self._ensure_model()
-        from domains.training.slonet import export_to_sou
+        from domain.training._internal.slonet import export_to_sou
         import os, time
         if not path:
             os.makedirs(self._train_config["checkpoint_dir"], exist_ok=True)
@@ -676,7 +676,7 @@ class SlonetTrainingDevice(Device):
         return path
 
     def _load(self, path=""):
-        from domains.training.slonet import import_from_sou
+        from domain.training._internal.slonet import import_from_sou
         try:
             self._model = import_from_sou(path)
             self._created_model = False
@@ -717,7 +717,7 @@ class SlonetTrainingDevice(Device):
 
     def _generate(self, prompt, max_tokens=50, temperature=1.0):
         self._ensure_model()
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
         tokens = self._tokenize(str(prompt))
         if len(tokens) == 0:
             return ""
@@ -731,7 +731,7 @@ class SlonetTrainingDevice(Device):
 
     def _forward(self, input_ids):
         self._ensure_model()
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
         if isinstance(input_ids, np.ndarray):
             x = Tensor(input_ids.reshape(1, -1) if input_ids.ndim == 1 else input_ids)
         else:

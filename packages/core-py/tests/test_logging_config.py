@@ -1,5 +1,5 @@
 """
-Tests for domains.logging.config — centralized logging configuration.
+Tests for domain.logging._internal.config — centralized logging configuration.
 
 Covers:
     - setup_logging() with all parameter combinations
@@ -33,7 +33,7 @@ _CORE_PY = Path(__file__).resolve().parents[1]
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domains.logging.config import (
+from domain.logging._internal.config import (
     LogFormatter,
     ClientExtensionFilter,
     _enriched_record_factory,

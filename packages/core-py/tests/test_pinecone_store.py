@@ -7,8 +7,8 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from domains.inference.vector_store import VectorEntry
-from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
+from domain.inference._internal.vector_store import VectorEntry
+from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
 
 
 class TestConstruction:

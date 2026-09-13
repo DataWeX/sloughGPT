@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 import logging
 
-from domains.learner.knowledge import (
+from domain.learner._internal.knowledge import (
     get_knowledge_memory,
     get_knowledge_ingestor,
 )

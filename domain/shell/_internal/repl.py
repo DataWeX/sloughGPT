@@ -1731,7 +1731,7 @@ class ShellREPL(LinuxCommandsMixin):
                 "unalias": "  unalias <name>  — Remove an alias",
                 "chat": "  chat [msg] | chat /reset  — Multi-turn chat session",
                 "gen": "  gen <prompt>  — Generate text via inference",
-                "ai": '  ai <query>  — LLM-powered NL interpretation',
+                "ai": '  ai [--loop|--auto] <query>  — AI agent: single-shot or interactive loop',
                 "models": "  models  — List available models",
                 "load": "  load <name>  — Load a model",
                 "train": "  train [dataset]  — Start training or list datasets",
@@ -1742,6 +1742,7 @@ class ShellREPL(LinuxCommandsMixin):
                 "checkpoints": "  checkpoints  — List training checkpoints",
                 "souls": "  souls  — List available souls",
                 "agents": "  agents <goal>  — Multi-agent orchestration",
+                "agent": "  agent [--auto] <goal>  — Interactive agent loop (plan/approve/execute)",
                 "status": "  status  — Detailed system status",
                 "metrics": "  metrics  — Show CPU/memory/disk metrics",
                 "events": "  events [filter] [n]  — Show recent events",
@@ -2939,19 +2940,58 @@ Examples:
             self._print(self._format_error(e, "checkpoints"))
 
     def _cmd_gen(self, args: str = "") -> None:
+        """Generate text with streaming. Usage: gen [--no-stream] <prompt>"""
         if not args:
-            self._print("  Usage: gen <prompt>")
+            self._print("  Usage: gen [--no-stream] <prompt>")
             return
         if not self._require_api("gen"):
             return
-        with self.console.spinner("Generating"):
-            result = self.cmds.generate(args, max_tokens=150)
-        if isinstance(result, dict) and "text" in result:
-            self._print(f"\n  {result['text']}\n")
-        elif isinstance(result, dict) and "error" in result:
-            self._print(f"  Error: {result['error']}")
-        else:
-            self._print(self._dump_json(result))
+
+        # Parse --no-stream flag
+        stream = True
+        if args.startswith("--no-stream"):
+            stream = False
+            args = args[len("--no-stream"):].lstrip()
+
+        if not args:
+            self._print("  Usage: gen <prompt>")
+            return
+
+        if not stream:
+            # Non-streaming (original behavior)
+            with self.console.spinner("Generating"):
+                result = self.cmds.generate(args, max_tokens=150)
+            if isinstance(result, dict) and "text" in result:
+                self._print(f"\n  {result['text']}\n")
+            elif isinstance(result, dict) and "error" in result:
+                self._print(f"  Error: {result['error']}")
+            else:
+                self._print(self._dump_json(result))
+            return
+
+        # Streaming mode — use chat_stream with a synthetic message
+        self._print("")
+        collected = []
+        try:
+            messages = [{"role": "user", "content": args}]
+            for token in self.cmds.chat_stream(messages, max_tokens=150):
+                if isinstance(token, dict) and "error" in token:
+                    self._print(f"\n  Error: {token['error']}")
+                    return
+                if token:
+                    collected.append(token)
+                    sys.stdout.write(token)
+                    sys.stdout.flush()
+        except Exception as e:
+            self._print(f"\n  Error: {e}")
+            return
+        self._print("")
+        # Render markdown in the full response
+        full = "".join(collected).strip()
+        if full:
+            from .markdown import render_markdown
+            rendered = render_markdown(full)
+            self._print(rendered)
 
     def _cmd_chat(self, args: str = "") -> None:
         """Multi-turn chat with streaming. Subcommands:
@@ -3011,7 +3051,7 @@ Examples:
             self._print("\n  [exiting chat]")
 
     def _chat_send(self, message: str) -> None:
-        """Send a single chat message with streaming."""
+        """Send a single chat message with streaming and markdown rendering."""
         if not self._chat_session_id:
             import uuid
             self._chat_session_id = str(uuid.uuid4())
@@ -3033,6 +3073,11 @@ Examples:
             return
         full = "".join(collected).strip()
         self._print("")
+        # Render markdown in the full response
+        if full:
+            from .markdown import render_markdown
+            rendered = render_markdown(full)
+            self._print(rendered)
         self._chat_history.append({"role": "assistant", "content": full})
 
     # ── LLM-powered NL interpreter ──────────────────────────────────
@@ -3300,16 +3345,54 @@ Examples:
                 self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
 
     def _cmd_ai(self, args: str = "") -> None:
+        """AI agent — single-shot natural language to command, or interactive agent loop.
+
+        Usage:
+          ai <query>               — interpret and run (single-shot)
+          ai --loop <query>        — interactive agent loop with approval
+          ai --auto <query>        — agent loop, auto-approve all tools
+        """
         if not args:
-            self._print("  Usage: ai <natural language query>")
-            self._print("  Example: ai show me running training jobs")
+            self._print("  Usage: ai [--loop|--auto] <natural language query>")
+            self._print("  Examples:")
+            self._print("    ai show me running training jobs")
+            self._print("    ai --loop fix the bug in main.py")
+            self._print("    ai --auto refactor this module")
+            return
+
+        # Parse flags
+        auto_approve = False
+        use_loop = False
+        while args.startswith("--"):
+            if args.startswith("--loop"):
+                use_loop = True
+                args = args[6:].lstrip()
+            elif args.startswith("--auto"):
+                auto_approve = True
+                use_loop = True
+                args = args[6:].lstrip()
+            else:
+                break
+
+        if not args:
+            self._print("  Usage: ai [--loop|--auto] <query>")
             return
 
         status = self.os.api_status
         if not status.get("available"):
-            self._print("  \u2717 API server is not connected. Use \u2018api start\u2019 to launch it.")
+            self._print(f"  {_C_RED}\u2717 API server is not connected.{_C_RESET} Use `api start` to launch it.")
             return
 
+        # Interactive agent loop mode
+        if use_loop:
+            self._run_agent_loop(args, auto_approve)
+            return
+
+        # Single-shot mode (original behavior)
+        self._run_ai_single_shot(args)
+
+    def _run_ai_single_shot(self, args: str) -> None:
+        """Single-shot NL-to-command interpretation."""
         available_commands = "\n".join(
             f"  {name} - {cmd.__doc__ or ''}"
             for name, cmd in sorted(self.COMMANDS.items())
@@ -3318,7 +3401,6 @@ Examples:
             h = getattr(mod, "help", "")
             available_commands += f"\n  {name} - {h}"
 
-        # Build shell context
         ctx_parts = [f"  Current directory: {os.getcwd()}"]
         model = self._get_current_model()
         soul = self._get_current_soul()
@@ -3351,7 +3433,7 @@ Examples:
             "Command:"
         )
 
-        self._print("  \u2601\ufe0f Interpreting as LLM query...")
+        self._print(f"  \u2601\ufe0f Interpreting as LLM query...")
         result = self._spinner_call("Thinking", lambda: self.cmds.generate(prompt, max_tokens=60))
 
         if isinstance(result, dict) and "text" in result:
@@ -3359,7 +3441,6 @@ Examples:
             generated = generated.strip('`"\'')
             self._print(f"  \u2192 {generated}")
             self._print("")
-            # Execute the generated command
             bg = generated.rstrip().endswith("&")
             cmds, _, _ = self._parse_pipeline(generated)
             if bg:
@@ -3375,11 +3456,92 @@ Examples:
         else:
             error = result.get("error", "unknown") if isinstance(result, dict) else "unexpected response"
             if "timeout" in str(error).lower() or "timed out" in str(error).lower():
-                self._print("  \u26a0\ufe0f AI server is busy (timeout). Try again in a moment.")
+                self._print(f"  {_C_YELLOW}\u26a0\ufe0f AI server is busy (timeout). Try again in a moment.{_C_RESET}")
             elif "connect" in str(error).lower() or "refused" in str(error).lower():
-                self._print("  \u274c AI server is not running. Start it with: api start")
+                self._print(f"  {_C_RED}\u274c AI server is not running.{_C_RESET} Start it with: api start")
             else:
-                self._print(f"  \u274c AI interpretation failed: {error}")
+                self._print(f"  {_C_RED}\u274c AI interpretation failed: {error}{_C_RESET}")
+
+    def _run_agent_loop(self, user_request: str, auto_approve: bool = False) -> None:
+        """Run the interactive agent loop with tool approval."""
+        from .agent_loop import AgentLoop
+
+        def _generate(prompt: str) -> str:
+            """Call the LLM for agent planning."""
+            result = self.cmds.generate(prompt, max_tokens=500)
+            if isinstance(result, dict) and "text" in result:
+                return result["text"]
+            return ""
+
+        loop = AgentLoop(
+            repl=self,
+            generate_fn=_generate,
+            max_iterations=15,
+            auto_approve=auto_approve,
+        )
+
+        with self.console.spinner("Agent starting"):
+            pass
+
+        loop.run(user_request)
+
+    def _cmd_agent(self, args: str = "") -> None:
+        """Interactive agent loop — plan, approve, execute, repeat.
+
+        Usage:
+          agent <goal>              — run agent loop (approve each step)
+          agent --auto <goal>       — run agent loop (auto-approve all)
+          agent --max N <goal>      — set max iterations (default: 15)
+        """
+        if not args:
+            self._print("  Usage: agent [--auto] [--max N] <goal>")
+            self._print("  Examples:")
+            self._print("    agent fix the failing test in test_foo.py")
+            self._print("    agent --auto refactor the auth module")
+            self._print("    agent --max 5 add a new API endpoint")
+            return
+
+        auto_approve = False
+        max_iter = 15
+        while args.startswith("--"):
+            if args.startswith("--auto"):
+                auto_approve = True
+                args = args[6:].lstrip()
+            elif args.startswith("--max"):
+                parts = args[5:].lstrip().split(maxsplit=1)
+                try:
+                    max_iter = int(parts[0])
+                except ValueError:
+                    self._print("  Invalid --max value")
+                    return
+                args = parts[1] if len(parts) > 1 else ""
+            else:
+                break
+
+        if not args:
+            self._print("  Usage: agent [--auto] [--max N] <goal>")
+            return
+
+        status = self.os.api_status
+        if not status.get("available"):
+            self._print(f"  {_C_RED}\u2717 API server is not connected.{_C_RESET} Use `api start` to launch it.")
+            return
+
+        from .agent_loop import AgentLoop
+
+        def _generate(prompt: str) -> str:
+            result = self.cmds.generate(prompt, max_tokens=500)
+            if isinstance(result, dict) and "text" in result:
+                return result["text"]
+            return ""
+
+        loop = AgentLoop(
+            repl=self,
+            generate_fn=_generate,
+            max_iterations=max_iter,
+            auto_approve=auto_approve,
+        )
+        loop.run(args)
 
     def _show_welcome(self) -> None:
         """Show first-run welcome message."""
@@ -3477,6 +3639,9 @@ Examples:
             ("\u2468 AI mode & scripting", [
                 "  ai <query>   \u2014 Natural language to commands",
                 "    Example: ai show me running training jobs",
+                "  ai --loop    \u2014 Interactive agent loop with approval",
+                "    Example: ai --loop fix the bug in main.py",
+                "  agent <goal> \u2014 Full agent: plan, approve, execute, repeat",
                 "  py <expr>    \u2014 Evaluate Python inline",
                 "    Example: py 2 + 2",
                 "  Advanced: pipelines, watch, background jobs",
@@ -4623,6 +4788,7 @@ _shell_commands = {
     "chat": ShellREPL._cmd_chat,
     "gen": ShellREPL._cmd_gen,
     "ai": ShellREPL._cmd_ai,
+    "agent": ShellREPL._cmd_agent,
     "models": ShellREPL._cmd_models,
     "load": ShellREPL._cmd_load,
     "train": ShellREPL._cmd_train,

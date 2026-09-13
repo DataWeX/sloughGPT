@@ -2,8 +2,8 @@
 
 import numpy as np
 import pytest
-from domains.training.slonet import Tensor, tensor as _tensor
-from domains.multimodal.diffusion import (
+from domain.training._internal.slonet import Tensor, tensor as _tensor
+from domain.multimodal._internal.diffusion import (
     _group_norm,
     _timestep_embedding,
     TimestepEmbedder,

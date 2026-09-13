@@ -3,7 +3,7 @@ Tests for TrainerProtocol and TrainResult.
 """
 
 from dataclasses import dataclass
-from domains.training.trainer_protocol import TrainerProtocol, TrainResult
+from domain.training._internal.trainer_protocol import TrainerProtocol, TrainResult
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 """Tests for the Personality System."""
 
-from domains.consciousness.personality import PersonalityProfile, PersonalityManager
+from domain.consciousness._internal.personality import PersonalityProfile, PersonalityManager
 
 
 class TestPersonalityProfile:

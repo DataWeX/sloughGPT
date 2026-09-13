@@ -114,7 +114,7 @@ def deps():
         patch.object(router_mod, "get_training_controller", return_value=_FakeController()),
         patch.object(router_mod, "notify_training_event", new=MagicMock()),
         patch(
-            "domains.training.train_pipeline.SloughGPTTrainer",
+            "domain.training._internal.train_pipeline.SloughGPTTrainer",
             new=trainer_cls,
         ),
     ):
@@ -180,7 +180,7 @@ def test_recover_allows_stale_recovering_job(tmp_path, deps):
 
 
 def test_recover_corrupt_recorded_path_422_no_job(tmp_path, deps):
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     bad = tmp_path / "ck" / "corrupt.soul"
     bad.parent.mkdir(parents=True, exist_ok=True)
@@ -201,7 +201,7 @@ def test_recover_corrupt_recorded_path_422_no_job(tmp_path, deps):
 
 
 def test_recover_missing_recorded_path_422_no_job(tmp_path, deps):
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     missing = str(tmp_path / "ck" / "nope.soul")
     job = _base_job(str(tmp_path), checkpoint_path=missing)
@@ -238,7 +238,7 @@ def test_recover_recorded_path_missing_on_disk_422(tmp_path, deps):
 
 def test_recover_valid_recorded_path_resumes_with_bundle(tmp_path, deps):
     executor, trainer_inst = deps
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     ckpt = str(tmp_path / "ck" / "model_100.soul")
     bundle = {"step": 7, "epoch": 2, "model_state_dict": {}}
@@ -276,7 +276,7 @@ def test_recover_valid_recorded_path_resumes_with_bundle(tmp_path, deps):
 
 def test_recover_fallback_no_checkpoint_starts_fresh(tmp_path, deps):
     executor, trainer_inst = deps
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     job = _base_job(str(tmp_path), checkpoint_path="")
     resp = _recover(
@@ -306,7 +306,7 @@ def test_recover_checkpoint_dir_from_job_config(tmp_path, deps):
     # hardcoded "checkpoints" default. Regression: pre-fix code scanned the
     # wrong directory for real recovered jobs.
     executor, trainer_inst = deps
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     custom_dir = str(tmp_path / "custom")
     job = _base_job(str(tmp_path), checkpoint_path="")
@@ -327,7 +327,7 @@ def test_recover_checkpoint_dir_from_job_config(tmp_path, deps):
 
 def test_recover_fallback_uses_latest_bundle(tmp_path, deps):
     executor, trainer_inst = deps
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     latest = str(tmp_path / "ck" / "model_200.soul")
     bundle = {"step": 5, "epoch": 1, "model_state_dict": {}}
@@ -357,7 +357,7 @@ def test_recover_success_records_completion_on_original_job(tmp_path, deps):
     # Terminal writes must target the original job's durable row, never the
     # ephemeral recovery id (which has no store row — those writes were silent
     # no-ops that also dropped the produced checkpoint path).
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     ckpt = str(tmp_path / "ck" / "model_100.soul")
     job = _base_job(str(tmp_path), checkpoint_path=ckpt)
@@ -385,7 +385,7 @@ def test_recover_failure_marks_original_job_failed(tmp_path, deps):
     # A failing recovery must mark the ORIGINAL job failed — otherwise its row
     # stayed "recovering" forever and was never recoverable or visible again.
     executor, trainer_inst = deps
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     job = _base_job(str(tmp_path), checkpoint_path="")
     trainer_inst.train.side_effect = RuntimeError("boom")
@@ -411,7 +411,7 @@ def test_recover_cancel_restores_interrupted(tmp_path, deps):
     # A cancelled recovery leaves the job recoverable again (status restored to
     # "interrupted"), not wrongly marked "recovered".
     executor, trainer_inst = deps
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     def _set_cancel(**kwargs):
         kwargs["cancel_event"].set()
@@ -438,7 +438,7 @@ def test_recover_reuses_original_hyperparameters(tmp_path, deps):
     # The recovered run must continue with the ORIGINAL job's trainer
     # configuration (same builder as /training/start), not a fixed subset that
     # silently dropped LoRA/dropout/scheduler/device settings.
-    from domains.training.train_pipeline import CheckpointManager
+    from domain.training._internal.train_pipeline import CheckpointManager
 
     tcls = MagicMock()
     job = _base_job(str(tmp_path), checkpoint_path="")
@@ -454,7 +454,7 @@ def test_recover_reuses_original_hyperparameters(tmp_path, deps):
         job,
         patches=[
             patch.object(CheckpointManager, "load_latest_with_path", return_value=(None, None)),
-            patch("domains.training.train_pipeline.SloughGPTTrainer", new=tcls),
+            patch("domain.training._internal.train_pipeline.SloughGPTTrainer", new=tcls),
         ],
     )
     assert resp.status_code == 200

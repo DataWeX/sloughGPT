@@ -5,17 +5,15 @@ Thanks for helping improve SloughGPT.
 ## Quick start
 
 1. **Branch** from `main` with a descriptive name.
-2. **Install** from the repo root: `python3 -m pip install -e ".[dev]"` (see **QUICKSTART.md**). Optional — Colab smoke / `nbconvert`: `python3 -m pip install -e ".[notebook]"` (**`pyproject.toml`**), then **`scripts/run_colab_notebook_smoke.sh`** or **`make colab-smoke`** (**`make help`**; **README.md** *Google Colab*).
+2. **Install** from the repo root: `python3 -m pip install -e ".[dev]"` (see **QUICKSTART.md**). For JS packages: `npm install` at repo root (installs all workspaces via Turborepo).
 3. **Validate**:
-   - `./verify.sh` and `python3 -m pytest tests/` (Python; CI subset in **`.github/workflows/reusable-ci-core.yml`**, including **`tests/test_checkpoint_utils.py`**, **`tests/test_config.py`** (**`merge_args_with_config`**, **`get_device`**), **`tests/test_domains_errors.py`**, **`tests/test_wandb_helpers.py`**, **`tests/test_sloughgpt_trainer_smoke.py`**, **`tests/test_sloughgpt_trainer_progress_callback.py`**, **`tests/test_cli_train_export_stem.py`**, **`tests/test_cli_train_api_payload.py`**, **`tests/test_training_router_kwds.py`**, **`tests/test_training_schemas.py`**, **`tests/test_lm_eval_char.py`**, **`tests/test_cli_local_soul_candidates.py`**, **`tests/test_soul_engine_conversation.py`**, **`tests/test_repo_root_package_json.py`** (root **`package.json`**, **`dev:stack`**, **`verify.sh`**, **`make test-repo-root`**), **`tests/test_sloughgpt_colab_notebook.py`**). With a **`.venv`**, you can use **`./run.sh python3 -m pytest tests/`** so the same interpreter is on **`PATH`**.
-   - **`tests/test_sloughgpt_colab_notebook.py`** runs **`bash`** for **`scripts/run_colab_notebook_smoke.sh --help`**; if **`bash`** is not on **`PATH`**, that case is **skipped** (on Windows, use Git Bash, WSL, or rely on Linux/macOS CI).
-   - Optional — **`tests/test_integration.py`** calls a **live** API on **`localhost:8000`** by default (see **`tests/README.md`** for env vars and **`websocket-client`**). Start the server first (e.g. **`SLO_API_PORT=8000 python3 apps/api/server/main.py`** or **`./scripts/dev-stack.sh`**); if nothing is listening, that module **skips**.
-   - If you touch **repo root `package.json`** (e.g. **`dev:stack`** / **`dev-stack.sh`**): **`npm run test:repo-root`** (after **`npm install`** at repo root), **`make test-repo-root`**, or **`python3 -m pytest tests/test_repo_root_package_json.py -q`**.
-   - If you touch **`apps/web/`**: `cd apps/web && npm ci && npm run ci` (lint + typecheck + Vitest + **`npm run build:clean`** — removes **`.next`** then **`next build`**; avoids flaky trace/cache issues; same as job **`test-web`**). To run **API + web** locally in one terminal: **`./scripts/dev-stack.sh`**, **`make dev-stack`**, or **`npm install` at repo root** then **`npm run dev:stack`** (see **QUICKSTART.md**).
-   - If you touch **`packages/sdk-ts/typescript-sdk/`**: `cd packages/sdk-ts/typescript-sdk && npm ci && npm run ci` (job **`test-sdk-ts`**).
-   - If you touch **`packages/strui/`**: `cd packages/strui && npm ci && npm run ci` (job **`test-strui`** — typecheck, Vitest, Storybook build).
-   - If you touch **`packages/sdk-py/sloughgpt_sdk/`**: `python3 -m pytest tests/test_sdk.py -q` (job **`sdk-test-py`**).
-   - If you change **`packages/standards/`** or schemas: `python3 scripts/validate_standards_schemas.py` (**`jsonschema`** is in **`python3 -m pip install -e ".[dev]"`**; otherwise `python3 -m pip install jsonschema`). Job **`standards-schemas`**.
+   - **All JS packages**: `npx turbo run lint typecheck test` from repo root.
+   - **Python**: `ruff check .` and `ruff format --check .` for lint; `python3 -m pytest tests/` for tests.
+   - **strui**: `cd packages/strui && npm run lint && npm run typecheck && npm test`
+   - **SDK TS**: `cd packages/sdk-ts/typescript-sdk && npm run ci`
+   - **Web app**: `cd apps/web && npm run ci`
+   - If you touch **repo root `package.json`**: `npm run test:repo-root`
+   - If you change **`packages/standards/`** or schemas: `python3 scripts/validate_standards_schemas.py`
 4. **Open a PR** with a clear description of intent and scope (see **`.github/pull_request_template.md`**).
 
 ## Issues

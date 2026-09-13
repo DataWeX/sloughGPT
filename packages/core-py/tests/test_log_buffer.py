@@ -5,7 +5,7 @@ import threading
 import time
 from unittest.mock import MagicMock
 import pytest
-from domains.shell.log_buffer import (
+from domain.shell._internal.log_buffer import (
     LogEntry, LogBuffer, LogBufferHandler, get_log_buffer,
 )
 

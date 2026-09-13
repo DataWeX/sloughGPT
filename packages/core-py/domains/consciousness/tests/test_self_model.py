@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from domains.consciousness.self_model import SelfEpisode, SelfIdentity, SelfModel
+from domain.consciousness._internal.self_model import SelfEpisode, SelfIdentity, SelfModel
 
 
 class TestSelfIdentity:

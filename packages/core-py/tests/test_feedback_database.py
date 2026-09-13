@@ -7,7 +7,7 @@ import pytest
 from pathlib import Path
 from datetime import datetime, timezone
 
-from domains.feedback.database import (
+from domain.feedback._internal.database import (
     FeedbackDB,
     Message,
     Feedback,

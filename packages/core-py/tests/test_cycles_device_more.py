@@ -1,4 +1,4 @@
-"""Coverage tests for CyclesDevice (domains.shell.cycles_device).
+"""Coverage tests for CyclesDevice (domain.shell._internal.cycles_device).
 
 Comprehensive coverage of all device operations, scene mutations,
 error handling, state tensor generation, and edge cases.
@@ -7,8 +7,8 @@ error handling, state tensor generation, and edge cases.
 import numpy as np
 import pytest
 
-from domains.shell.cycles_device import CyclesDevice
-from domains.shell.vm import DeviceFault
+from domain.shell._internal.cycles_device import CyclesDevice
+from domain.shell._internal.vm import DeviceFault
 
 
 # ── Initialization ───────────────────────────────────────────────────────────

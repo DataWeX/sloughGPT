@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from domains.shell.vm import Device, DeviceBus, DeviceFault
+from domain.shell._internal.vm import Device, DeviceBus, DeviceFault
 
 logger = logging.getLogger("slo.shell.device_system")
 

@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from domains.collections.scheduler import (
+from domain.collections._internal.scheduler import (
     JobConfig,
     JobScheduler,
     CollectorMonitor,
     CollectorExporter,
 )
-from domains.collections.collector import Collector
-from domains.collections.sources import Record, Source
-from domains.collections.stores import MemoryStore, FileStore
-from domains.collections.validators import CollectorRunner
+from domain.collections._internal.collector import Collector
+from domain.collections._internal.sources import Record, Source
+from domain.collections._internal.stores import MemoryStore, FileStore
+from domain.collections._internal.validators import CollectorRunner
 
 
 # ---------------------------------------------------------------------------

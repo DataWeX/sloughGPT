@@ -19,7 +19,7 @@ from domains.infrastructure.weight_loader import (
     infer_arch_from_state_dict, build_model_from_config,
     WeightLoaderRegistry, get_weight_loader_registry,
 )
-from domains.training.slonet import SloTransformer
+from domain.training._internal.slonet import SloTransformer
 
 
 def _build_slnc_file(tensors, config, n_layer, n_embd, n_head):
@@ -403,7 +403,7 @@ class TestBuildLoadPlan:
 
 class TestDirectWeightLoader:
     def test_gpt2_direct_load_matches_fused(self, tmp_path):
-        from domains.inference.slonet_provider import convert_hf_to_slonet
+        from domain.inference._internal.slonet_provider import convert_hf_to_slonet
 
         n_embed, n_layer = 64, 2
         sd = {}
@@ -451,7 +451,7 @@ class TestDirectWeightLoader:
         parser.close()
 
     def test_llama_direct_load_matches_fused(self, tmp_path):
-        from domains.inference.slonet_provider import convert_hf_to_slonet
+        from domain.inference._internal.slonet_provider import convert_hf_to_slonet
 
         n_embed, n_layer = 64, 2
         sd = {}
@@ -752,7 +752,7 @@ class TestWeightLoaderRegistry:
 class TestSoulWeightLoader:
     def test_soul_loader_loads_weights(self, tmp_path):
         from domains.infrastructure.weight_loader import SoulWeightLoader
-        from domains.inference.slo_format import save_soul
+        from domain.inference._internal.slo_format import save_soul
 
         n_embed, n_layer = 32, 2
         model = SloTransformer(
@@ -785,7 +785,7 @@ class TestSoulWeightLoader:
 
     def test_soul_load_metadata(self, tmp_path):
         from domains.infrastructure.weight_loader import SoulWeightLoader
-        from domains.inference.slo_format import save_soul
+        from domain.inference._internal.slo_format import save_soul
 
         n_embed, n_layer = 32, 2
         model = SloTransformer(
@@ -803,7 +803,7 @@ class TestSoulWeightLoader:
 
     def test_soul_load_timing_keys(self, tmp_path):
         from domains.infrastructure.weight_loader import SoulWeightLoader
-        from domains.inference.slo_format import save_soul
+        from domain.inference._internal.slo_format import save_soul
 
         n_embed, n_layer = 32, 1
         model = SloTransformer(

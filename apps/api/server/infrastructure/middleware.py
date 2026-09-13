@@ -25,7 +25,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 
 from domains.infrastructure.correlation import set_correlation_id
-from domains.logging.config import set_request_id
+from domain.logging._internal.config import set_request_id
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from schemas.common import error_response
@@ -502,6 +502,9 @@ class ClientErrorFilterMiddleware(BaseHTTPMiddleware):
     only emits a supplementary DEBUG line for extension-origin 4xx/5xx so the
     failure is traceable without polluting the error level.  Because it wraps
     the app outermost, it cannot alter the level of the UnifiedRequest log.
+
+    NOTE: Merged into UnifiedRequestMiddleware in production. Standalone
+    class kept for backward compatibility.
     """
 
     async def dispatch(
@@ -541,11 +544,9 @@ def get_configured_middleware(
     return [
         (RequestTimeoutMiddleware, {"timeout": request_timeout}),
         (MetricsMiddleware, {}),
-        (PayloadLoggingMiddleware, {}),
         (UnifiedRequestMiddleware, {}),
         (ReadinessGateMiddleware, {}),
         (CorrelationIdMiddleware, {}),
-        (ClientErrorFilterMiddleware, {}),
     ]
 
 

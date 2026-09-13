@@ -228,7 +228,7 @@ class ConsciousnessRouter:
     @endpoint("consciousness.evaluate")
     async def evaluate(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Evaluate consciousness system quality."""
-        from domains.consciousness.evaluation import ConsciousnessEvaluator
+        from domain.consciousness._internal.evaluation import ConsciousnessEvaluator
 
         engine = self._get_engine()
         evaluator = ConsciousnessEvaluator()
@@ -424,7 +424,7 @@ class ConsciousnessRouter:
             qualia = engine.qualia.experience(topic)
             growth = random.uniform(-0.08, 0.12)
 
-            from domains.consciousness.self_model import SelfEpisode
+            from domain.consciousness._internal.self_model import SelfEpisode
             episode = SelfEpisode(
                 timestamp=now - (count - i) * 120,  # 2 min apart
                 input_text=topic,
@@ -450,7 +450,7 @@ class ConsciousnessRouter:
     @endpoint("consciousness.personality.get")
     async def get_personality(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Get the current personality profile."""
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         manager = PersonalityManager()
         profile = manager.get_profile()
         return success_response(data=profile.to_dict())
@@ -462,7 +462,7 @@ class ConsciousnessRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Update the personality profile."""
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         manager = PersonalityManager()
         profile = manager.get_profile()
 
@@ -487,7 +487,7 @@ class ConsciousnessRouter:
     @endpoint("consciousness.personality.reset")
     async def reset_personality(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Reset personality to defaults."""
-        from domains.consciousness.personality import PersonalityManager, PersonalityProfile
+        from domain.consciousness._internal.personality import PersonalityManager, PersonalityProfile
         manager = PersonalityManager()
         profile = PersonalityProfile()
         manager.save(profile)
@@ -502,7 +502,7 @@ class ConsciousnessRouter:
         if not episodes:
             return success_response(data={"history": [], "labels": {}})
 
-        from domains.consciousness.personality import PersonalityProfile
+        from domain.consciousness._internal.personality import PersonalityProfile
         defaults = PersonalityProfile()
         current = defaults.to_dict()
         history = []
@@ -540,7 +540,7 @@ class ConsciousnessRouter:
     @endpoint("consciousness.personality.presets")
     async def get_presets(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Get available personality presets."""
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         presets = PersonalityManager.get_presets()
         return success_response(data={
             "presets": {name: profile.to_dict() for name, profile in presets.items()},
@@ -554,7 +554,7 @@ class ConsciousnessRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Apply a personality preset."""
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         manager = PersonalityManager()
         try:
             profile = manager.apply_preset(body.preset)
@@ -565,7 +565,7 @@ class ConsciousnessRouter:
     @endpoint("consciousness.personality.conflicts")
     async def get_conflicts(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Detect personality conflicts and warnings."""
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         manager = PersonalityManager()
         conflicts = manager.get_conflicts()
         return success_response(data={
@@ -576,7 +576,7 @@ class ConsciousnessRouter:
     @endpoint("consciousness.personas.list")
     async def list_personas(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """List all saved personas."""
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         manager = PersonalityManager()
         personas = manager.list_personas()
         return success_response(data={"personas": personas, "count": len(personas)})
@@ -588,7 +588,7 @@ class ConsciousnessRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Save a named persona from the current profile or a provided profile."""
-        from domains.consciousness.personality import PersonalityManager, PersonalityProfile
+        from domain.consciousness._internal.personality import PersonalityManager, PersonalityProfile
         manager = PersonalityManager()
         if body.profile:
             profile = PersonalityProfile.from_dict(body.profile)
@@ -600,7 +600,7 @@ class ConsciousnessRouter:
     @endpoint("consciousness.personas.get")
     async def get_persona(self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Get a saved persona's full profile."""
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         manager = PersonalityManager()
         profile = manager.load_persona(persona_id)
         if profile is None:
@@ -610,7 +610,7 @@ class ConsciousnessRouter:
     @endpoint("consciousness.personas.activate")
     async def activate_persona(self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Activate a saved persona as the current profile."""
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         manager = PersonalityManager()
         profile = manager.activate_persona(persona_id)
         if profile is None:
@@ -620,7 +620,7 @@ class ConsciousnessRouter:
     @endpoint("consciousness.personas.delete")
     async def delete_persona(self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Delete a saved persona."""
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         manager = PersonalityManager()
         deleted = manager.delete_persona(persona_id)
         if not deleted:
@@ -631,7 +631,7 @@ class ConsciousnessRouter:
     async def backup(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Create a full backup of consciousness state."""
         import time as _time
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
 
         engine = self._get_engine()
         manager = PersonalityManager()
@@ -691,8 +691,8 @@ class ConsciousnessRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Restore consciousness from a backup."""
-        from domains.consciousness.personality import PersonalityManager, PersonalityProfile
-        from domains.consciousness.self_model import SelfEpisode
+        from domain.consciousness._internal.personality import PersonalityManager, PersonalityProfile
+        from domain.consciousness._internal.self_model import SelfEpisode
 
         backup = body.backup
         if not isinstance(backup, dict):
@@ -731,7 +731,7 @@ class ConsciousnessRouter:
         for qh in backup.get("qualia_history", []):
             ts = qh.get("timestamp", 0)
             state_data = {k: v for k, v in qh.items() if k != "timestamp"}
-            from domains.consciousness.qualia import QualiaState
+            from domain.consciousness._internal.qualia import QualiaState
             state = QualiaState(**state_data)
             engine.qualia.history.append((ts, state))
 
@@ -760,7 +760,7 @@ class ConsciousnessRouter:
         """Download consciousness backup as a JSON file."""
         from fastapi.responses import JSONResponse
         import time as _time
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
 
         engine = self._get_engine()
         manager = PersonalityManager()
@@ -982,7 +982,7 @@ class ConsciousnessRouter:
         beliefs = dict(engine.self_model.self_beliefs)
         belief_avgs = {k: round(v, 4) for k, v in beliefs.items()}
 
-        from domains.consciousness.personality import PersonalityManager
+        from domain.consciousness._internal.personality import PersonalityManager
         manager = PersonalityManager()
         profile = manager.get_profile()
         voice_avgs = {k: round(v, 4) for k, v in profile.voice.items()}

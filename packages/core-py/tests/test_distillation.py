@@ -8,8 +8,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import numpy as np
 import pytest
 
-from domains.training.slonet import Tensor, no_grad
-from domains.training.distillation import (
+from domain.training._internal.slonet import Tensor, no_grad
+from domain.training._internal.distillation import (
     DistillationConfig, DistillationLoss, DistillationTrainer,
     ProgressiveDistiller, create_distillation_trainer,
     _to_np, _to_tensor,

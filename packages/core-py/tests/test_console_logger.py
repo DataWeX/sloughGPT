@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from domains.logging.base import LogLevel, LogRecord
-from domains.logging.console_logger import ConsoleLogger
+from domain.logging._internal.base import LogLevel, LogRecord
+from domain.logging._internal.console_logger import ConsoleLogger
 
 
 def _record(

@@ -10,16 +10,16 @@ from pathlib import Path
 
 import pytest
 
-from domains.collections.sources import Record, FileSource
-from domains.collections.stores import FileStore, MemoryStore
-from domains.collections.filters import (
+from domain.collections._internal.sources import Record, FileSource
+from domain.collections._internal.stores import FileStore, MemoryStore
+from domain.collections._internal.filters import (
     LengthFilter,
     DedupFilter,
     KeywordFilter,
     RegexFilter,
     FilterChain,
 )
-from domains.collections.collector import Collector
+from domain.collections._internal.collector import Collector
 
 
 # ── Record ───────────────────────────────────────────────────────────

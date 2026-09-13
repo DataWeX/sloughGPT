@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from domains.shell.vm_training_bridge import VMTrainingBridge, get_bridge
+from domain.shell._internal.vm_training_bridge import VMTrainingBridge, get_bridge
 
 
 # ── VMTrainingBridge ───────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ class TestVMTrainingBridge:
 class TestSingleton:
 
     def test_get_returns_same(self):
-        import domains.shell.vm_training_bridge as mod
+        import domain.shell._internal.vm_training_bridge as mod
         mod._bridge = None
         b1 = get_bridge()
         b2 = get_bridge()

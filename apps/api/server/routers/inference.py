@@ -9,20 +9,20 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
-from domains.agents.system import get_agent_system
-from domains.agents.tools import get_tool_registry
-from domains.cognitive.rag_service import get_rag_service
-from domains.feedback.response_tracker import get_response_tracker
+from domain.agents._internal.system import get_agent_system
+from domain.agents._internal.tools import get_tool_registry
+from domain.cognitive._internal.rag_service import get_rag_service
+from domain.feedback._internal.response_tracker import get_response_tracker
 from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domains.infrastructure.conversation_log import capture
-from domains.infrastructure.errors import AppError
+from domain.infrastructure._internal.errors import AppError
 from domains.infrastructure.request_coalescer import get_coalescer
 from domains.infrastructure.server_state import get_server_state
 from domains.learner import get_learner
-from domains.learner.entity_extractor import extract_and_store
-from domains.learner.knowledge import KnowledgeFact, get_knowledge_memory
-from domains.memory.memory_service import get_memory_service
-from domains.models.provider import KnowledgeProcessor, apply_processors, get_provider
+from domain.learner._internal.entity_extractor import extract_and_store
+from domain.learner._internal.knowledge import KnowledgeFact, get_knowledge_memory
+from domain.memory._internal.service import get_memory_service
+from domain.models._internal.provider import KnowledgeProcessor, apply_processors, get_provider
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
@@ -386,7 +386,7 @@ def _apply_meta_weights(
                 return cached_params
 
     try:
-        from domains.feedback.meta_weights import get_meta_weight_manager
+        from domain.feedback._internal.meta_weights import get_meta_weight_manager
 
         manager = get_meta_weight_manager()
         adj = manager.get_adjustment(
@@ -441,7 +441,7 @@ def _apply_meta_weights(
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
     """Search learned knowledge + optionally live web search. Returns {facts, source, topics}."""
     try:
-        from domains.learner.knowledge_augmenter import enrich_with_knowledge
+        from domain.learner._internal.knowledge_augmenter import enrich_with_knowledge
 
         return enrich_with_knowledge(user_msg, auto_search=auto_search, max_facts=max_facts)
     except Exception as e:
@@ -656,7 +656,7 @@ def _run_post_gen_tasks(
 ) -> None:
     """Launch fire-and-forget background tasks after chat generation completes."""
     import state as _pgs_state
-    from domains.cognitive.rag_service import get_rag_service as _pgs_rag
+    from domain.cognitive._internal.rag_service import get_rag_service as _pgs_rag
 
     duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
     tokens = len(full_response.split())
@@ -844,7 +844,7 @@ class InferenceRouter:
             and self._context_core._vector_store is None
         ):
             try:
-                from domains.inference.vector_store import simple_embed
+                from domain.inference._internal.vector_store import simple_embed
 
                 self._context_core.set_vector_store(self._vector_store_ref, simple_embed)
             except Exception as e:
@@ -1837,7 +1837,7 @@ class InferenceRouter:
             rag_context = ""
             if req.use_rag:
                 try:
-                    from domains.cognitive.rag_service import is_rag_service_ready
+                    from domain.cognitive._internal.rag_service import is_rag_service_ready
 
                     if not is_rag_service_ready():
                         logger.debug("RAG service not ready yet, skipping query")
@@ -2552,7 +2552,7 @@ class InferenceRouter:
             except Exception as e:
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Chat stream outer failed: %s", e, extra={"tag": "INF"})
-                from domains.infrastructure.errors import classify_exception
+                from domain.infrastructure._internal.errors import classify_exception
                 classified = classify_exception(e)
                 err_code = classified.code or "E_INFRA_GENERATION"
                 http_status = getattr(classified, 'http_status', None) or 500
@@ -3031,7 +3031,7 @@ class InferenceRouter:
     async def list_model_providers(self) -> dict:
         try:
             """list_model_providers."""
-            from domains.models.provider import get_provider, list_providers
+            from domain.models._internal.provider import get_provider, list_providers
 
             result = {}
             for name in list_providers():

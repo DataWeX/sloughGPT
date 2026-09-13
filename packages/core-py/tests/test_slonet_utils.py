@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pytest
 import numpy as np
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor,
     topk,
     multinomial,
@@ -237,14 +237,14 @@ class TestLogitProcessors:
 class TestNoGrad:
 
     def test_context_manager(self):
-        import domains.training.slonet as mod
+        import domain.training._internal.slonet as mod
         old = mod._NO_GRAD
         with no_grad():
             assert mod._NO_GRAD is True
         assert mod._NO_GRAD is old
 
     def test_decorator(self):
-        import domains.training.slonet as mod
+        import domain.training._internal.slonet as mod
         old = mod._NO_GRAD
 
         @no_grad()

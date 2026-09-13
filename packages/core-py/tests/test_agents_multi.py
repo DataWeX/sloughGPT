@@ -6,7 +6,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 
-from domains.agents.multi import (
+from domain.agents._internal.multi import (
     SpecializedAgent,
     DEFAULT_AGENTS,
     TaskStatus,

@@ -1,13 +1,13 @@
 """Tests for LR schedulers — config dataclasses, factory, scheduler creation."""
 
 import pytest
-from domains.training.lr_schedulers import (
+from domain.training._internal.lr_schedulers import (
     SchedulerConfig, CosineAnnealingConfig, WarmupConfig,
     OneCycleConfig, CyclicConfig, WarmupCosineScheduler,
     PolynomialDecayScheduler, LinearWarmupScheduler,
     create_scheduler, BEST_PRACTICES,
 )
-from domains.training.slonet import SloLRScheduler
+from domain.training._internal.slonet import SloLRScheduler
 
 
 # ── Mock Optimizer ─────────────────────────────────────────────────────────

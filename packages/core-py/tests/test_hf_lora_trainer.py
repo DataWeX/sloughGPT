@@ -5,12 +5,12 @@ import numpy as np
 import pytest
 from pathlib import Path
 
-from domains.training.slonet import SloTransformer, Tensor, cross_entropy, SloAdam
-from domains.training.lora import (
+from domain.training._internal.slonet import SloTransformer, Tensor, cross_entropy, SloAdam
+from domain.training._internal.lora import (
     LoRALinear, LoRAConfig, apply_lora_to_model, get_lora_parameters,
     _walk_slo_tree, count_lora_parameters,
 )
-from domains.training.hf_lora_finetune import (
+from domain.training._internal.hf_lora_finetune import (
     HFLoraConfig, HFLoraTrainer, load_lora_adapter, merge_lora_adapter,
     _LoRADataset,
 )
@@ -460,7 +460,7 @@ class TestMergeLoRAAdapter:
 
     def test_merge_via_walk_slo_tree(self):
         """merge_lora_adapter should replace LoRALinear with SloLinear via _walk_slo_tree."""
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
 
         model = _make_model(vocab_size=32, n_embed=16, n_layer=1, n_head=2)
         cfg = HFLoraConfig(rank=4, target_modules=["W_q", "W_v"])
@@ -487,7 +487,7 @@ class TestMergeLoRAAdapter:
         assert result is model
 
     def test_merge_multiple_modules(self):
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         model = _make_model(vocab_size=32, n_embed=16, n_layer=1, n_head=2)
         cfg = HFLoraConfig(rank=4, target_modules=["W_q", "W_v", "W_k"])
         trainer = HFLoraTrainer(cfg)
@@ -511,7 +511,7 @@ class TestMergeLoRAAdapter:
     def test_merge_base_weight_approximately_unchanged(self):
         model = _make_model(vocab_size=32, n_embed=16, n_layer=1, n_head=2)
         # Record base weight before LoRA
-        from domains.training.slonet import SloLinear
+        from domain.training._internal.slonet import SloLinear
         w_before = None
         for path, module in _walk_slo_tree(model, []):
             if 'W_q' in path and isinstance(module, SloLinear):

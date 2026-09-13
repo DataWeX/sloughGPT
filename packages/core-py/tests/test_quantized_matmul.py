@@ -907,7 +907,7 @@ class TestSloLinearQuantized:
     """Test that SloLinear uses int8 GEMM when quantized weight is set."""
 
     def test_quantized_forward_matches_float(self):
-        from domains.training.slonet import SloLinear, Tensor
+        from domain.training._internal.slonet import SloLinear, Tensor
         layer = SloLinear(16, 8, bias=True)
         x = Tensor(np.random.randn(1, 16).astype(np.float32))
         y_float = layer.forward_numpy(x.data)
@@ -922,7 +922,7 @@ class TestSloLinearQuantized:
         assert cosine > 0.95, f"Cosine similarity too low: {cosine}"
 
     def test_quantized_forward_uses_int8_matmul(self):
-        from domains.training.slonet import SloLinear, Tensor
+        from domain.training._internal.slonet import SloLinear, Tensor
         layer = SloLinear(16, 8, bias=True)
         x = Tensor(np.random.randn(1, 16).astype(np.float32))
         engine = Quantine(bits=8, mode="symmetric")
@@ -938,7 +938,7 @@ class TestSloLinearQuantized:
         assert y_via_layer.shape == y_direct.shape
 
     def test_autograd_tensor_forward_quantized(self):
-        from domains.training.slonet import SloLinear, Tensor
+        from domain.training._internal.slonet import SloLinear, Tensor
         layer = SloLinear(16, 8, bias=True)
         x = Tensor(np.random.randn(2, 16).astype(np.float32))
         engine = Quantine(bits=8, mode="symmetric")
@@ -949,7 +949,7 @@ class TestSloLinearQuantized:
         assert y.data.shape == (2, 8)
 
     def test_no_quantize_uses_float(self):
-        from domains.training.slonet import SloLinear, Tensor
+        from domain.training._internal.slonet import SloLinear, Tensor
         layer = SloLinear(16, 8, bias=True)
         x = Tensor(np.random.randn(1, 16).astype(np.float32))
         y = layer.forward(x)

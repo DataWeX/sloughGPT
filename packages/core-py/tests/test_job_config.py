@@ -1,4 +1,4 @@
-"""Tests for domains.collections.scheduler — JobConfig and JobScheduler."""
+"""Tests for domain.collections._internal.scheduler — JobConfig and JobScheduler."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from domains.collections.scheduler import JobConfig, JobScheduler
+from domain.collections._internal.scheduler import JobConfig, JobScheduler
 
 
 # ---------------------------------------------------------------------------

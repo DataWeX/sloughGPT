@@ -1,7 +1,7 @@
 """Tests for production knowledge graph."""
 
 import pytest
-from domains.cognitive.knowledge_graph_v2 import (
+from domain.cognitive._internal.knowledge_graph_v2 import (
     Entity,
     Fact,
     RelationType,

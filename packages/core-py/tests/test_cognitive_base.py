@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
-from domains.cognitive.base import CognitiveDomain, CognitiveException
+from domain.cognitive._internal.base import CognitiveDomain, CognitiveException
 from domains import DomainException
 
 

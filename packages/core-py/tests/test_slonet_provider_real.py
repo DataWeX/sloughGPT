@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from domains.infrastructure.slnc.spec import compute_header_size
-from domains.inference.slonet_provider import (
+from domain.inference._internal.slonet_provider import (
     SloNetChatProvider,
     _get_slo_layernorm,
     _split_fused_qkv,
@@ -183,7 +183,7 @@ def test_init_raises_typeerror():
 
 
 def test_get_slo_layernorm_caches_class():
-    from domains.training.slonet import SloLayerNorm
+    from domain.training._internal.slonet import SloLayerNorm
     assert _get_slo_layernorm() is SloLayerNorm
     assert _get_slo_layernorm() is SloLayerNorm
 
@@ -396,7 +396,7 @@ def test_fused_gemm_generation_bit_identical(quantized_provider, monkeypatch):
     packs = [(b.attn._fused_qkv(), b.ff._fused_gate_up()) for b in model.blocks]
     assert any(p[0] is not None or p[1] is not None for p in packs), "fusion packs not built"
 
-    monkeypatch.setattr("domains.training.slonet._fuse_quant_weights", lambda *a, **k: None)
+    monkeypatch.setattr("domain.training._internal.slonet._fuse_quant_weights", lambda *a, **k: None)
     unfused = gen()
     np.testing.assert_array_equal(fused, unfused)
 

@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from domains.infrastructure.lifecycle import (
+from domain.infrastructure._internal.lifecycle import (
     LifecycleManager,
     LifecyclePhase,
     StartupProfile,

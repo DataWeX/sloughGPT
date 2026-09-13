@@ -1,4 +1,4 @@
-"""Tests for domains/learner/continual.py — ContinualLearner."""
+"""Tests for domain.learner._internal.continual.py — ContinualLearner."""
 
 import time
 from pathlib import Path
@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from domains.learner import continual
-from domains.learner.continual import (
+from domain.learner._internal.continual import (
     CHAR_SET,
     STOI,
     ITOS,
@@ -20,8 +20,8 @@ from domains.learner.continual import (
     _detokenize,
     _build_transformer,
 )
-from domains.training.slonet import SloTransformer
-from domains.learner.knowledge import KnowledgeFact
+from domain.training._internal.slonet import SloTransformer
+from domain.learner._internal.knowledge import KnowledgeFact
 
 
 @pytest.fixture(autouse=True)
@@ -246,7 +246,7 @@ def test_search_knowledge_and_query_topic(learner):
 
 
 def test_get_learner_singleton(learner, monkeypatch):
-    from domains.learner.continual import get_learner
+    from domain.learner._internal.continual import get_learner
     monkeypatch.setattr(continual, "_learner", None)
     monkeypatch.setattr(continual, "ContinualLearner", lambda **kw: learner)
     assert get_learner() is learner
@@ -257,7 +257,7 @@ def test_get_learner_singleton(learner, monkeypatch):
 
 
 def test_load_existing_checkpoint(state_paths):
-    from domains.training.slonet import export_to_sou
+    from domain.training._internal.slonet import export_to_sou
     net = _build_transformer(n_embed=32, n_layer=1, n_head=1, soul_name="t")
     export_to_sou(net, str(state_paths))
     inst = ContinualLearner(n_embed=32, n_layer=1, n_head=1)

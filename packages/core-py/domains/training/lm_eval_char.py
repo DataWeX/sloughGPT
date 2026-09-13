@@ -46,8 +46,8 @@ def evaluate_soul_char_lm(
         ``num_chars_skipped``, ``eval_chars``, ``block_size``, ``vocab_size``,
         ``warnings``.
     """
-    from domains.inference.slo_format import load_soul
-    from domains.training.slonet import SloTransformer
+    from domain.inference._internal.slo_format import load_soul
+    from domain.training._internal.slonet import SloTransformer
 
     path = Path(eval_text_path)
     if not path.is_file():

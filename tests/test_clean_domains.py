@@ -45,6 +45,14 @@ class TestChatDataclasses:
 
 
 class TestChatDomain:
+    @pytest.fixture(autouse=True)
+    def _isolate_response_tracker(self, monkeypatch, tmp_path):
+        """Point the global ResponseTracker at a scratch dir so assertions never
+        see chat logs from prior server runs in the repo ``data/`` dir."""
+        from domains.feedback import response_tracker as _rt
+
+        monkeypatch.setattr(_rt, "_response_tracker", _rt.ResponseTracker(log_dir=str(tmp_path)))
+
     def test_constructor_creates_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "chat_logs"
@@ -76,26 +84,25 @@ class TestChatDomain:
         stats = chat.get_stats()
         assert stats == {"total": 0}
 
-    def test_log_writes_jsonl(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            chat = ChatDomain(log_dir=tmp)
-            chat._log(
-                user_message="hi",
-                assistant_response="hello",
-                model="gpt2",
-                temperature=0.8,
-                max_tokens=256,
-                session_id="s1",
-                user_id="u1",
-                tokens_generated=5,
-                duration_ms=10,
-            )
-            log_files = list(Path(tmp).glob("responses_*.jsonl"))
-            assert len(log_files) == 1
-            with open(log_files[0]) as f:
-                entry = json.loads(f.readline())
-            assert entry["user_message"] == "hi"
-            assert entry["assistant_response"] == "hello"
+    def test_log_writes_jsonl(self, tmp_path):
+        chat = ChatDomain(log_dir=str(tmp_path))
+        chat._log(
+            user_message="hi",
+            assistant_response="hello",
+            model="gpt2",
+            temperature=0.8,
+            max_tokens=256,
+            session_id="s1",
+            user_id="u1",
+            tokens_generated=5,
+            duration_ms=10,
+        )
+        log_files = list(tmp_path.glob("responses_*.jsonl"))
+        assert len(log_files) == 1
+        with open(log_files[0]) as f:
+            entry = json.loads(f.readline())
+        assert entry["user_message"] == "hi"
+        assert entry["assistant_response"] == "hello"
 
     @pytest.mark.asyncio
     @patch("domains.chat.domain.ChatDomain._generate", return_value="mock response")

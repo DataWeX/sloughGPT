@@ -16,7 +16,7 @@ class TestTrainingExecutor:
     """Core executor functionality."""
 
     def test_submit_and_complete(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         results = []
@@ -34,7 +34,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_concurrency_limit(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         running = []
@@ -54,7 +54,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_cancel_queued_job(self):
-        from domains.training.executor import TrainingExecutor, JobStatus
+        from domain.training._internal.executor import TrainingExecutor, JobStatus
 
         exec_ = TrainingExecutor(max_workers=1)
         evt = threading.Event()
@@ -73,7 +73,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_is_cancelled_flag(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         check_results = []
@@ -93,7 +93,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_list_jobs(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -110,7 +110,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_tree_id_tracking(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -124,7 +124,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_purge_completed(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -145,7 +145,7 @@ class TestTrainingExecutorEdgeBranches:
     """Remaining branch coverage: result_type, call_args, failures, cancel edge."""
 
     def test_to_dict_non_dict_result(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -160,7 +160,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_submit_with_call_args(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         seen = {}
@@ -175,7 +175,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_failed_job_records_error(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=1)
 
@@ -190,7 +190,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_point_storage_exception_is_swallowed(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -214,7 +214,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_result_summary_none_cases(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         assert exec_.result_summary("unknown") is None
@@ -235,7 +235,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_result_summary_completed_dict(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -253,7 +253,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_active_count(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=1)
         evt = threading.Event()
@@ -270,14 +270,14 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_cancel_unknown_job_returns_false(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         assert exec_.cancel("no_such_job") is False
         exec_.shutdown(wait=True)
 
     def test_cancel_completed_job_returns_false(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -290,7 +290,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_get_training_executor_singleton(self):
-        import domains.training.executor as exmod
+        import domain.training._internal.executor as exmod
 
         old = exmod._instance
         try:
@@ -305,7 +305,7 @@ class TestTrainingExecutorEdgeBranches:
                 ex1.shutdown(wait=True)
 
     def test_get_training_executor_double_check_race(self):
-        import domains.training.executor as exmod
+        import domain.training._internal.executor as exmod
 
         old = exmod._instance
         new_exec = exmod.TrainingExecutor(max_workers=1)
@@ -345,7 +345,7 @@ class TestCompressCheckpointBranches:
     """Failure paths in compress_checkpoint()."""
 
     def test_missing_file_returns_none(self):
-        from domains.training.executor import compress_checkpoint
+        from domain.training._internal.executor import compress_checkpoint
 
         assert compress_checkpoint("/nonexistent/checkpoint.soul") is None
 

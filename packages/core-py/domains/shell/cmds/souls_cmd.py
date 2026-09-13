@@ -77,7 +77,7 @@ def run(argv: list[str], out: Console, api: ShellCommands,
             return 0
 
     except Exception as e:
-        from domains.shell.error import format_error
+        from domain.shell._internal.error import format_error
         out.print(format_error(e, "souls", color=False))
         return 1
 

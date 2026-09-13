@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 pytestmark = pytest.mark.slow
-from domains.inference.pdf_vlm import PDFVLMProcessor
+from domain.inference._internal.pdf_vlm import PDFVLMProcessor
 
 
 @pytest.fixture

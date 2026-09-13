@@ -1,12 +1,12 @@
-"""Tests for domains.inference.semantic_cache — CacheEntry, SemanticCache, CachedSoulEngine;
-domains.inference.forward_pass — ForwardPassResult, timed_forward, ForwardPassable."""
+"""Tests for domain.inference._internal.semantic_cache — CacheEntry, SemanticCache, CachedSoulEngine;
+domain.inference._internal.forward_pass — ForwardPassResult, timed_forward, ForwardPassable."""
 
 import time
 import numpy as np
 import pytest
 
-from domains.inference.semantic_cache import CacheEntry, SemanticCache, CachedSoulEngine
-from domains.inference.forward_pass import ForwardPassResult, timed_forward
+from domain.inference._internal.semantic_cache import CacheEntry, SemanticCache, CachedSoulEngine
+from domain.inference._internal.forward_pass import ForwardPassResult, timed_forward
 
 
 # ---------------------------------------------------------------------------

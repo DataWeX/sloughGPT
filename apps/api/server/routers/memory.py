@@ -7,7 +7,7 @@ manage the memory store the chat loop writes to automatically.
 
 import logging
 
-from domains.memory.memory_service import get_memory_service
+from domain.memory._internal.service import get_memory_service
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
@@ -268,8 +268,8 @@ class MemoryRouter:
         self, threshold: float | None = None, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Merge near-duplicate facts, keeping the longest in each cluster."""
-        from domains.memory.consolidation import plan_consolidation
-        from domains.memory.memory_config import MemoryConfig
+        from domain.memory._internal.consolidation import plan_consolidation
+        from domain.memory._internal.config import MemoryConfig
 
         svc = self._service()
         if threshold is None:
@@ -290,7 +290,7 @@ class MemoryRouter:
     @endpoint("memory.archive")
     def archive(self, limit: int | None = None) -> dict:
         """Return recent task-backed provenance archive records, newest first."""
-        from domains.memory.task_memory import list_archive
+        from domain.memory._internal.task_memory import list_archive
 
         if limit is None:
             limit = 20
@@ -301,7 +301,7 @@ class MemoryRouter:
     @endpoint("memory.archive_stats")
     def archive_stats(self) -> dict:
         """Summarize the task-backed provenance archive."""
-        from domains.memory.task_memory import archive_stats
+        from domain.memory._internal.task_memory import archive_stats
 
         return success_response(data=archive_stats())
 
@@ -310,7 +310,7 @@ class MemoryRouter:
         self, retain_days: float | None = None, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Delete archive records older than the retention window."""
-        from domains.memory.task_memory import prune_archive
+        from domain.memory._internal.task_memory import prune_archive
 
         removed = prune_archive(retain_days=retain_days)
         safe_audit_log("memory.archive_prune", resource="archive", detail=f"pruned={removed}")

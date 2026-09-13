@@ -75,12 +75,9 @@ class IngestResponse(BaseModel):
 
 
 def _get_db():
-    from mogdb import MogDB
+    from infrastructure.db_pool import get_db
 
-    repo_root = Path(__file__).resolve().parents[4]
-    db_path = os.path.join(repo_root, "data", "uploads_mogdb")
-    sync_path = os.path.join(repo_root, "data", "uploads_json")
-    return MogDB(db_path, sync_dir=sync_path)
+    return get_db("uploads_mogdb")
 
 
 class FilesRouter:
@@ -416,7 +413,7 @@ class FilesRouter:
         # Integrate with RAG service
         facts_stored = 0
         try:
-            from domains.cognitive.rag_service import get_rag_service
+            from domain.cognitive._internal.rag_service import get_rag_service
 
             rag = get_rag_service()
             chunk_ids = rag.add_document(

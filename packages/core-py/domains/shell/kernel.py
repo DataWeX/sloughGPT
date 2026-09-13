@@ -6,7 +6,7 @@ Neural capabilities live in addons/neural.py (canonical) and are composed into
 the Kernel class via the addon system (kernel.install_addon()).
 
 All kernel imports go through this module:
-    from domains.shell.kernel import Kernel, Process, ProcessState
+    from domain.shell._internal.kernel import Kernel, Process, ProcessState
 
 Supporting modules (kernel_process, kernel_memory, etc.) are imported by this
 file — they contain the subsystem implementations. kernel.py is the canonical

@@ -13,7 +13,7 @@ import logging
 
 logger = logging.getLogger("slo.multimodal.video")
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloLayerNorm, SloTransformerBlock,
     SloAdam,
 )

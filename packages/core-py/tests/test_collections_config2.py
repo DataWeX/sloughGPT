@@ -1,8 +1,8 @@
-"""Tests for domains.collections.config — SourceConfig, StoreConfig, FilterConfig, PipelineConfig."""
+"""Tests for domain.collections._internal.config — SourceConfig, StoreConfig, FilterConfig, PipelineConfig."""
 
 from dataclasses import fields, asdict
 
-from domains.collections.config import (
+from domain.collections._internal.config import (
     SourceConfig,
     StoreConfig,
     FilterConfig,

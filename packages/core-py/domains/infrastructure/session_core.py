@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from domains.feedback.message_feedback import get_message_feedback, MessageData
+from domain.feedback._internal.message_feedback import get_message_feedback, MessageData
 
 
 class SessionCore:

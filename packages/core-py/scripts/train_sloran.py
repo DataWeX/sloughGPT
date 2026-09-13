@@ -2,7 +2,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from domains.training.sloran import SloRAN
-from domains.training.slonet import Tensor, no_grad
+from domain.training._internal.slonet import Tensor, no_grad
 import numpy as np
 
 DATA = os.path.join(os.path.dirname(__file__),'..','..','..','data','shakespeare','input.txt')

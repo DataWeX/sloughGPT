@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
 
-from domains.multimodal.engine import (
+from domain.multimodal._internal.engine import (
     MultimodalOutput,
     TextDecoder,
     MultimodalEngine,
@@ -214,7 +214,7 @@ class TestMultimodalEngine:
 
     def test_clip_gradients(self):
         engine = MultimodalEngine(embed_dim=64, hidden_dim=128)
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
         p = Tensor(np.ones((2, 2)), requires_grad=True)
         p.grad = Tensor(np.ones((2, 2)) * 10)
         engine._clip_gradients([p], max_norm=1.0)

@@ -124,7 +124,7 @@ class SessionRouter:
                 return SessionCore.get_messages(session_id)
 
             def _fetch_feedback():
-                from domains.feedback.message_feedback import get_message_feedback
+                from domain.feedback._internal.message_feedback import get_message_feedback
 
                 fb = get_message_feedback()
                 return fb.get_stats()
@@ -132,7 +132,7 @@ class SessionRouter:
             def _fetch_knowledge():
                 knowledge = {"total_facts": 0, "topics": []}
                 try:
-                    from domains.learner.knowledge import get_knowledge_memory
+                    from domain.learner._internal.knowledge import get_knowledge_memory
 
                     km = get_knowledge_memory()
                     knowledge["total_facts"] = km.stats().get("total_facts", 0)
@@ -144,7 +144,7 @@ class SessionRouter:
             def _fetch_traits():
                 traits, modes = {}, {}
                 try:
-                    from domains.context.managers import (
+                    from domain.context._internal.managers import (
                         MemoryManager,
                         PersonalityManager,
                         StyleManager,
@@ -250,7 +250,7 @@ class SessionRouter:
                         )
                         return
 
-                    from domains.models.provider import get_provider
+                    from domain.models._internal.provider import get_provider
 
                     provider = get_provider("default")
                     if provider is None:

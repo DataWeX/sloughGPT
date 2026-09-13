@@ -1,4 +1,4 @@
-"""Tests for domains/shell/permissions.py, audit.py, cmds/data_cmds.py."""
+"""Tests for domain.shell._internal.permissions.py, audit.py, cmds/data_cmds.py."""
 
 import json
 import os
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.shell.permissions import (
+from domain.shell._internal.permissions import (
     Risk, ShellPermissions, _RISK_MAP, _FORCE_PATTERNS,
     _SAFE, _ELEVATED, _DANGEROUS, _CRITICAL,
     set_permissions_db, reset_permissions_db,
@@ -219,7 +219,7 @@ class TestShellPermissionsPersistence:
 
 # ── audit.py ────────────────────────────────────────────────────────────────
 
-from domains.shell.audit import ShellAuditLogger, get_shell_audit_logger
+from domain.shell._internal.audit import ShellAuditLogger, get_shell_audit_logger
 
 
 class TestShellAuditLogger:
@@ -333,7 +333,7 @@ class TestShellAuditLogger:
 
 class TestAuditSingleton:
     def test_singleton(self, tmp_path):
-        import domains.shell.audit as audit_mod
+        import domain.shell._internal.audit as audit_mod
         audit_mod._audit = None
         logger1 = get_shell_audit_logger(log_dir=tmp_path)
         logger2 = get_shell_audit_logger(log_dir=tmp_path)
@@ -344,8 +344,8 @@ class TestAuditSingleton:
 # ── cmds/data_cmds.py ──────────────────────────────────────────────────────
 
 from domains.shell.cmds import data_cmds
-from domains.shell.console import Console
-from domains.shell.io import MemoryIO
+from domain.shell._internal.console import Console
+from domain.shell._internal.io import MemoryIO
 
 
 def _make_console():

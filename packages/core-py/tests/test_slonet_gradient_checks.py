@@ -5,7 +5,7 @@ This catches formula bugs that pattern-matching audits miss.
 """
 import numpy as np
 import pytest
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, _add, _mul, _pow, _matmul, _softmax, _sum, _mean, _max,
     sigmoid, tanh, relu, gelu, silu, log_softmax,
     _layernorm, _rmsnorm, _conv2d, _maxpool2d,
@@ -485,7 +485,7 @@ class TestTrainingConvergence:
             vocab_size=256, n_embed=64, n_layer=2, n_head=2,
             block_size=32, dropout=0.0,
         )
-        from domains.training.slonet import SloAdamW
+        from domain.training._internal.slonet import SloAdamW
         opt = SloAdamW(lr=1e-3)
         x = np.random.randint(0, 256, (4, 32))
         y = np.random.randint(0, 256, (4, 32))

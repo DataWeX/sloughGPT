@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from domains.shell.error import format_error
+from domain.shell._internal.error import format_error
 
 
 # ── format_error ──────────────────────────────────────────────────────────

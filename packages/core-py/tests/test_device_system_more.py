@@ -1,13 +1,13 @@
-"""Coverage tests for DeviceSystem (domains.shell.device_system)."""
+"""Coverage tests for DeviceSystem (domain.shell._internal.device_system)."""
 
 import pytest
 
-from domains.shell.device_system import (
+from domain.shell._internal.device_system import (
     DeviceSystem,
     get_device_system,
     reset_device_system,
 )
-from domains.shell.vm import Device, DeviceFault
+from domain.shell._internal.vm import Device, DeviceFault
 
 
 class _FakeDevice(Device):

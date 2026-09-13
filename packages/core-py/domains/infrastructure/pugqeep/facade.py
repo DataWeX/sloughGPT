@@ -422,7 +422,7 @@ class PGQ:
         Returns:
             The *job_id* for tracking.
         """
-        from domains.training.executor import get_training_executor
+        from domain.training._internal.executor import get_training_executor
 
         tid = tree_id or self.name
         executor = get_training_executor()
@@ -432,12 +432,12 @@ class PGQ:
 
     def training_status(self, job_id: str) -> Optional[dict[str, Any]]:
         """Get training job status from the executor."""
-        from domains.training.executor import get_training_executor
+        from domain.training._internal.executor import get_training_executor
         return get_training_executor().status(job_id)
 
     def cancel_training(self, job_id: str) -> bool:
         """Cancel a training job via the executor."""
-        from domains.training.executor import get_training_executor
+        from domain.training._internal.executor import get_training_executor
         return get_training_executor().cancel(job_id)
 
     # ── Search ──

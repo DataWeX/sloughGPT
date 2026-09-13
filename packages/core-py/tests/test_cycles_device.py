@@ -1,9 +1,9 @@
-"""Tests for domains.shell.cycles_device — CyclesDevice VM device wrapper."""
+"""Tests for domain.shell._internal.cycles_device — CyclesDevice VM device wrapper."""
 
 import numpy as np
 import pytest
-from domains.shell.cycles_device import CyclesDevice
-from domains.shell.vm import DeviceFault
+from domain.shell._internal.cycles_device import CyclesDevice
+from domain.shell._internal.vm import DeviceFault
 
 
 # ── Basic Info ─────────────────────────────────────────────────────────

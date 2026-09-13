@@ -10,7 +10,7 @@ import threading
 import time
 from typing import Any
 
-from domains.training.executor import get_training_executor
+from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter
 from schemas.common import raise_error
 
@@ -31,8 +31,8 @@ async def train(request):
     ``checkpoint_dir`` with ``stoi`` / ``itos`` / ``chars`` for char-LM eval; see
     ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
-    from domains.training.dataset_manifest import ManifestError
-    from domains.training.train_pipeline import SloughGPTTrainer
+    from domain.training._internal.dataset_manifest import ManifestError
+    from domain.training._internal.train_pipeline import SloughGPTTrainer
 
     from .schemas import TrainRequest
 
@@ -116,7 +116,7 @@ async def train(request):
 @router.post("/train/resolve")
 async def train_resolve(body) -> dict[str, Any]:
     """Resolve ``data_path`` and checkpoint stem (dry run; no training)."""
-    from domains.training.dataset_manifest import ManifestError
+    from domain.training._internal.dataset_manifest import ManifestError
 
     from .schemas import TrainResolveRequest
 

@@ -304,7 +304,7 @@ def build_model_from_config(config: dict, _lazy: bool = True):
     Returns:
         SloTransformer instance (uninitialized if _lazy=True)
     """
-    from domains.training.slonet import SloTransformer
+    from domain.training._internal.slonet import SloTransformer
 
     n_embed = config.get("n_embd", config.get("hidden_size", 768))
     n_head = config.get("n_head", config.get("num_attention_heads", 12))
@@ -549,7 +549,7 @@ class SoulWeightLoader:
 
     def load_metadata(self) -> dict:
         """Load just the metadata (no weights) for model construction."""
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
         soul, _ = load_soul(self._soul_path)
         cfg = soul.metadata.get("config", {})
         return {
@@ -562,7 +562,7 @@ class SoulWeightLoader:
         }
 
     def load(self, model) -> WeightLoadResult:
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
 
         _t0 = time.monotonic()
         soul, state_dict = load_soul(self._soul_path)

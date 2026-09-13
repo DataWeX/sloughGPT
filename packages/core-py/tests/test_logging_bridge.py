@@ -1,11 +1,11 @@
-"""Tests for domains.logging.bridge — BridgeHandler and record_extra_context."""
+"""Tests for domain.logging._internal.bridge — BridgeHandler and record_extra_context."""
 
 import logging
 
 import pytest
-from domains.logging.bridge import BridgeHandler, record_extra_context, _LEVEL_MAP
-from domains.logging.base import Logger, LogLevel, LogRecord
-from domains.logging.console_logger import ConsoleLogger
+from domain.logging._internal.bridge import BridgeHandler, record_extra_context, _LEVEL_MAP
+from domain.logging._internal.base import Logger, LogLevel, LogRecord
+from domain.logging._internal.console_logger import ConsoleLogger
 
 
 class TestRecordExtraContext:

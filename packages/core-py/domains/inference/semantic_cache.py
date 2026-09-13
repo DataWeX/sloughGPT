@@ -73,7 +73,7 @@ class SemanticCache:
     def _get_hyperdim(self):
         """Lazy-load hyperdimensional processor."""
         if self._hyperdim is None:
-            from domains.soul.quantum import HyperdimensionalProcessor
+            from domain.soul._internal.quantum import HyperdimensionalProcessor
 
             self._hyperdim = HyperdimensionalProcessor(dim=self.dim)
         return self._hyperdim

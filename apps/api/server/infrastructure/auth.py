@@ -17,7 +17,7 @@ import time
 from collections import deque
 from datetime import datetime, timezone
 
-from domains.infrastructure.errors import AppError
+from domain.infrastructure._internal.errors import AppError
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from schemas.common import raise_error

@@ -1,5 +1,5 @@
 """
-Tests for domains/infrastructure/event_bus.py — async pub/sub event bus.
+Tests for domain.infrastructure._internal.event_bus.py — async pub/sub event bus.
 
 Covers:
     - Subscribe (on) and emit
@@ -25,7 +25,7 @@ _CORE_PY = Path(__file__).resolve().parents[1]
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domains.infrastructure.event_bus import (
+from domain.infrastructure._internal.event_bus import (
     EventBus,
     Event,
     EventPriority,
@@ -316,7 +316,7 @@ class TestSingleton:
         set_event_bus(original)  # restore
 
     def test_reset_creates_new_instance(self):
-        from domains.infrastructure.event_bus import reset_event_bus
+        from domain.infrastructure._internal.event_bus import reset_event_bus
         original = get_event_bus()
         reset_event_bus()
         new = get_event_bus()
@@ -383,7 +383,7 @@ class TestHandlerValidation:
 class TestInstallLogSubscriber:
     def test_idempotent(self):
         """Calling install_log_subscriber twice doesn't add duplicate handlers."""
-        import domains.infrastructure.event_bus as mod
+        import domain.infrastructure._internal.event_bus as mod
         original = mod._LOG_SUBSCRIBER_INSTALLED
         mod._LOG_SUBSCRIBER_INSTALLED = False
         try:
@@ -398,7 +398,7 @@ class TestInstallLogSubscriber:
     def test_noisy_events_filtered(self):
         """Noisy events (heartbeat, metric, cache) should not reach the log handler."""
         import logging
-        import domains.infrastructure.event_bus as mod
+        import domain.infrastructure._internal.event_bus as mod
         original = mod._LOG_SUBSCRIBER_INSTALLED
         mod._LOG_SUBSCRIBER_INSTALLED = False
         try:

@@ -6,16 +6,16 @@ import time
 
 import numpy as np
 
-from domains.shell.kernel_interrupts import (
+from domain.shell._internal.kernel_interrupts import (
     Interrupt,
     InterruptManager,
     InterruptType,
     InterruptVector,
 )
-from domains.shell.kernel_memory import MemoryBlock, TensorMemory
-from domains.shell.kernel_process import Process, ProcessState, Priority
+from domain.shell._internal.kernel_memory import MemoryBlock, TensorMemory
+from domain.shell._internal.kernel_process import Process, ProcessState, Priority
 from domains.shell import kernel_scheduler
-from domains.shell.kernel_scheduler import Scheduler
+from domain.shell._internal.kernel_scheduler import Scheduler
 
 
 class TestInterruptType:

@@ -1,8 +1,8 @@
-"""Coverage tests for domains/shell/kernel_devices.py."""
+"""Coverage tests for domain.shell._internal.kernel_devices.py."""
 
 import pytest
 
-from domains.shell.kernel_devices import (
+from domain.shell._internal.kernel_devices import (
     DeviceDriver,
     DeviceHandle,
     DeviceManager,

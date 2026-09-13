@@ -10,7 +10,7 @@ signal) and parameters live in WorldParams so tests can tune them.
 import numpy as np
 import pytest
 
-from domains.shell.simulation import (
+from domain.shell._internal.simulation import (
     WorldGrid, WorldParams,
     cell_update_combustion, cell_update_metabolism, cell_update_ember,
     cell_update_living, cell_update_water, cell_update_conduction,
@@ -249,7 +249,7 @@ class TestMetal:
 
 
 def _diffuse_only(g, params):
-    from domains.shell.simulation import cell_update_diffusion
+    from domain.shell._internal.simulation import cell_update_diffusion
     cell_update_diffusion(g, params)
 
 

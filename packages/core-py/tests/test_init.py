@@ -4,7 +4,7 @@ Tests for Shell Init System — ServiceDef, ServiceManager, InitSystem.
 
 import time
 import pytest
-from domains.shell.init import (
+from domain.shell._internal.init import (
     ServiceDef, ServiceInstance, ServiceManager, InitSystem,
     get_init_system, reset_init_system,
 )
@@ -199,7 +199,7 @@ class TestInitSystem:
 
 class TestInitSystemDeps:
     def test_resolve_deps_preserves_all(self):
-        from domains.shell.init import ServiceManager, ServiceDef
+        from domain.shell._internal.init import ServiceManager, ServiceDef
         svc1 = ServiceManager(ServiceDef(name="a", runlevel=1, deps=[], builtin=True))
         svc2 = ServiceManager(ServiceDef(name="b", runlevel=1, deps=["a"], builtin=True))
         init = InitSystem()
@@ -210,7 +210,7 @@ class TestInitSystemDeps:
         assert "b" in names
 
     def test_dependency_before_dependent(self):
-        from domains.shell.init import ServiceManager, ServiceDef
+        from domain.shell._internal.init import ServiceManager, ServiceDef
         svc1 = ServiceManager(ServiceDef(name="a", runlevel=1, deps=[], builtin=True))
         svc2 = ServiceManager(ServiceDef(name="b", runlevel=1, deps=["a"], builtin=True))
         init = InitSystem()

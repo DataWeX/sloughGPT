@@ -10,9 +10,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.collections.scheduler import JobConfig, JobScheduler, CollectorMonitor, CollectorExporter
-from domains.collections.sources import Record
-from domains.collections.stores import MemoryStore
+from domain.collections._internal.scheduler import JobConfig, JobScheduler, CollectorMonitor, CollectorExporter
+from domain.collections._internal.sources import Record
+from domain.collections._internal.stores import MemoryStore
 
 
 # ── JobConfig ──────────────────────────────────────────────────────────────

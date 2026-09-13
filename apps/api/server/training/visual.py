@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from domains.shared import find_repo_root
-from domains.training.executor import get_training_executor
+from domain.training._internal.executor import get_training_executor
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
@@ -92,7 +92,7 @@ async def start_visual_training(
     def _run_visual(job_id_: str = job_id):
         try:
             training_jobs[job_id_]["status"] = "running"
-            from domains.training.video_trainer import VideoCaptionTrainer, VideoTrainConfig
+            from domain.training._internal.video_trainer import VideoCaptionTrainer, VideoTrainConfig
 
             config = VideoTrainConfig(
                 data_path=data_path_str,

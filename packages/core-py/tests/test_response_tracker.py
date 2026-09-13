@@ -1,10 +1,10 @@
-"""Tests for domains/feedback/response_tracker.py — response logging for benchmarking."""
+"""Tests for domain.feedback._internal.response_tracker.py — response logging for benchmarking."""
 
 import json
 import tempfile
 import pytest
 from pathlib import Path
-from domains.feedback.response_tracker import ResponseTracker, ResponseLog, get_response_tracker
+from domain.feedback._internal.response_tracker import ResponseTracker, ResponseLog, get_response_tracker
 
 
 class TestResponseLog:

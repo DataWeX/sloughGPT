@@ -4,8 +4,8 @@ Pre-built Journey Tests for Common Web Applications.
 Provides reusable journey tests that work with any site configuration.
 
 Usage:
-    from domains.testing.journeys import PageJourney, NavigationJourney, FullSuiteJourney
-    from domains.testing.sloughgpt import SLOUGHPGPT_SITE
+    from domain.testing._internal.journeys import PageJourney, NavigationJourney, FullSuiteJourney
+    from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
     journey = PageJourney(SLOUGHPGPT_SITE)
     result = journey.test_page("training")

@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import domains.training.distill_gpt2 as dg
-from domains.training.distill_gpt2 import (
+import domain.training._internal.distill_gpt2 as dg
+from domain.training._internal.distill_gpt2 import (
     DistillConfig,
     TextDataset,
     DistillEvaluator,

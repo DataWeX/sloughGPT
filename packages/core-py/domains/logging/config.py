@@ -12,7 +12,7 @@ with a single entry point that configures:
 
 Usage::
 
-    from domains.logging.config import setup_logging
+    from domain.logging._internal.config import setup_logging
 
     # At startup (once):
     setup_logging()  # reads SLO_LOG_LEVEL, SLO_LOG_FORMAT, SLO_LOG_DIR env vars
@@ -881,7 +881,7 @@ def setup_logging(
 
     # Dashboard event buffer filter (captures tagged events for CLI monitor)
     try:
-        from domains.logging.dashboard_filter import DashboardFilter
+        from domain.logging._internal.dashboard_filter import DashboardFilter
         root.addFilter(DashboardFilter())
     except Exception as exc:
         print(f"Warning: DashboardFilter unavailable: {exc}", file=sys.stderr)

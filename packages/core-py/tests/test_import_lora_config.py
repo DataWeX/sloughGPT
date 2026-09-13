@@ -1,5 +1,5 @@
-"""Tests for domains.training.data_import — ImportResult and related logic;
-domains.training.hf_lora_finetune — HFLoraConfig, _LoRADataset."""
+"""Tests for domain.training._internal.data_import — ImportResult and related logic;
+domain.training._internal.hf_lora_finetune — HFLoraConfig, _LoRADataset."""
 
 import json
 import os
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from domains.training.data_import import (
+from domain.training._internal.data_import import (
     ImportResult,
     RepoImporter,
     DEFAULT_IGNORES,
@@ -16,7 +16,7 @@ from domains.training.data_import import (
     GitHubSearch,
     BooksSearch,
 )
-from domains.training.hf_lora_finetune import HFLoraConfig, _LoRADataset
+from domain.training._internal.hf_lora_finetune import HFLoraConfig, _LoRADataset
 
 
 # ---------------------------------------------------------------------------

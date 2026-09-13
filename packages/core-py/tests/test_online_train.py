@@ -3,7 +3,7 @@
 import numpy as np
 import time
 import threading
-from domains.feedback.online_train import (
+from domain.feedback._internal.online_train import (
     LoRAConfig,
     OnlineLoRAUpdater,
     get_online_lora_updater,

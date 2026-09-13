@@ -19,7 +19,7 @@ from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence, Union
 from pathlib import Path
 import logging
 from domains.shared import find_repo_root
-from domains.inference.forward_pass import ForwardPassResult
+from domain.inference._internal.forward_pass import ForwardPassResult
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("slo.slonet")
@@ -111,7 +111,7 @@ def _check_numba():
 
 # Numba-accelerated inference kernels (lazy import, graceful fallback)
 try:
-    from domains.training.slonet_kernels import (
+    from domain.training._internal.slonet_kernels import (
         nb_layernorm as _nb_layernorm,
         nb_swi_glu_mul as _nb_swi_glu_mul,
         fused_attention_single as _nb_fused_attention_single,
@@ -204,7 +204,7 @@ def _get_accelerator():
     if _ACCELERATOR is not None:
         return _ACCELERATOR if _ACCELERATOR != "none" else None
     try:
-        from domains.slolib.gpu import get_accelerator as _get_slolib_acc
+        from domain.slolib._internal.gpu import get_accelerator as _get_slolib_acc
         acc = _get_slolib_acc()
         if acc is not None and acc.name != "cpu":
             _ACCELERATOR = acc
@@ -2144,7 +2144,7 @@ class SloLayerNorm(SloLayer):
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         if _KERNELS_AVAILABLE:
-            from domains.training.slonet_kernels import fused_layer_norm
+            from domain.training._internal.slonet_kernels import fused_layer_norm
             return fused_layer_norm(
                 x.astype(np.float32),
                 self.weight.data.astype(np.float32),
@@ -2669,7 +2669,7 @@ class SloMultiHeadAttention(SloLayer):
         scale_f = 1.0 / math.sqrt(E)
         if _KERNELS_AVAILABLE and B == 1 and N == 1:
             # Single-token decode: fused kernel has no causal masking needed
-            from domains.training.slonet_kernels import fused_attention_single, gqa_expand
+            from domain.training._internal.slonet_kernels import fused_attention_single, gqa_expand
             # K_r: (B, seq, K_H, E) → (K_H, seq, E) for fused kernel
             K_np = K_r[0].transpose(1, 0, 2).astype(np.float32)
             V_np = V_r[0].transpose(1, 0, 2).astype(np.float32)
@@ -2681,7 +2681,7 @@ class SloMultiHeadAttention(SloLayer):
             out = out_h.reshape(1, 1, H * E)
         elif _KERNELS_AVAILABLE and B == 1 and mask is None:
             # Multi-token prompt: fused kernel applies built-in causal masking
-            from domains.training.slonet_kernels import fused_attention_multi, gqa_expand
+            from domain.training._internal.slonet_kernels import fused_attention_multi, gqa_expand
             K_np = K_r[0].transpose(1, 0, 2).astype(np.float32)  # (K_H, seq, E)
             V_np = V_r[0].transpose(1, 0, 2).astype(np.float32)
             if K_H < H:
@@ -3698,7 +3698,7 @@ def _layernorm_state_dict(x: Tensor, weight: np.ndarray, eps: float = 1e-5) -> T
 
 def _invalidate_gpu_cache():
     try:
-        from domains.slolib.gpu import get_accelerator
+        from domain.slolib._internal.gpu import get_accelerator
         acc = get_accelerator()
         if hasattr(acc, 'clear_cache'):
             acc.clear_cache()

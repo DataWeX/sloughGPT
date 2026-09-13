@@ -10,6 +10,7 @@ Usage:
 
 import json
 import logging
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -23,6 +24,73 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("migrate")
 
 DATA_ROOT = Path(__file__).parent.parent / "data"
+
+
+def default_collection(src: str) -> str:
+    """Derive a collection name from a source path (non-alnum → '_')."""
+    slug = re.sub(r"[^A-Za-z0-9]", "_", Path(src).stem)
+    return slug or "documents"
+
+
+def _import_generic(argv: list[str]) -> int:
+    """Import one JSON/JSONL file into a MogDB directory.
+
+    Old CLI contract: positional source + ``--db``, ``--collection``,
+    ``--key``, ``--dry-run``, ``--force``, ``--sync-dir``.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Import JSON/JSONL data into MogDB")
+    parser.add_argument("src", help="Source JSON/JSONL file")
+    parser.add_argument("--db", default=None, help="Target MogDB directory")
+    parser.add_argument("--collection", default=None, help="Collection name")
+    parser.add_argument("--key", default="_id", help="Field to use as document _id")
+    parser.add_argument("--dry-run", action="store_true", help="Validate without writing")
+    parser.add_argument("--force", action="store_true", help="Skip confirmation")
+    parser.add_argument("--sync-dir", default=None, help="Export the resulting collection here")
+    args = parser.parse_args(argv)
+
+    source = Path(args.src)
+    if not source.exists():
+        logger.warning("Source file not found: %s", source)
+        return 2
+
+    collection = args.collection or default_collection(args.src)
+    db_path = Path(args.db) if args.db else DATA_ROOT / f"{collection}_mogdb"
+
+    with open(source) as f:
+        if source.suffix.lower() == ".jsonl":
+            docs = [json.loads(line) for line in f if line.strip()]
+        else:
+            data = json.load(f)
+            docs = data if isinstance(data, list) else list(data.values())
+
+    if args.dry_run:
+        logger.info("[dry-run] would import %d docs into %s.%s", len(docs), db_path, collection)
+        return 0
+
+    backup_existing(db_path)
+    db = MogDB(str(db_path))
+    col = db.collection(collection)
+    col.drop()
+    if args.key != "_id":
+        for doc in docs:
+            if args.key in doc:
+                doc["_id"] = str(doc[args.key])
+    ids = col.insert_many(docs) if docs else []
+    db.close()
+    logger.info("Imported %d docs into %s.%s", len(ids), db_path, collection)
+
+    if args.sync_dir:
+        sync = Path(args.sync_dir)
+        sync.mkdir(parents=True, exist_ok=True)
+        verify = MogDB(str(db_path))
+        rows = verify.collection(collection).find()
+        verify.close()
+        target = sync / f"{collection}.json"
+        target.write_text(json.dumps(rows, indent=2))
+        logger.info("Synced %d docs to %s", len(rows), target)
+    return 0
 
 
 def backup_existing(db_path: Path) -> None:
@@ -199,8 +267,14 @@ def migrate_rag_documents() -> dict:
     return {"inserted": len(docs), "count": count}
 
 
-def main():
+def main(argv: list[str] | None = None) -> int | None:
     import argparse
+
+    if argv is not None:
+        # Programmatic API — generic file → MogDB import (testable, no side
+        # effects beyond the requested target). Returns a process exit code.
+        return _import_generic(argv)
+
     parser = argparse.ArgumentParser(description="Migrate legacy data to MogDB")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done")
     parser.add_argument("--force", action="store_true", help="Skip confirmation")
@@ -224,6 +298,7 @@ def main():
         logger.info("  %s: %s", key, val)
 
     logger.info("\nDone. Knowledge and RAG managers now use proper per-document MogDB storage.")
+    return 0
 
 
 if __name__ == "__main__":

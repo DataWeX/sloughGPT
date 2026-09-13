@@ -12,11 +12,14 @@ python3 -m pip install -e ".[dev]"
 ./verify.sh
 # With a .venv, prefix commands so they use that interpreter: ./run.sh python3 -m pytest tests/ -q
 # Minimal editable install only: python3 -m pip install -e .  (add dev extras or python3 -m pip install ruff to use ./verify.sh lint)
-# Next.js (apps/web): npm ci && npm run ci — same as CI job test-web (lint, typecheck, Vitest, build:clean / next build)
-# TypeScript SDK (packages/sdk-ts/typescript-sdk): npm ci && npm run ci — job test-sdk-ts (lint + build + test)
-# Python SDK: python3 -m pytest tests/test_sdk.py — job sdk-test-py
-# Standards: python3 scripts/validate_standards_schemas.py (jsonschema in .[dev]) — job standards-schemas
-# Colab notebook full execute locally: python3 -m pip install -e ".[notebook]" — ./scripts/run_colab_notebook_smoke.sh or make colab-smoke; make help lists colab targets (README → Google Colab). make colab-test runs tests/test_sloughgpt_colab_notebook.py only. Colab pytest module shells out to bash for --help; without bash that subtest skips (Windows: Git Bash / WSL).
+# JS workspaces (Turborepo): npm install at repo root — installs all packages, then:
+#   npx turbo run lint typecheck test   # run checks across all JS packages
+#   npx turbo run dev                   # start all dev servers
+# Web app: cd apps/web && npm ci && npm run ci
+# strui: cd packages/strui && npm run lint && npm run typecheck && npm test
+# TypeScript SDK: cd packages/sdk-ts/typescript-sdk && npm run ci
+# Python SDK: python3 -m pytest tests/test_sdk.py
+# Standards: python3 scripts/validate_standards_schemas.py
 ```
 
 ### 2. Quick Training (CLI)

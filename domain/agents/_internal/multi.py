@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import logging
 
-from ..shell.commands import ShellCommands
+from domain.shell._internal.commands import ShellCommands
 
 logger = logging.getLogger("slo.agents.multi")
 

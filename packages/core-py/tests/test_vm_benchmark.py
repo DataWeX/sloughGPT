@@ -2,7 +2,7 @@
 
 import time
 import numpy as np
-from domains.shell.vm import CPU, X86CPU, X86Assembler, Assembler
+from domain.shell._internal.vm import CPU, X86CPU, X86Assembler, Assembler
 
 
 def bench(label, fn, iterations=1000):

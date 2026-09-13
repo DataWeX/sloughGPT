@@ -1,9 +1,9 @@
-"""Tests for domains.collections.registry — CollectionRegistry, get_registry."""
+"""Tests for domain.collections._internal.registry — CollectionRegistry, get_registry."""
 
-from domains.collections.registry import CollectionRegistry, get_registry
-from domains.collections.sources import GeneratorSource, Record
-from domains.collections.stores import MemoryStore
-from domains.collections.filters import LengthFilter, KeywordFilter
+from domain.collections._internal.registry import CollectionRegistry, get_registry
+from domain.collections._internal.sources import GeneratorSource, Record
+from domain.collections._internal.stores import MemoryStore
+from domain.collections._internal.filters import LengthFilter, KeywordFilter
 
 
 def _source(name="src1"):
@@ -251,7 +251,7 @@ class TestGetRegistrySingleton:
         assert len(r2.list_sources()) > before
 
     def test_singleton_resets_on_new_registry(self):
-        import domains.collections.registry as mod
+        import domain.collections._internal.registry as mod
         old = mod._default_registry
         mod._default_registry = None
         r = get_registry()

@@ -44,19 +44,23 @@ COLLECTIONS = frozenset(
 
 _DEFAULT_PATH = str(PathLib(__file__).resolve().parents[4] / "data" / "docstore")
 
-_db: MogDB | None = None
-
 
 def _get_db() -> MogDB:
-    """Return the shared MogDB instance, creating it from config on first use.
+    """Return the shared MogDB instance for the docstore.
 
     The storage path comes from ``MOGDB_DOCSTORE_PATH`` (set by tests) and
     defaults to ``<repo>/data/docstore``.
     """
-    global _db
-    if _db is None:
-        _db = MogDB(os.environ.get("MOGDB_DOCSTORE_PATH", _DEFAULT_PATH))
-    return _db
+    from infrastructure.db_pool import get_db
+
+    custom_path = os.environ.get("MOGDB_DOCSTORE_PATH")
+    if custom_path:
+        # Tests may override the path — fall back to direct instantiation
+        # since the pool key is based on the default path.
+        from mogdb import MogDB as _MogDB
+
+        return _MogDB(custom_path)
+    return get_db("docstore")
 
 
 def _collection(name: str) -> Any:

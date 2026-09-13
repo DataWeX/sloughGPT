@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from domains.training.mobile_training_store import MobileTrainingStore
+from domain.training._internal.mobile_training_store import MobileTrainingStore
 
 
 @pytest.fixture

@@ -7,8 +7,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from domains.training.slonet import Tensor, no_grad, SloLSTM, SloLinear, SloEmbedding
-from domains.slolib.gpu import _CPUBackend
+from domain.training._internal.slonet import Tensor, no_grad, SloLSTM, SloLinear, SloEmbedding
+from domain.slolib._internal.gpu import _CPUBackend
 
 cpu = _CPUBackend()
 

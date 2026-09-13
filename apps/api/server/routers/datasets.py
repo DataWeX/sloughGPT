@@ -153,7 +153,7 @@ class DatasetsRouter:
 
     def _get_data_importer(self):
         """Get DataImporter configured to save to the repo datasets directory."""
-        from domains.training.data_import import DataImporter
+        from domain.training._internal.data_import import DataImporter
 
         return DataImporter(output_dir=str(self._DATASETS_DIR))
 
@@ -252,7 +252,7 @@ class DatasetsRouter:
             raise_error(f"Import already in progress for '{request.name}'", "E_INFRA_BUSY")
         async with lock:
             try:
-                from domains.training.data_import import RepoImporter
+                from domain.training._internal.data_import import RepoImporter
 
                 importer = RepoImporter()
                 _t0 = time.monotonic()
@@ -297,7 +297,7 @@ class DatasetsRouter:
             raise_error(f"Import already in progress for '{name}'", "E_INFRA_BUSY")
         async with lock:
             try:
-                from domains.training.data_import import HuggingFaceImporter
+                from domain.training._internal.data_import import HuggingFaceImporter
 
                 importer = HuggingFaceImporter()
                 _t0 = time.monotonic()
@@ -358,7 +358,7 @@ class DatasetsRouter:
             raise_error(f"Import already in progress for '{request.name}'", "E_INFRA_BUSY")
         async with lock:
             try:
-                from domains.training.data_import import URLImporter
+                from domain.training._internal.data_import import URLImporter
 
                 importer = URLImporter()
                 _t0 = time.monotonic()
@@ -572,7 +572,7 @@ class DatasetsRouter:
                     name = source.name or f"batch_{i}"
                     try:
                         if source.type == "url" and source.url:
-                            from domains.training.data_import import URLImporter
+                            from domain.training._internal.data_import import URLImporter
 
                             importer = URLImporter()
                             result = importer.import_from_url(
@@ -586,7 +586,7 @@ class DatasetsRouter:
                                 path=source.path, name=name, extensions=source.extensions
                             )
                         elif source.type == "github" and source.url:
-                            from domains.training.data_import import RepoImporter
+                            from domain.training._internal.data_import import RepoImporter
 
                             importer = RepoImporter()
                             result = importer.import_from_github(
@@ -595,7 +595,7 @@ class DatasetsRouter:
                                 output_dir=str(self._DATASETS_DIR),
                             )
                         elif source.type == "huggingface" and source.dataset_id:
-                            from domains.training.data_import import HuggingFaceImporter
+                            from domain.training._internal.data_import import HuggingFaceImporter
 
                             importer = HuggingFaceImporter()
                             result = importer.download_dataset(
@@ -668,7 +668,7 @@ class DatasetsRouter:
     ) -> dict:
         """Search books by title or ISBN via Open Library."""
         try:
-            from domains.training.data_import import BooksSearch
+            from domain.training._internal.data_import import BooksSearch
 
             searcher = BooksSearch()
             results = searcher.search(q, limit)
@@ -694,7 +694,7 @@ class DatasetsRouter:
             Calls the GitHub Search API via GitHubSearch.search_repos().
         """
         try:
-            from domains.training.data_import import GitHubSearch
+            from domain.training._internal.data_import import GitHubSearch
 
             searcher = GitHubSearch()
             items = searcher.search_repos(q, limit)
@@ -722,7 +722,7 @@ class DatasetsRouter:
     ) -> dict:
         """Import book by ISBN. Fetches full text if available on Project Gutenberg."""
         try:
-            from domains.training.data_import import ISBNImporter
+            from domain.training._internal.data_import import ISBNImporter
 
             importer = ISBNImporter(output_dir=str(self._DATASETS_DIR))
             _t0 = time.monotonic()
@@ -1096,7 +1096,7 @@ class DatasetsRouter:
                 lambda: input_file.read_text(encoding="utf-8", errors="replace")[:500_000]
             )
 
-            from domains.training.quality_scorer import compute_data_quality
+            from domain.training._internal.quality_scorer import compute_data_quality
 
             metrics = await asyncio.to_thread(compute_data_quality, raw)
 

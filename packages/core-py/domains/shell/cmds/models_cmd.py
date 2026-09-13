@@ -15,7 +15,7 @@ _VALID_SCHEME = {"symmetric", "asymmetric"}
 
 def _format_error(e: Exception, cmd: str = "") -> str:
     """Format an exception into a user-friendly error message."""
-    from domains.shell.error import format_error
+    from domain.shell._internal.error import format_error
     return format_error(e, cmd, color=False)
 
 
