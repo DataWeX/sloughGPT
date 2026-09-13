@@ -670,14 +670,20 @@ function QuickActionsTab() {
 function StartupTab() {
   const { health, startupStage, startupElapsed, startupModelProgress, startupModelProgressMessage } = useLiveStatus()
   const [startupData, setStartupData] = useState<Record<string, unknown> | null>(null)
+  const [historyData, setHistoryData] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchStartup = async () => {
       try {
-        const res = await fetch('/health/startup-progress')
-        const json = await res.json()
-        setStartupData(json.data)
+        const [progressRes, historyRes] = await Promise.all([
+          fetch('/health/startup-progress'),
+          fetch('/health/startup-history'),
+        ])
+        const progressJson = await progressRes.json()
+        const historyJson = await historyRes.json()
+        setStartupData(progressJson.data)
+        setHistoryData(historyJson.data)
       } catch {
         // ignore
       } finally {
@@ -706,6 +712,8 @@ function StartupTab() {
 
   const hooks = startupData?.hooks as Record<string, { name: string; stage: string; status: string; duration_seconds: number; error: string | null }> | undefined
   const stages = startupData?.stages as Record<string, { hooks: string[]; time: number | null }> | undefined
+  const stats = historyData?.stats as { count: number; avg_duration: number; min_duration: number; max_duration: number; p50_duration: number; p95_duration: number; success_rate: number } | undefined
+  const stageStats = historyData?.stage_stats as Record<string, { avg: number; min: number; max: number; p50: number; count: number }> | undefined
 
   return (
     <div className="space-y-4">
@@ -731,7 +739,7 @@ function StartupTab() {
         </div>
         <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
           <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Status</div>
-          <div className={cn('text-[14px] font-medium', startupStage === 'background' ? 'text-[#28c840]' : 'text-[#febc2e]'}>
+          <div className={cn('text-[14px] font-medium', startupStage === 'background' ? 'text-[#28c840]' : 'text-[#febc2e]')}>
             {startupStage === 'background' ? 'Ready' : 'Starting'}
           </div>
         </div>
@@ -762,6 +770,58 @@ function StartupTab() {
           ))}
         </div>
       </div>
+
+      {/* Performance comparison */}
+      {stats && stats.count > 0 && (
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
+            <span className="text-[11px] font-medium text-[#8e8e93]">Performance History</span>
+            <span className="text-[9px] text-[#636366] ml-2">{stats.count} startups recorded</span>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="text-center">
+                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Avg</div>
+                <div className="text-[14px] font-mono text-[#c7c7cc]">{stats.avg_duration}s</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">P50</div>
+                <div className="text-[14px] font-mono text-[#c7c7cc]">{stats.p50_duration}s</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">P95</div>
+                <div className="text-[14px] font-mono text-[#c7c7cc]">{stats.p95_duration}s</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Min</div>
+                <div className="text-[14px] font-mono text-[#28c840]">{stats.min_duration}s</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] text-[#636366] uppercase tracking-wider mb-1">Max</div>
+                <div className="text-[14px] font-mono text-[#ff5f57]">{stats.max_duration}s</div>
+              </div>
+            </div>
+            {startupElapsed > 0 && stats.avg_duration > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-center gap-2">
+                <span className="text-[10px] text-[#636366]">Current:</span>
+                <span className={cn(
+                  'text-[11px] font-mono font-medium',
+                  startupElapsed < stats.avg_duration ? 'text-[#28c840]' : 'text-[#febc2e]',
+                )}>
+                  {startupElapsed.toFixed(1)}s
+                </span>
+                <span className="text-[10px] text-[#636366]">vs avg {stats.avg_duration}s</span>
+                {startupElapsed < stats.avg_duration && (
+                  <span className="text-[9px] text-[#28c840]">({((1 - startupElapsed / stats.avg_duration) * 100).toFixed(0)}% faster)</span>
+                )}
+                {startupElapsed > stats.avg_duration && (
+                  <span className="text-[9px] text-[#febc2e]">(+{((startupElapsed / stats.avg_duration - 1) * 100).toFixed(0)}% slower)</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Stages */}
       {stages && (
