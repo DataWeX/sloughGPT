@@ -542,6 +542,21 @@ class HealthRouter:
             "exported_at": time.time(),
         })
 
+    @endpoint("health.startup_webhooks")
+    async def startup_webhooks(self) -> dict:
+        """Startup webhook notifications status.
+
+        Returns registered webhooks, recent deliveries,
+        and delivery statistics.
+
+        Returns:
+            Envelope with webhook status.
+        """
+        from infrastructure.startup_webhooks import get_webhook_manager
+
+        manager = get_webhook_manager()
+        return success_response(data=manager.get_status())
+
     async def startup_stream(self, request: Request) -> StreamingResponse:
         """SSE stream for real-time startup progress updates.
 

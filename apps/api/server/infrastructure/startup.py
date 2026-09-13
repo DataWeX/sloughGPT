@@ -331,6 +331,11 @@ class StartupOrchestrator:
         viz = get_terminal_viz()
         viz.start()
 
+        # Emit startup start webhook
+        from infrastructure.startup_webhooks import get_webhook_manager, WebhookEvent
+        webhook_mgr = get_webhook_manager()
+        await webhook_mgr.emit(WebhookEvent.STARTUP_START, {"server": "sloughgpt"})
+
         from infrastructure.staged_loader import Stage, get_staged_loader
 
         loader = get_staged_loader()
@@ -1035,6 +1040,9 @@ def _start_parent_preload(model_type: str):
                 elapsed,
                 extra={"tag": "START"},
             )
+
+            # Wire server_state.model so _wait_for_model() unblocks.
+            server_state.model = getattr(provider, "_model", provider)
 
             # NOW stop the guard to release the subprocess copy.
             try:
