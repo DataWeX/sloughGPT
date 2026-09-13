@@ -1,7 +1,7 @@
 """Train SloRAN on Shakespeare character-level language modeling."""
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from domains.training.sloran import SloRAN
+from domain.training._internal.sloran import SloRAN
 from domain.training._internal.slonet import Tensor, no_grad
 import numpy as np
 

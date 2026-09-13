@@ -126,7 +126,7 @@ def build_load_plan(
     """
     _t0 = time.monotonic()
 
-    from domains.infrastructure.arch_config import build_arch
+    from domain.infrastructure._internal.arch_config import build_arch
     arch = build_arch(
         name=config.get("architectures", ["unknown"])[0],
         config=config,

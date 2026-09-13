@@ -42,7 +42,7 @@ class ParallelExecutor:
             handler: Callable that processes one item.
             name: Queue name for debugging.
         """
-        from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+        from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue
 
         q = ProducerConsumerQueue(
             maxsize=self._num_workers * self._queue_factor,

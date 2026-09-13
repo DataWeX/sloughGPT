@@ -29,8 +29,8 @@ import threading
 import os
 from typing import Any, Optional, Callable, Generator
 
-from domains.infrastructure.model_worker import WorkerStreamStalledError
-from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT, DEFAULT_STALL_TIMEOUT
+from domain.infrastructure._internal.model_worker import WorkerStreamStalledError
+from domain.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT, DEFAULT_STALL_TIMEOUT
 
 
 def resolve_memory_limit_mb(
@@ -135,7 +135,7 @@ class ProcessGuard:
         self._stop_monitor = threading.Event()
         self._restart_lock = threading.Lock()
         if max_concurrent is None:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure._internal.resource_manager import get_resource_manager
             max_concurrent = get_resource_manager().process_guard_concurrent
         self._semaphore = threading.Semaphore(max_concurrent)
 
@@ -307,7 +307,7 @@ class ProcessGuard:
     # ── Private ──────────────────────────────────────────────────────
 
     def _launch_worker(self) -> None:
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         if self._worker is not None:
             self._worker.stop()

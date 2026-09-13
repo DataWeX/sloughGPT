@@ -5,7 +5,7 @@ Provides a common interface for all data stores (sessions, datasets, feedback)
 and replaces ad-hoc json.load / os.listdir / file I/O scattered everywhere.
 
 Usage:
-    from domains.infrastructure.repository import FileRepository
+    from domain.infrastructure._internal.repository import FileRepository
 
     repo = FileRepository[SessionData]("data/sessions", serializer=SessionData)
     repo.save("session_1", session)

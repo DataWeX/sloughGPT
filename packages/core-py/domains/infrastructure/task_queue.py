@@ -75,7 +75,7 @@ class WorkerPool:
 
     def __init__(self, num_workers: Optional[int] = None):
         if num_workers is None:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure._internal.resource_manager import get_resource_manager
             num_workers = get_resource_manager().task_queue_workers
         self.num_workers = num_workers
         self._queue: asyncio.Queue | None = None
@@ -174,7 +174,7 @@ class TaskQueue:
         # Event bus integration
         self._event_bus = None
         try:
-            from domains.infrastructure.event_bus import get_event_bus
+            from domain.infrastructure._internal.event_bus import get_event_bus
             self._event_bus = get_event_bus()
         except Exception as e:
             logger.debug("TaskQueue event bus unavailable: %s", e, extra={"tag": "INFRA"})
@@ -544,7 +544,7 @@ _default_queue: InProcessTaskQueue | None = None
 def get_task_queue() -> InProcessTaskQueue:
     global _default_queue
     if _default_queue is None:
-        from domains.infrastructure.resource_manager import get_resource_manager
+        from domain.infrastructure._internal.resource_manager import get_resource_manager
         n = get_resource_manager().task_queue_workers
         _default_queue = InProcessTaskQueue(num_workers=n)
     return _default_queue

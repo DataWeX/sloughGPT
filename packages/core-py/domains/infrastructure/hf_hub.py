@@ -1093,7 +1093,7 @@ def list_missing_files(
 
 import shutil
 
-from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
 
 class HFDownloadBackend(DownloadBackend):
@@ -1167,7 +1167,7 @@ class HFDownloadBackend(DownloadBackend):
         Used when supports_compression() returns True. Downloads each
         file via CompressedDownloader and decompresses on-the-fly.
         """
-        from domains.infrastructure.compressed_transfer import CompressedDownloader
+        from domain.infrastructure._internal.compressed_transfer import CompressedDownloader
 
         downloader = CompressedDownloader()
         files = self.list_files(resource_id)
@@ -1263,7 +1263,7 @@ class HFDownloadBackend(DownloadBackend):
         Resolves the file in the HF cache (snapshot or flat layout),
         then uses CompressedFileServer to compress on-the-fly.
         """
-        from domains.infrastructure.compressed_transfer import CompressedFileServer
+        from domain.infrastructure._internal.compressed_transfer import CompressedFileServer
 
         resolved = resolve_cached_path(resource_id, file_path, hf_home=self._hf_home)
         if resolved is None or not resolved.is_file():

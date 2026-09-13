@@ -13,7 +13,7 @@ from typing import Dict
 
 import numpy as np
 
-from domains.infrastructure.model_resolver import (
+from domain.infrastructure._internal.model_resolver import (
     get_model_dir,
     find_safetensors,
 )
@@ -57,7 +57,7 @@ def load_model_weights(
 
 def _auto_convert(st_path: Path, slnc_path: Path, model_id: str) -> None:
     """Convert safetensors to .slnc on first load."""
-    from domains.infrastructure.slnc.compiler import SLNCCompiler
+    from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
     logger.info("Converting %s → .slnc", st_path.name, extra={"tag": "INFRA"})
     SLNCCompiler().compile(model_id, str(slnc_path))
     logger.info("Converted to .slnc: %s (%.1f MB)", slnc_path.name,
@@ -66,7 +66,7 @@ def _auto_convert(st_path: Path, slnc_path: Path, model_id: str) -> None:
 
 def _load_from_slnc(slnc_path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
     """Load weights from .slnc memory-mapped format."""
-    from domains.infrastructure.slnc.parser import SLNCParser
+    from domain.infrastructure._internal.slnc.parser import SLNCParser
 
     logger.info("Loading from .slnc: %s", slnc_path.name, extra={"tag": "INFRA"})
     parser = SLNCParser(str(slnc_path))

@@ -7,7 +7,7 @@ True zero-copy weight loading via mmap. Numpy arrays are views into file
 pages. OS handles demand loading — only accessed blocks get paged in from disk.
 
 Usage:
-    from domains.infrastructure.slnc.parser import SLNCParser
+    from domain.infrastructure._internal.slnc.parser import SLNCParser
 
     parser = SLNCParser("models/gpt2.slnc")
     q_weight = parser.get_tensor("h.0.attn.c_attn.weight")  # zero-copy view
@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from domains.infrastructure.slnc.spec import (
+from domain.infrastructure._internal.slnc.spec import (
     MAGIC,
     VERSION,
     MAX_NDIM,

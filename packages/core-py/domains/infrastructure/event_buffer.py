@@ -6,7 +6,7 @@ them for the /dashboard/stream SSE endpoint and CLI monitor.
 
 Usage::
 
-    from domains.infrastructure.event_buffer import get_event_buffer
+    from domain.infrastructure._internal.event_buffer import get_event_buffer
     buf = get_event_buffer()
     buf.record("TRAIN", "Train step 310/500 — loss 2.341")
     events = buf.recent(20)

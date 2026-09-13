@@ -18,7 +18,7 @@ Features:
   - Streaming: async generator for token-by-token output
 
 Usage:
-    from domains.infrastructure.numpy_engine import NumpyEngine
+    from domain.infrastructure._internal.numpy_engine import NumpyEngine
     engine = NumpyEngine.from_pretrained("gpt2")
     text = engine.generate("Hello", max_new_tokens=50)
     # Streaming
@@ -32,15 +32,15 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional, Tup
 
 import numpy as np
 
-from domains.infrastructure.arch_config import build_arch
-from domains.infrastructure.numpy_ops import softmax
-from domains.infrastructure.numpy_forward import forward_cached
-from domains.infrastructure.compression import CompressedWeight, LRUCache
+from domain.infrastructure._internal.arch_config import build_arch
+from domain.infrastructure._internal.numpy_ops import softmax
+from domain.infrastructure._internal.numpy_forward import forward_cached
+from domain.infrastructure._internal.compression import CompressedWeight, LRUCache
 
 logger = logging.getLogger("slo.infrastructure.numpy_engine")
 
 if TYPE_CHECKING:
-    from domains.infrastructure.point_compressor import ModelTree, PointLibrary
+    from domain.infrastructure._internal.point_compressor import ModelTree, PointLibrary
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
 def _load_weights(model_id: str) -> Tuple[dict, dict]:
     """Load config.json + weights from HF cache. Returns (config, weights)."""
-    from domains.infrastructure.slnc.parser import get_model_dir, find_safetensors, load_model_config
+    from domain.infrastructure._internal.slnc.parser import get_model_dir, find_safetensors, load_model_config
 
     model_dir = get_model_dir(model_id)
     if not model_dir.exists():
@@ -64,11 +64,11 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
 
     slnc_path = safetensors_path.with_suffix(".slnc")
     if not slnc_path.exists():
-        from domains.infrastructure.slnc.compiler import SLNCCompiler
+        from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
         logger.info("Converting %s → .slnc", model_id, extra={"tag": "INFRA"})
         SLNCCompiler().compile(model_id, str(slnc_path))
 
-    from domains.infrastructure.slnc.parser import SLNCParser
+    from domain.infrastructure._internal.slnc.parser import SLNCParser
     parser = SLNCParser(str(slnc_path))
     weights = parser.get_weights_dict_parallel()
     logger.info("Loaded %d weights from %s (slnc mmap)", len(weights), model_id,
@@ -359,12 +359,12 @@ class NumpyEngine:
         """
         config, weights = _load_weights(model_id)
         if tokenizer is None:
-            from domains.infrastructure.morph_tokenizer import MorphTokenizer
+            from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
             tokenizer = MorphTokenizer.from_pretrained(model_id)
 
         model_tree = None
         if use_points:
-            from domains.infrastructure.point_compressor import ModelTree, PointLibrary
+            from domain.infrastructure._internal.point_compressor import ModelTree, PointLibrary
             if library is None:
                 library = PointLibrary(
                     name=model_id.replace("/", "_"),
@@ -395,13 +395,13 @@ class NumpyEngine:
         Returns:
             NumpyEngine instance using mmap-backed weights
         """
-        from domains.infrastructure.slnc.parser import SLNCParser
+        from domain.infrastructure._internal.slnc.parser import SLNCParser
 
         parser = SLNCParser(slnc_path)
         config = parser.config
 
         if tokenizer is None:
-            from domains.infrastructure.morph_tokenizer import MorphTokenizer
+            from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
             model_id = config.get("_name_or_path", "unknown")
             tokenizer = MorphTokenizer.from_pretrained(model_id)
 

@@ -5,7 +5,7 @@ Useful for downloading models distributed via git (e.g., HuggingFace repos, GitH
 
 Usage::
 
-    from domains.infrastructure.git_download import GitBackend
+    from domain.infrastructure._internal.git_download import GitBackend
 
     backend = GitBackend()
     backend.download("repo/model-name", on_progress=..., on_file_complete=...)
@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
 logger = logging.getLogger("slo.git_download")
 

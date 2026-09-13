@@ -10,12 +10,12 @@ Design goals:
 
 Usage:
     # Server: serve a file with streaming LZ4 compression
-    from domains.infrastructure.compressed_transfer import CompressedFileServer
+    from domain.infrastructure._internal.compressed_transfer import CompressedFileServer
     server = CompressedFileServer()
     response = server.serve("/path/to/model.bin")  # returns StreamingResponse
 
     # Client: download with on-the-fly decompression
-    from domains.infrastructure.compressed_transfer import CompressedDownloader
+    from domain.infrastructure._internal.compressed_transfer import CompressedDownloader
     downloader = CompressedDownloader()
     result = downloader.download_from_url(
         url="http://server/download/model.bin.lz4",

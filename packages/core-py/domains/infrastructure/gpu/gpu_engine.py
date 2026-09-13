@@ -6,7 +6,7 @@ Loads the shared library (libgpu_engine.so/.dylib/.dll) and wraps
 all C functions with Python classes.
 
 Usage:
-    from domains.infrastructure.gpu.gpu_engine import GpuDevice
+    from domain.infrastructure._internal.gpu.gpu_engine import GpuDevice
 
     device = GpuDevice()  # auto-selects best backend
     buf = device.buffer_create(1024 * 4, GPU_BUF_STORAGE)

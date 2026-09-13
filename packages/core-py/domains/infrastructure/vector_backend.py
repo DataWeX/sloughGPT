@@ -15,8 +15,8 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
-from domains.infrastructure.arch_config import ArchConfig
-from domains.infrastructure.compute_backend import ComputeBackend, register_backend
+from domain.infrastructure._internal.arch_config import ArchConfig
+from domain.infrastructure._internal.compute_backend import ComputeBackend, register_backend
 
 logger = logging.getLogger(__name__)
 

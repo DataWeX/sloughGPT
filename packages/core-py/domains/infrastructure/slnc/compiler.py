@@ -12,7 +12,7 @@ Pipeline:
   6. Verify (optional integrity check)
 
 Usage:
-    from domains.infrastructure.slnc.compiler import SLNCCompiler
+    from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
 
     compiler = SLNCCompiler()
     compiler.compile("gpt2", output="models/gpt2.slnc")
@@ -28,7 +28,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from domain.shared import find_repo_root
-from domains.infrastructure.slnc.spec import (
+from domain.infrastructure._internal.slnc.spec import (
     MAGIC,
     VERSION,
     MAX_NDIM,
@@ -117,7 +117,7 @@ class SLNCCompiler:
         Returns:
             Path to created .slnc file
         """
-        from domains.infrastructure.model_resolver import (
+        from domain.infrastructure._internal.model_resolver import (
             get_model_dir as _get_model_dir,
             find_safetensors as _find_safetensors,
             load_model_config,
@@ -138,7 +138,7 @@ class SLNCCompiler:
             output = str(models_dir / f"{model_id.replace('/', '_')}.slnc")
 
         try:
-            from domains.infrastructure.model_protector import protect_model
+            from domain.infrastructure._internal.model_protector import protect_model
             protect_model(model_id, [output])
         except Exception as e:
             logger.debug("Could not protect .slnc file: %s", e)
@@ -162,7 +162,7 @@ class SLNCCompiler:
         with open(cfg_path) as f:
             config = json.load(f)
 
-        from domains.infrastructure.model_resolver import find_safetensors as _find_safetensors
+        from domain.infrastructure._internal.model_resolver import find_safetensors as _find_safetensors
         safetensors_path = _find_safetensors(directory)
         if safetensors_path is None:
             raise FileNotFoundError(f"No .safetensors in {model_dir}")

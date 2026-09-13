@@ -37,8 +37,8 @@ from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 
-from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT
-from domains.infrastructure.structured_log import StructuredLogger
+from domain.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT
+from domain.infrastructure._internal.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.infrastructure.model_server")
 
@@ -423,7 +423,7 @@ class SessionKVCache:
 
 def _optimize_cpu_threads() -> None:
     """Set optimal compute / BLAS thread counts from ResourceManager."""
-    from domains.infrastructure.resource_manager import get_resource_manager
+    from domain.infrastructure._internal.resource_manager import get_resource_manager
     rm = get_resource_manager()
     rm.apply_blas_env()
     rm.apply_compute_limits()
@@ -799,7 +799,7 @@ class CircuitBreaker:
 
 def _has_mps() -> bool:
     try:
-        from domains.infrastructure.ml_types import mps as ml_mps
+        from domain.infrastructure._internal.ml_types import mps as ml_mps
         return ml_mps.is_available()
     except ImportError:
         return False
@@ -808,7 +808,7 @@ def _has_mps() -> bool:
 def _mps_oom_recovery() -> None:
     """Clear MPS cache and potentially force CPU fallback."""
     try:
-        from domains.infrastructure.ml_types import mps as ml_mps
+        from domain.infrastructure._internal.ml_types import mps as ml_mps
         if _has_mps():
             ml_mps.empty_cache()
     except Exception as exc:
@@ -830,7 +830,7 @@ def _get_bg_queue():
     if _bg_queue is None:
         with _bg_queue_lock:
             if _bg_queue is None:
-                from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+                from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue
                 _bg_queue = ProducerConsumerQueue[Any](
                     maxsize=32,
                     num_consumers=2,
@@ -1345,7 +1345,7 @@ class ModelServer:
 
         # Priority request queue (replaces per-loop semaphore)
         if max_concurrent is None:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure._internal.resource_manager import get_resource_manager
             max_concurrent = get_resource_manager().concurrent_writes
         self._max_concurrent = max_concurrent
         self._request_queue: Optional[PriorityRequestQueue] = None
@@ -1489,7 +1489,7 @@ class ModelServer:
             slnc_path = self._slnc_path
             if not slnc_path:
                 # Resolve .slnc from HF model ID via cache directory
-                from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
+                from domain.infrastructure._internal.model_resolver import get_model_dir as _get_model_dir
 
                 cache_dir = _get_model_dir(self._hf_model_id)
                 candidate = cache_dir / "model.slnc"

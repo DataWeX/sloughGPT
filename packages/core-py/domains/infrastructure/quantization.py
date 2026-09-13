@@ -16,7 +16,7 @@ Design:
   routes accordingly. No changes needed to the model's forward pass.
 
 Usage:
-    from domains.infrastructure.quantization import Quantine, TensorInfo
+    from domain.infrastructure._internal.quantization import Quantine, TensorInfo
 
     engine = Quantine(bits=8, mode="asymmetric", clip_percentile=0.999)
     info = engine.quantize(name="blocks.0.q_proj.weight", arr=weight_array)
@@ -122,7 +122,7 @@ _c_matmul_int4 = _int4_numpy_fallback
 logger = logging.getLogger("slo.infrastructure.quantization")
 
 try:
-    from domains.infrastructure.quant_core.wrapper import (
+    from domain.infrastructure._internal.quant_core.wrapper import (
         matmul_int8_c, matmul_int4_c, matmul_int8_f32_c, HAS_AVX2, HAS_AVX512,
     )
     if HAS_AVX2:
@@ -861,7 +861,7 @@ class Quantine:
 
         # Check AVX2 availability
         try:
-            from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+            from domain.infrastructure._internal.quant_core.wrapper import HAS_AVX2
             has_avx2 = bool(HAS_AVX2)
         except Exception:
             has_avx2 = False

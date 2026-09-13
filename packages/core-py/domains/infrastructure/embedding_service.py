@@ -9,7 +9,7 @@ This is the foundational base layer, not opinion. It provides:
 - Model hash tagging (MD5 of checkpoint file)
 
 Usage:
-    from domains.infrastructure.embedding_service import EmbeddingService
+    from domain.infrastructure._internal.embedding_service import EmbeddingService
     svc = EmbeddingService(dimension=128)
     vec = svc.embed("hello world")
     label = svc.classify("the sky is blue")

@@ -12,7 +12,7 @@ from typing import Optional, List, Iterator, AsyncIterator, Any, Callable
 import numpy as np
 
 from .constants import DEFAULT_GENERATE_TIMEOUT
-from domains.infrastructure.model_server import CircuitBreaker, ModelMetrics
+from domain.infrastructure._internal.model_server import CircuitBreaker, ModelMetrics
 
 logger = logging.getLogger("slo.infrastructure.slonet_server")
 

@@ -10,7 +10,7 @@ that delegate to numpy equivalents. This lets us benchmark and eventually
 replace torch entirely.
 
 Usage:
-    from domains.infrastructure.ml_types import dtype, device, tensor, zeros, isnan, isinf
+    from domain.infrastructure._internal.ml_types import dtype, device, tensor, zeros, isnan, isinf
 
     x = tensor([1.0, 2.0, 3.0], dtype=float32)
     d = device("cpu")  # always "cpu" for numpy, but API-compatible

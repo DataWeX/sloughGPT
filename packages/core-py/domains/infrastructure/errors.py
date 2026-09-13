@@ -16,7 +16,7 @@ Error Code Registry:
   Use raise_error() from schemas.common to raise with a registered code.
 
 Usage:
-    from domains.infrastructure.errors import (
+    from domain.infrastructure._internal.errors import (
         AppError, ModelOOMError, NotFoundError, ErrorCode,
         classify_exception, emit_error_event,
     )
@@ -441,7 +441,7 @@ def get_error_info(code: str) -> tuple[str, int, bool, str] | None:
 def emit_error_event(error: AppError, source: str = "") -> None:
     """Emit an error event on the EventBus (fire-and-forget)."""
     try:
-        from domains.infrastructure.event_bus import get_event_bus
+        from domain.infrastructure._internal.event_bus import get_event_bus
         bus = get_event_bus()
         import asyncio
         try:

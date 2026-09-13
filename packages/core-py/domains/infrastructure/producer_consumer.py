@@ -11,7 +11,7 @@ Provides ``ProducerConsumerQueue``, a bounded, priority-capable queue with:
 
 Usage::
 
-    from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+    from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue
 
     q = ProducerConsumerQueue(maxsize=100, num_consumers=4)
 

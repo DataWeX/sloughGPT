@@ -8,7 +8,7 @@ on-the-fly decompression.
 
 Usage::
 
-    from domains.infrastructure.external_download import ExternalDownloadBackend
+    from domain.infrastructure._internal.external_download import ExternalDownloadBackend
 
     backend = ExternalDownloadBackend(base_url="http://192.168.1.100:8000")
     backend.download("my-model", on_progress=..., on_file_complete=...)
@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import urljoin
 
-from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
 logger = logging.getLogger("slo.external_download")
 
@@ -187,7 +187,7 @@ class ExternalDownloadBackend(DownloadBackend):
                 on_progress(resource_id, current, total_size, speed)
 
             if self._compressed:
-                from domains.infrastructure.compressed_transfer import CompressedDownloader
+                from domain.infrastructure._internal.compressed_transfer import CompressedDownloader
 
                 downloader = CompressedDownloader()
                 result = downloader.download_from_url(

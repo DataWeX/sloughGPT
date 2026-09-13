@@ -17,8 +17,8 @@ import base64
 
 import numpy as np
 
-from domains.infrastructure.pugqeep.point import Point
-from domains.infrastructure.pugqeep.compressor import PointCompressor
+from domain.infrastructure._internal.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
 
 
 class PointWeight:
@@ -106,7 +106,7 @@ def compress_slonet_to_points(model, method: str = "auto",
     def _compress(name: str, arr: np.ndarray):
         if arr.size < 16:
             # Too small to compress — store raw
-            from domains.infrastructure.pugqeep.point import Point as RawPoint
+            from domain.infrastructure._internal.pugqeep.point import Point as RawPoint
             raw_point = RawPoint(
                 identity=name,
                 function_type="raw",

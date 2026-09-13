@@ -5,7 +5,7 @@ On 8GB Macs, MPS has ~6.8GB usable. When memory usage exceeds the threshold,
 new generations automatically fall back to CPU to prevent OOM crashes.
 
 Usage:
-    from domains.infrastructure.mps_monitor import get_mps_monitor
+    from domain.infrastructure._internal.mps_monitor import get_mps_monitor
     device = get_mps_monitor().get_device("auto")  # returns "cpu" if MPS is full
 """
 
@@ -146,7 +146,7 @@ class MPSMemoryMonitor:
         Falls back to 0.0 if MPS is not available.
         """
         try:
-            from domains.infrastructure.ml_types import mps as ml_mps
+            from domain.infrastructure._internal.ml_types import mps as ml_mps
             if not ml_mps.is_available():
                 return 0.0
             # MPS not available via numpy — return 0
@@ -158,7 +158,7 @@ class MPSMemoryMonitor:
         """Aggressively clear MPS memory."""
         try:
             import gc
-            from domains.infrastructure.ml_types import mps as ml_mps
+            from domain.infrastructure._internal.ml_types import mps as ml_mps
             gc.collect()
             if ml_mps.is_available():
                 ml_mps.empty_cache()

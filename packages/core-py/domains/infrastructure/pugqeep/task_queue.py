@@ -524,7 +524,7 @@ class TaskQueue:
         if self._worker_queue is not None:
             return  # already running
 
-        from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+        from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue
 
         self._num_workers = num_workers
         self._worker_queue = ProducerConsumerQueue[Task](

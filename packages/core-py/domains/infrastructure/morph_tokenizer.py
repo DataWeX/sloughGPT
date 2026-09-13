@@ -7,7 +7,7 @@ Own BPE implementation that reads tokenizer.json directly. Morphological
 analysis is linguistic rule-based reasoning (prefixes, suffixes, roots).
 
 Usage:
-    from domains.infrastructure.morph_tokenizer import MorphTokenizer
+    from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
     tok = MorphTokenizer.from_pretrained("gpt2")
 
     ids = tok.encode("unhappiness")

@@ -25,7 +25,7 @@ _size_cache: dict[str, tuple[float, Optional[float]]] = {}
 _size_cache_lock = threading.Lock()
 
 try:
-    from domains.infrastructure.hf_hub import (
+    from domain.infrastructure._internal.hf_hub import (
         is_download_complete,
         get_cache_dir,
         find_cached_model_dir,
@@ -60,7 +60,7 @@ def _sum_weight_files(cache_dir: Path) -> Optional[float]:
 def _get_hub_file_size_gb(model_id: str) -> Optional[float]:
     """Get total model weight file size from HuggingFace Hub API (siblings listing)."""
     try:
-        from domains.infrastructure.hf_hub import fetch_model_info
+        from domain.infrastructure._internal.hf_hub import fetch_model_info
         info = fetch_model_info(model_id)
         if not info or not info.get("siblings"):
             return None

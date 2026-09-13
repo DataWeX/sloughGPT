@@ -16,7 +16,7 @@ Thresholds:
 
 Usage::
 
-    from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+    from domain.infrastructure._internal.memory_pressure import get_memory_pressure_monitor
     monitor = get_memory_pressure_monitor()
     monitor.check()  # call before inference
     allowed = monitor.allow_load()  # call before model loading
@@ -326,7 +326,7 @@ class MemoryPressureMonitor:
     def _clear_kv_caches(self) -> None:
         """Clear cross-turn KV session caches to free memory."""
         try:
-            from domains.infrastructure.model_server import SESSION_KV_CACHE
+            from domain.infrastructure._internal.model_server import SESSION_KV_CACHE
             removed = SESSION_KV_CACHE.clear_all()
             logger.debug("KV cache cleared: %d sessions dropped", removed)
         except Exception as e:

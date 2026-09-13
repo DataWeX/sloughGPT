@@ -287,7 +287,7 @@ Be concise, accurate, and helpful."""
         provider = os.environ.get("MAN_VECTOR_STORE", "chromadb")
         def _do():
             try:
-                from domains.infrastructure.auto_ingest import AutoIngester
+                from domain.infrastructure._internal.auto_ingest import AutoIngester
                 import asyncio
                 ingester = AutoIngester(provider=provider)
                 asyncio.run(ingester.ingest())

@@ -6,7 +6,7 @@ Unlike other backends, this one copies files instead of downloading them.
 
 Usage::
 
-    from domains.infrastructure.local_download import LocalFileBackend
+    from domain.infrastructure._internal.local_download import LocalFileBackend
 
     backend = LocalFileBackend(source_dir="/path/to/models")
     backend.download("my-model", on_progress=..., on_file_complete=...)
@@ -22,7 +22,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
 logger = logging.getLogger("slo.local_download")
 

@@ -6,7 +6,7 @@ Backward-compatible shim — all code lives in pugqeep/ package.
 
 from __future__ import annotations
 
-from domains.infrastructure.pugqeep import (
+from domain.infrastructure._internal.pugqeep import (
     Point,
     PointCompressor,
     PointLibrary,

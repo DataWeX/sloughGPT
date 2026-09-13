@@ -8,7 +8,7 @@ in Prometheus text exposition format.  No external dependencies.
 
 Usage::
 
-    from domains.infrastructure.metrics import get_metrics_collector
+    from domain.infrastructure._internal.metrics import get_metrics_collector
     collector = get_metrics_collector()
     collector.record_request("/chat", 200, 1.5)
     print(collector.render())

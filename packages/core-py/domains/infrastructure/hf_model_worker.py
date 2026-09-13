@@ -36,7 +36,7 @@ def hf_model_loader(
     """
     resolved_device = _resolve_device(device)
 
-    from domains.infrastructure.model_loader import get_model_loader
+    from domain.infrastructure._internal.model_loader import get_model_loader
     result = get_model_loader().load(model_id, device=resolved_device, verify=False)
     model = result.model
     tokenizer = result.tokenizer
@@ -56,7 +56,7 @@ def _resolve_device(device: str) -> str:
     """Resolve device string, defaulting to CPU for stability."""
     if device == "auto":
         try:
-            from domains.infrastructure.ml_types import auto_device
+            from domain.infrastructure._internal.ml_types import auto_device
             return auto_device()
         except ImportError as exc:
             logger.debug("auto_device import failed, falling back to cpu: %s", exc)

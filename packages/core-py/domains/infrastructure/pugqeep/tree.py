@@ -423,7 +423,7 @@ def load_model_to_points(
 ) -> Tree:
     """Load a HuggingFace model and compress its weights into Points."""
     try:
-        from domains.infrastructure.numpy_engine import _load_weights
+        from domain.infrastructure._internal.numpy_engine import _load_weights
     except ImportError:
         raise ImportError(
             "load_model_to_points requires numpy_engine._load_weights. "

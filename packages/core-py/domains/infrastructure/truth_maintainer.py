@@ -8,7 +8,7 @@ label disagrees with their nearest meaning point, then generates corrective
 contrastive pairs to pull misclassified texts toward their correct region.
 
 Usage:
-    from domains.infrastructure.truth_maintainer import TruthMaintainer
+    from domain.infrastructure._internal.truth_maintainer import TruthMaintainer
     maintainer = TruthMaintainer()
     maintainer.run_maintenance(encoder, texts, meaning_tags, optimizer)
 """

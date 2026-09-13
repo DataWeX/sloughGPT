@@ -9,7 +9,7 @@ Provides a `ModelLoader` class that handles:
   - Quantization (via walk_slo_linears)
 
 Usage:
-    from domains.infrastructure.model_loader import ModelLoader
+    from domain.infrastructure._internal.model_loader import ModelLoader
 
     loader = ModelLoader()
     result = loader.load("gpt2")
@@ -115,12 +115,12 @@ class ModelLoader:
         import time as _time
         load_start = _time.monotonic()
 
-        from domains.infrastructure.conversion_tracker import get_tracker, ConversionStage
+        from domain.infrastructure._internal.conversion_tracker import get_tracker, ConversionStage
         tracker = get_tracker()
 
         # Check if .slnc already exists — skip conversion stages
         try:
-            from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
+            from domain.infrastructure._internal.model_resolver import get_model_dir as _get_model_dir
             cache_dir = _get_model_dir(model_id)
             has_slnc = (cache_dir / "model.slnc").exists()
         except Exception as exc:
@@ -184,7 +184,7 @@ class ModelLoader:
         Returns None if no .slnc file found, otherwise LoadResult.
         """
         try:
-            from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
+            from domain.infrastructure._internal.model_resolver import get_model_dir as _get_model_dir
             cache_dir = _get_model_dir(model_id)
         except Exception as exc:
             logger.debug("Failed to resolve model directory: %s", exc)
@@ -294,11 +294,11 @@ class ModelLoader:
         Handles bfloat16 weights by reading raw bytes and converting to float32.
         """
         try:
-            from domains.infrastructure.safetensors_loader import (
+            from domain.infrastructure._internal.safetensors_loader import (
                 _find_safetensors,
                 load_model_config,
             )
-            from domains.infrastructure.conversion_tracker import get_tracker, ConversionStage
+            from domain.infrastructure._internal.conversion_tracker import get_tracker, ConversionStage
             import json as _json
             import struct
 
@@ -346,7 +346,7 @@ class ModelLoader:
                     if total_tensors > 0:
                         tracker.update(model_id, progress=(i + 1) / total_tensors * 0.7)  # 70% for reading
 
-            from domains.infrastructure.slnc.compiler import SLNCCompiler
+            from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
             compiler = SLNCCompiler()
             tracker.update(model_id, message="Writing .slnc format...")
             compiler.compile_from_dict(config, weights, str(slnc_path))
@@ -355,7 +355,7 @@ class ModelLoader:
             # Protect the .slnc file from accidental deletion
             tracker.update(model_id, stage=ConversionStage.PROTECTING, message="Protecting files...")
             try:
-                from domains.infrastructure.model_protector import protect_model
+                from domain.infrastructure._internal.model_protector import protect_model
                 protect_model(model_id, [str(slnc_path)])
             except Exception as exc:
                 logger.debug("Model protection failed: %s", exc)

@@ -7,7 +7,7 @@ After a model is downloaded or converted to .slnc, this module:
   3. Tracks protected files in a manifest for integrity checks
 
 Usage:
-    from domains.infrastructure.model_protector import protect_model, check_model, unprotect_model
+    from domain.infrastructure._internal.model_protector import protect_model, check_model, unprotect_model
 
     # After download/conversion:
     protect_model("gpt2", ["/path/to/model.slnc"])

@@ -14,12 +14,12 @@ import threading
 import uuid
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from domains.infrastructure.inference_protocol import (
+from domain.infrastructure._internal.inference_protocol import (
     HEADER_SIZE,
     decode_header,
     encode_message,
 )
-from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT
+from domain.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT
 
 logger = logging.getLogger(__name__)
 

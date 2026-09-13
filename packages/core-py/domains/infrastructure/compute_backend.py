@@ -19,7 +19,7 @@ from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
 
 import numpy as np
 
-from domains.infrastructure.arch_config import ArchConfig
+from domain.infrastructure._internal.arch_config import ArchConfig
 
 
 class ComputeBackend(abc.ABC):
@@ -194,12 +194,12 @@ _BACKENDS: Dict[str, type] = {}
 def _auto_register() -> None:
     """Auto-register built-in backends."""
     try:
-        from domains.infrastructure.numpy_backend import NumpyBE
+        from domain.infrastructure._internal.numpy_backend import NumpyBE
         _BACKENDS["numpy"] = NumpyBE
     except ImportError:
         pass
     try:
-        from domains.infrastructure.vector_backend import VectorBE
+        from domain.infrastructure._internal.vector_backend import VectorBE
         _BACKENDS["vector"] = VectorBE
     except ImportError:
         pass

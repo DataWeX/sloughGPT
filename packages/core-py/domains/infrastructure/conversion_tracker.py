@@ -11,7 +11,7 @@ Stages:
                                       or → error
 
 Usage:
-    from domains.infrastructure.conversion_tracker import get_tracker
+    from domain.infrastructure._internal.conversion_tracker import get_tracker
 
     tracker = get_tracker()
     tracker.start("gpt2", stage="downloading")

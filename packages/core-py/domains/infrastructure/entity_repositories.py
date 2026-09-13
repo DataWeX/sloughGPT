@@ -21,7 +21,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Optional
 
-from domains.infrastructure.repository import (
+from domain.infrastructure._internal.repository import (
     FileRepository,
     MemoryRepository,
 )

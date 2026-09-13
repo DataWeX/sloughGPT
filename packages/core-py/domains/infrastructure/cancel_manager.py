@@ -7,7 +7,7 @@ so the manager stays type-agnostic.
 
 Usage::
 
-    from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+    from domain.infrastructure._internal.cancel_manager import get_cancel_manager, OpType
 
     mgr = get_cancel_manager()
 
@@ -47,7 +47,7 @@ _lock = threading.Lock()
 def _emit_op_event(action: str, op: "Operation") -> None:
     """Emit an operation lifecycle event to the global EventBus."""
     try:
-        from domains.infrastructure.event_bus import get_event_bus
+        from domain.infrastructure._internal.event_bus import get_event_bus
         get_event_bus().emit_sync(
             "operations",
             {

@@ -4,7 +4,7 @@ from the detected CPU topology for the SloNet / NumPy stack.
 
 Usage::
 
-    from domains.infrastructure.resource_manager import get_resource_manager
+    from domain.infrastructure._internal.resource_manager import get_resource_manager
 
     rm = get_resource_manager()
     pool_size = rm.inference_pool_size
@@ -37,7 +37,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Optional
 
-from domains.infrastructure.cpu_topology import CpuTopology, detect_topology
+from domain.infrastructure._internal.cpu_topology import CpuTopology, detect_topology
 
 logger = logging.getLogger("slo.infrastructure.resource_manager")
 

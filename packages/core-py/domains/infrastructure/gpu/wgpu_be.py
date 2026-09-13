@@ -19,8 +19,8 @@ from typing import Any, Dict, Iterator, Optional, Tuple
 
 import numpy as np
 
-from domains.infrastructure.compute_backend import ComputeBackend, register_backend
-from domains.infrastructure.arch_config import ArchConfig
+from domain.infrastructure._internal.compute_backend import ComputeBackend, register_backend
+from domain.infrastructure._internal.arch_config import ArchConfig
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class WgpuBE(ComputeBackend):
 
         # Import GPU engine
         try:
-            from domains.infrastructure.gpu.gpu_engine import GpuDevice, GPU_BUF_STORAGE
+            from domain.infrastructure._internal.gpu.gpu_engine import GpuDevice, GPU_BUF_STORAGE
             self._gpu = GpuDevice(device)
             self._GPU_BUF_STORAGE = GPU_BUF_STORAGE
             self._has_gpu = True
@@ -149,7 +149,7 @@ class WgpuBE(ComputeBackend):
             return a @ b
 
         try:
-            from domains.infrastructure.gpu.gpu_engine import GPU_BUF_STORAGE, GPU_BUF_UNIFORM
+            from domain.infrastructure._internal.gpu.gpu_engine import GPU_BUF_STORAGE, GPU_BUF_UNIFORM
 
             a_f32 = np.ascontiguousarray(a.astype(np.float32))
             b_f32 = np.ascontiguousarray(b.astype(np.float32))

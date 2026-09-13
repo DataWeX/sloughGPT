@@ -15,7 +15,7 @@ Labels:
   - analytical: reasoning, analysis, evaluation
 
 Usage:
-    from domains.infrastructure.truth_labeler import TruthLabeler
+    from domain.infrastructure._internal.truth_labeler import TruthLabeler
     labeler = TruthLabeler()
     result = labeler.label("The sky is blue")
     # → {"label": "factual", "confidence": 0.8, "reason": "declarative statement"}

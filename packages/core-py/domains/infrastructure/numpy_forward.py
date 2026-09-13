@@ -12,8 +12,8 @@ from typing import List, Optional
 
 import numpy as np
 
-from domains.infrastructure.arch_config import ArchConfig
-from domains.infrastructure.numpy_ops import rmsnorm, layer_norm, softmax, gelu, silu, rope
+from domain.infrastructure._internal.arch_config import ArchConfig
+from domain.infrastructure._internal.numpy_ops import rmsnorm, layer_norm, softmax, gelu, silu, rope
 
 
 def norm_fn(arch: ArchConfig):

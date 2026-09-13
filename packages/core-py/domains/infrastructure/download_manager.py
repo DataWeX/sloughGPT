@@ -363,7 +363,7 @@ class DownloadManager:
         )
         self._notify_callbacks(model_id)
 
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domain.infrastructure._internal.cancel_manager import get_cancel_manager, OpType
         mgr = get_cancel_manager()
         cancel_event = threading.Event()
         op_id = mgr.register(
@@ -391,7 +391,7 @@ class DownloadManager:
             self._set_progress(model_id, status=DownloadStatus.CANCELLED)
             mgr.finish(op_id, "cancelled")
             try:
-                from domains.infrastructure.event_buffer import get_event_buffer
+                from domain.infrastructure._internal.event_buffer import get_event_buffer
                 get_event_buffer().record("DOWNLOAD", f"{model_id} cancelled")
             except Exception as exc:
                 logger.debug("Failed to record download cancel event: %s", exc)
@@ -405,7 +405,7 @@ class DownloadManager:
             self._notify_callbacks(model_id)
             mgr.finish(op_id, str(e))
             try:
-                from domains.infrastructure.event_buffer import get_event_buffer
+                from domain.infrastructure._internal.event_buffer import get_event_buffer
                 get_event_buffer().record("ERROR", f"download {model_id} failed: {str(e)[:40]}")
             except Exception as exc:
                 logger.debug("Failed to record download error event: %s", exc)
@@ -432,7 +432,7 @@ class DownloadManager:
         start_time = time.time()
 
         try:
-            from domains.infrastructure.event_buffer import get_event_buffer
+            from domain.infrastructure._internal.event_buffer import get_event_buffer
             size_str = ""
             if total_bytes_hint > 0:
                 if total_bytes_hint > 1e9:
@@ -547,7 +547,7 @@ class DownloadManager:
         self._record_download_complete(model_id, bytes_downloaded, elapsed, speed)
 
         try:
-            from domains.infrastructure.event_buffer import get_event_buffer
+            from domain.infrastructure._internal.event_buffer import get_event_buffer
             get_event_buffer().record("DOWNLOAD", f"{model_id} complete ({elapsed:.1f}s)")
         except Exception:
             pass

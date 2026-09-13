@@ -586,7 +586,7 @@ class PGQ:
     def _put_many_parallel(self, data: Dict[str, np.ndarray], compress: bool,
                            method: Optional[str], num_workers: int) -> dict:
         import threading
-        from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+        from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue
 
         if num_workers < 0:
             import os
@@ -647,7 +647,7 @@ class PGQ:
 
     def _get_many_parallel(self, names: List[str], num_workers: int) -> Dict[str, Optional[np.ndarray]]:
         import threading
-        from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+        from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue
 
         if num_workers < 0:
             import os

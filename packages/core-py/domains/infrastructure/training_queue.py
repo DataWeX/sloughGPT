@@ -92,7 +92,7 @@ async def training_handler(task) -> dict:
                 cancel_event.set()
                 return
             try:
-                import domains.training.service as _svc
+                import domain.training._internal.service as _svc
                 at_cancel = _svc.get_cancel_event()
                 if at_cancel is not None and at_cancel.is_set():
                     cancel_event.set()
@@ -106,7 +106,7 @@ async def training_handler(task) -> dict:
         while True:
             paused = task.pause_event.is_set()
             try:
-                import domains.training.service as _svc
+                import domain.training._internal.service as _svc
                 at_pause = _svc.get_pause_event()
                 if at_pause is not None and at_pause.is_set():
                     paused = True
@@ -262,7 +262,7 @@ async def training_sessions_handler(task) -> dict:
                 cancel_event.set()
                 return
             try:
-                import domains.training.service as _svc
+                import domain.training._internal.service as _svc
                 at_cancel = _svc.get_cancel_event()
                 if at_cancel is not None and at_cancel.is_set():
                     cancel_event.set()
@@ -350,7 +350,7 @@ async def training_sessions_handler(task) -> dict:
 
 def register_training_handlers() -> None:
     """Register training handlers with the global task queue. Call once at startup."""
-    from domains.infrastructure.task_queue import get_task_queue
+    from domain.infrastructure._internal.task_queue import get_task_queue
     tq = get_task_queue()
     tq.register_handler("training", training_handler)
     tq.register_handler("training-sessions", training_sessions_handler)
@@ -359,7 +359,7 @@ def register_training_handlers() -> None:
 
 def unregister_training_handlers() -> None:
     """Unregister training handlers. Call at shutdown."""
-    from domains.infrastructure.task_queue import get_task_queue
+    from domain.infrastructure._internal.task_queue import get_task_queue
     tq = get_task_queue()
     tq.unregister_handler("training")
     tq.unregister_handler("training-sessions")

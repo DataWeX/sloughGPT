@@ -427,8 +427,13 @@ class StartupOrchestrator:
         loader.on(Stage.BACKGROUND, "autotrainer", _init_autotrainer, timeout=10.0)
         loader.on(Stage.BACKGROUND, "rag_ingest", _init_rag, timeout=60.0)
 
-        # Fire background stage without waiting — these run concurrently
-        asyncio.create_task(loader.run_stage(Stage.BACKGROUND))
+        # Schedule BACKGROUND stage to run after uvicorn binds the server socket.
+        # Firing it before yield starves the event loop, preventing
+        # loop.create_server() from completing (GIL starvation from heavy sync
+        # imports in background hooks).  A short delay lets the event loop
+        # finish the socket bind before BACKGROUND work begins.
+        loop = asyncio.get_running_loop()
+        loop.call_later(2.0, lambda: asyncio.ensure_future(loader.run_stage(Stage.BACKGROUND)))
 
         # Server is now READY (stage 2 complete)
         STARTUP_PHASE.update(phase="running", step=9, total=9, message="Server running")

@@ -12,7 +12,7 @@ Implementations:
 
 Usage::
 
-    from domains.infrastructure.download_backend import DownloadBackend
+    from domain.infrastructure._internal.download_backend import DownloadBackend
 
     class MyBackend(DownloadBackend):
         def is_cached(self, resource_id): ...

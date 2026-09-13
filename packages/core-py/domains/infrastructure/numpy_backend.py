@@ -18,9 +18,9 @@ from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from domains.infrastructure.compute_backend import ComputeBackend, register_backend
-from domains.infrastructure.arch_config import ArchConfig
-from domains.infrastructure.numpy_ops import (
+from domain.infrastructure._internal.compute_backend import ComputeBackend, register_backend
+from domain.infrastructure._internal.arch_config import ArchConfig
+from domain.infrastructure._internal.numpy_ops import (
     softmax as _softmax,
     rmsnorm as _rmsnorm,
     silu as _silu,
@@ -429,9 +429,9 @@ def create_backend_from_slnc(slnc_path: str, backend_name: str = "numpy") -> Com
     Returns:
         Initialized ComputeBackend ready for inference.
     """
-    from domains.infrastructure.slnc.parser import SLNCParser
-    from domains.infrastructure.arch_config import build_arch
-    from domains.infrastructure.compute_backend import get_backend
+    from domain.infrastructure._internal.slnc.parser import SLNCParser
+    from domain.infrastructure._internal.arch_config import build_arch
+    from domain.infrastructure._internal.compute_backend import get_backend
 
     parser = SLNCParser(slnc_path)
     config = parser.config

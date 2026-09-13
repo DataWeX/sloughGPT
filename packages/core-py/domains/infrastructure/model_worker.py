@@ -583,7 +583,7 @@ def _hf_worker_main(
         repetition_penalty: float = 1.0,
         **gen_kwargs: Any,
     ) -> None:
-        from domains.infrastructure.model_server import _TokenStreamer
+        from domain.infrastructure._internal.model_server import _TokenStreamer
 
         inputs = tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"]

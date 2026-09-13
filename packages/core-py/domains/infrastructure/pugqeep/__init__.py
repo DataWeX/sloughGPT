@@ -54,7 +54,7 @@ from .generic import (
     JSONStorage,
     DirectoryStorage,
 )
-from domains.infrastructure.producer_consumer import (
+from domain.infrastructure._internal.producer_consumer import (
     ProducerConsumerQueue,
     ShutdownMode,
 )

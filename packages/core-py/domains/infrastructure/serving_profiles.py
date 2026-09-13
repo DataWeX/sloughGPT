@@ -10,7 +10,7 @@ restart or until a different profile is applied.
 
 Usage::
 
-    from domains.infrastructure.serving_profiles import (
+    from domain.infrastructure._internal.serving_profiles import (
         get_profile, list_profiles, apply_profile,
     )
 

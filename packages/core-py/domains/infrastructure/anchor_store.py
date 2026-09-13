@@ -6,7 +6,7 @@ during training. New text is positioned by its distance from these
 tags, which determines its semantic meaning classification.
 
 Usage:
-    from domains.infrastructure.anchor_store import MeaningTags, get_default_meaning_tags
+    from domain.infrastructure._internal.anchor_store import MeaningTags, get_default_meaning_tags
     store = get_default_meaning_tags(dimension=128)
 """
 

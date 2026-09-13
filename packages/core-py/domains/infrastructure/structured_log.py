@@ -3,7 +3,7 @@ Structured logging with request-context, JSON formatting, and latency tracking.
 
 Usage::
 
-    from domains.infrastructure.structured_log import StructuredLogger, LogContext
+    from domain.infrastructure._internal.structured_log import StructuredLogger, LogContext
 
     log = StructuredLogger("slo.models")
 
@@ -15,7 +15,7 @@ Usage::
 
 Timing helpers::
 
-    from domains.infrastructure.structured_log import log_timer, timed
+    from domain.infrastructure._internal.structured_log import log_timer, timed
 
     # Context manager
     with log_timer(log, "model load"):
@@ -28,7 +28,7 @@ Timing helpers::
 
 FastAPI middleware::
 
-    from domains.infrastructure.structured_log import request_log_middleware
+    from domain.infrastructure._internal.structured_log import request_log_middleware
 
     app.middleware("http")(request_log_middleware)
     # Adds request_id + timing to every request
@@ -351,7 +351,7 @@ def setup_structured_logging(
 
     Call once at startup::
 
-        from domains.infrastructure.structured_log import setup_structured_logging
+        from domain.infrastructure._internal.structured_log import setup_structured_logging
         setup_structured_logging()
 
     Note: This adds a handler to the root logger. The main setup_logging()
@@ -375,7 +375,7 @@ async def request_log_middleware(request, call_next):
 
     Usage::
 
-        from domains.infrastructure.structured_log import request_log_middleware
+        from domain.infrastructure._internal.structured_log import request_log_middleware
         app.middleware("http")(request_log_middleware)
     """
     rid = request.headers.get("X-Request-Id") or str(uuid.uuid4())[:8]

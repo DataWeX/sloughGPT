@@ -1713,7 +1713,7 @@ class Engine:
         if self._spawn_queue is not None:
             return
 
-        from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+        from domain.infrastructure._internal.producer_consumer import ProducerConsumerQueue
 
         self._spawn_queue = ProducerConsumerQueue[Process](
             maxsize=max_queue,
