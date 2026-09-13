@@ -21,5 +21,5 @@ def get_tokenizer() -> Any:
     Side effects:
         - Creates a default ``SloBPE`` on first access if the manager has none.
     """
-    from domains.training.tokenizer_manager import get_tokenizer_manager
+    from domain.training._internal.tokenizer_manager import get_tokenizer_manager
     return get_tokenizer_manager().get_tokenizer()

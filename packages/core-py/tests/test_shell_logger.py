@@ -34,7 +34,7 @@ def _record(
 
 @pytest.fixture
 def ansi_on(monkeypatch):
-    import domains.logging.config as cfg
+    import domain.logging._internal.config as cfg
 
     codes = {
         "RESET": "\033[0m",

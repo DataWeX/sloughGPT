@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-from domains.learner.knowledge_storage import KnowledgeStorage
+from domain.learner._internal.knowledge_storage import KnowledgeStorage
 
 
 class TestKnowledgeStorage:

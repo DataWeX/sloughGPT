@@ -122,7 +122,7 @@ class FakeHttpx:
 
 @pytest.fixture
 def fake_httpx(monkeypatch):
-    import domains.mobile.notifications as mod
+    import domain.mobile._internal.notifications as mod
 
     store = {}
 

@@ -68,7 +68,7 @@ def parse_ssml(ssml: str) -> tuple[str, list[dict]]:
 
 def _get_slonet():
     """Lazy import of slonet primitives."""
-    from domains.training.slonet import (
+    from domain.training._internal.slonet import (
         Tensor, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm, SloAdam,
     )
     return Tensor, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm, SloAdam

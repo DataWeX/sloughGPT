@@ -432,14 +432,14 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
         await store.connect()
         return store
     if key == "chromadb":
-        from domains.inference.vector_stores.chromadb_store import ChromaDBVectorStore
+        from domain.inference._internal.vector_stores.chromadb_store import ChromaDBVectorStore
         store = ChromaDBVectorStore(
             persist_directory=kwargs.get("persist_directory", "data/vector_store")
         )
         await store.connect()
         return store
     if key == "pinecone":
-        from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
+        from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
         store = PineconeVectorStore(
             api_key=kwargs.get("api_key"),
             index_name=kwargs.get("index") or kwargs.get("index_name") or "sloughgpt",
@@ -618,7 +618,7 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
     global _slo_embedder, _slo_embedder_rejected
     if _slo_embedder is None and not _slo_embedder_rejected:
         try:
-            from domains.inference.slo_embedder import SloTextEmbedder
+            from domain.inference._internal.slo_embedder import SloTextEmbedder
             candidate = SloTextEmbedder.load()
             if candidate is not None and not candidate.acceptable():
                 logger.info(

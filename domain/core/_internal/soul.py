@@ -28,14 +28,14 @@ if TYPE_CHECKING:
 
 import numpy as np
 
-from domains.inference import (
+from domain.inference import (
     SloProfile,
     load_soul,
     save_soul,
 )
 
 try:
-    from domains.models import ModelInterface, ModelLoader
+    from domain.models import ModelInterface, ModelLoader
 except (ImportError, ModuleNotFoundError):
     ModelInterface = Any  # type: ignore[misc,assignment]
     ModelLoader = None  # type: ignore[assignment]
@@ -153,7 +153,7 @@ class SloEngine:
     def _init_cognitive(self):
         """Lazy-load cognitive components."""
         try:
-            from domains.cognitive.reasoning import (
+            from domain.cognitive._internal.reasoning import (
                 ReasoningEngine,
                 DeepReasoning,
                 FormalLogicEngine,
@@ -193,7 +193,7 @@ class SloEngine:
     def _init_semantic_cache(self) -> None:
         """Initialize semantic cache."""
         try:
-            from domains.inference.semantic_cache import SemanticCache
+            from domain.inference._internal.semantic_cache import SemanticCache
 
             self._semantic_cache = SemanticCache(
                 dim=10000,
@@ -242,7 +242,7 @@ class SloEngine:
         tok_config = metadata.get('tokenizer_config') if isinstance(metadata, dict) else None
         if tok_config:
             try:
-                from domains.training.tokenizer import SloBPE
+                from domain.training._internal.tokenizer import SloBPE
                 self._tokenizer = SloBPE.from_dict(tok_config)
                 logger.info("BPE tokenizer loaded from soul metadata (vocab=%d)", self._tokenizer.vocab_size, extra={"tag": "MODEL"})
             except Exception as e:
@@ -426,7 +426,7 @@ class SloEngine:
 
         # Knowledge: Auto-inject relevant facts from learner KnowledgeMemory
         try:
-            from domains.learner.knowledge import get_knowledge_memory
+            from domain.learner._internal.knowledge import get_knowledge_memory
             km = get_knowledge_memory()
             kb_results = km.search(prompt, top_k=5)
             if kb_results:
@@ -613,7 +613,7 @@ class SloEngine:
                         **kwargs,
                     )
                 else:
-                    from domains.training.slonet import SloLSTM, tensor, _sample_from_logits
+                    from domain.training._internal.slonet import SloLSTM, tensor, _sample_from_logits
                     lstm_layers = [l for l in self._model.layers if isinstance(l, SloLSTM)]
                     if not lstm_layers:
                         raise AttributeError(f"No generation path for {type(self._model).__name__}")
@@ -940,7 +940,7 @@ class SloEngine:
         """Query the soul's knowledge base."""
         if not self._logic_engine:
             return False
-        from domains.cognitive.reasoning import Predicate, Term
+        from domain.cognitive._internal.reasoning import Predicate, Term
 
         return self._logic_engine.query(
             Predicate(name=predicate_name, terms=[Term(name=t) for t in terms])
@@ -1025,7 +1025,7 @@ class SloEngine:
         - Curriculum Learning: Efficient training
         """
         try:
-            from domains.cognitive.grounding import GroundingOrchestrator
+            from domain.cognitive._internal.grounding import GroundingOrchestrator
 
             self._grounding = GroundingOrchestrator()
 
@@ -1194,7 +1194,7 @@ class SloEngine:
         """
         if not self._semantic_cache:
             try:
-                from domains.inference.semantic_cache import SemanticCache
+                from domain.inference._internal.semantic_cache import SemanticCache
 
                 self._semantic_cache = SemanticCache(
                     dim=10000,
@@ -1305,8 +1305,8 @@ class SloEngine:
         """
         import time as _time
 
-        from domains.training.tokenizer_manager import get_tokenizer_manager
-        from domains.training.slonet import (
+        from domain.training._internal.tokenizer_manager import get_tokenizer_manager
+        from domain.training._internal.slonet import (
             SloNet, SloEmbedding, SloLSTM,
             SloAdam, cross_entropy, tensor,
         )
@@ -1446,7 +1446,7 @@ class SloEngine:
 
         full_prompt = self._build_full_prompt(prompt, include_reasoning=True)
         idx = self._tokenize(full_prompt)
-        from domains.training.slonet import SloLSTM, tensor
+        from domain.training._internal.slonet import SloLSTM, tensor
         lstm_layers = [l for l in self._model.layers if isinstance(l, SloLSTM)]
         if not lstm_layers:
             return [{"token_id": 0, "token_text": "[no LSTM]", "prob": 1.0, "top_candidates": []}]

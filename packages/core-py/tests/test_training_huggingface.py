@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.training.huggingface.model_map import (
+from domain.training._internal.huggingface.model_map import (
     ModelSize,
     HFModelInfo,
     HF_MODELS,
@@ -19,18 +19,18 @@ from domains.training.huggingface.model_map import (
     get_model_requirements,
     map_to_sloughgpt_config,
 )
-from domains.training.huggingface.local_loader import (
+from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,
     HuggingFaceLocalLoader,
     HuggingFaceLocalClient,
 )
-from domains.training.huggingface.api_loader import (
+from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
     HuggingFaceAPILoader,
     HFInferenceClient,
     create_api_client,
 )
-from domains.training.huggingface.client import (
+from domain.training._internal.huggingface.client import (
     HFClient,
     get_model_memory,
     list_models,
@@ -568,7 +568,7 @@ class TestListModels:
 
 class TestInitExports:
     def test_key_exports_importable(self):
-        from domains.training.huggingface import (
+        from domain.training._internal.huggingface import (
             HFClient,
             HFLocalConfig,
             HuggingFaceLocalLoader,
@@ -588,13 +588,13 @@ class TestInitExports:
         assert HF_MODELS is not None
 
     def test_local_model_loader_alias(self):
-        from domains.training.huggingface import LocalModelLoader
+        from domain.training._internal.huggingface import LocalModelLoader
         assert LocalModelLoader is HuggingFaceLocalLoader
 
     def test_model_registry_alias(self):
-        from domains.training.huggingface import MODEL_REGISTRY
+        from domain.training._internal.huggingface import MODEL_REGISTRY
         assert MODEL_REGISTRY is HF_MODELS
 
     def test_model_info_alias(self):
-        from domains.training.huggingface import ModelInfo
+        from domain.training._internal.huggingface import ModelInfo
         assert ModelInfo is HFModelInfo

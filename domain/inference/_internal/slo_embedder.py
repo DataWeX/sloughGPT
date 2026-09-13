@@ -67,7 +67,7 @@ QUALITY_NN_K = 3                 # nearest-neighbour count for n-gram agreement 
 # ---------------------------------------------------------------------------
 
 from contextlib import contextmanager
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 @contextmanager
 def _no_accel():
@@ -162,7 +162,7 @@ def _tokenize_simple(text: str) -> List[str]:
 def _build_bpe_tokenizer(texts: List[str], vocab_size: int = 2048):
     """Train a BPE tokenizer on the corpus and return (bpe, encode_fn)."""
     try:
-        from domains.multimodal.bpe_tokenizer import BPETokenizer
+        from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
         bpe = BPETokenizer(vocab_size=vocab_size)
         bpe.train(texts)
         def encode_fn(text: str, max_len: int) -> np.ndarray:
@@ -217,7 +217,7 @@ def _build_encoder(
     n_layers: int,
 ):
     """Build a SloNet text encoder from existing primitives."""
-    from domains.training.slonet import (
+    from domain.training._internal.slonet import (
         SloEmbedding,
         SloTransformerBlock,
         SloLayerNorm,
@@ -246,7 +246,7 @@ def _build_encoder(
 
         def forward(self, token_ids: np.ndarray):
             """token_ids: (B, seq_len) → (B, embed_dim)"""
-            from domains.training.slonet import Tensor as _T, tensor as _tensor
+            from domain.training._internal.slonet import Tensor as _T, tensor as _tensor
 
             B, S = token_ids.shape
             tok = self.tok_emb.forward(_tensor(token_ids, requires_grad=False))
@@ -373,7 +373,7 @@ def _label_by_meaning(text: str, points_store=None) -> Optional[str]:
     progresses the embedding space aligns such that texts semantically
     near each other land near the same meaning point.
     """
-    from domains.inference.vector_store import simple_embed
+    from domain.inference._internal.vector_store import simple_embed
     if points_store is None:
         return None
     vec = simple_embed(text, dimension=points_store.dimension)
@@ -413,7 +413,7 @@ def train_embedder(
     Returns:
         dict with training stats
     """
-    from domains.training.slonet import SloAdam, Tensor
+    from domain.training._internal.slonet import SloAdam, Tensor
 
     if len(texts) < 2:
         raise ValueError("Need at least 2 text samples for contrastive training")
@@ -441,7 +441,7 @@ def train_embedder(
     logger.info("Encoder params: %d tensors", len(params), extra={"tag": "INFRA"})
 
     # 2b. Load meaning tags (the stars — fixed semantic reference points)
-    from domains.infrastructure.anchor_store import get_default_meaning_tags
+    from domain.infrastructure._internal.anchor_store import get_default_meaning_tags
     meaning_tags = get_default_meaning_tags(dimension=embed_dim)
     logger.info("Loaded %d meaning tags: %s", len(meaning_tags.names()), meaning_tags.names(), extra={"tag": "INFRA"})
 
@@ -552,7 +552,7 @@ def train_embedder(
             logger.info("Epoch %d refine: %s", epoch + 1, {k: v for k, v in refined.items()}, extra={"tag": "INFRA"})
 
         # Step B: Correct misclassified texts via TruthMaintainer
-        from domains.infrastructure.truth_maintainer import get_truth_maintainer
+        from domain.infrastructure._internal.truth_maintainer import get_truth_maintainer
         maintainer = get_truth_maintainer()
         misclassified = maintainer.find_misclassified(texts, all_norm, meaning_tags)
         if misclassified and len(misclassified) >= 3:
@@ -743,7 +743,7 @@ def _compute_quality(
 
     # Reference: word n-gram TF-IDF (zero downloads, always available).
     try:
-        from domains.inference.vector_store import _word_ngram_embed
+        from domain.inference._internal.vector_store import _word_ngram_embed
         ref = np.stack([_word_ngram_embed(t, 128) for t in probes])
         rn = np.linalg.norm(ref, axis=1, keepdims=True) + 1e-10
         reference = ref / rn
@@ -904,7 +904,7 @@ def _retrieval_benchmark_for(
         n = np.linalg.norm(v)
         return v / n if n > 0 else v
 
-    from domains.inference.vector_store import _word_ngram_embed
+    from domain.inference._internal.vector_store import _word_ngram_embed
     return _retrieval_benchmark(
         texts, trained_fn, lambda t: _word_ngram_embed(t, 128),
         top_k=QUALITY_NN_K, max_queries=QUALITY_MAX_PROBES,
@@ -942,7 +942,7 @@ def _save_checkpoint(
         json.dump({"vocab": vocab, "itos": {str(k): v for k, v in itos.items()}}, f)
 
     # Save as .soul (binary format compatible with import_from_sou)
-    from domains.training.slonet import SloNet
+    from domain.training._internal.slonet import SloNet
 
     net = SloNet(
         soul_name="text-embedder",
@@ -984,7 +984,7 @@ def _save_checkpoint(
         meta["embed_mean"] = [float(v) for v in embed_mean]
     json_bytes = json.dumps(meta, allow_nan=False).encode()
 
-    from domains.training.slonet import SOU_MAGIC
+    from domain.training._internal.slonet import SOU_MAGIC
     tmp_fd, tmp_path = tempfile.mkstemp(
         dir=os.path.dirname(path) or ".", suffix=".tmp",
     )
@@ -1073,7 +1073,7 @@ class SloTextEmbedder:
             with open(path, "rb") as f:
                 raw = f.read()
 
-            from domains.training.slonet import SOU_MAGIC
+            from domain.training._internal.slonet import SOU_MAGIC
             if raw[:4] != SOU_MAGIC:
                 return None
 
@@ -1108,7 +1108,7 @@ class SloTextEmbedder:
             # Try loading BPE tokenizer
             bpe_tokenizer = None
             try:
-                from domains.multimodal.bpe_tokenizer import BPETokenizer
+                from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
                 bpe_path = os.path.splitext(path)[0] + "-bpe.json"
                 if os.path.exists(bpe_path):
                     bpe_tokenizer = BPETokenizer()

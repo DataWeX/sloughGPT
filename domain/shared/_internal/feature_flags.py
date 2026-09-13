@@ -7,10 +7,10 @@ FEATURE: feature-flags — Runtime feature toggles with env var overrides.
 DO NOT DELETE. Controls which features are active.
 
 Usage:
-    from domains.shared.feature_flags import is_enabled, FeatureFlags
+    from domain.shared._internal.feature_flags import is_enabled, FeatureFlags
 
     if is_enabled("native_c_inference"):
-        from domains.inference.native.engine import NativeEngine
+        from domain.inference._internal.native.engine import NativeEngine
         ...
 
     # Register new features

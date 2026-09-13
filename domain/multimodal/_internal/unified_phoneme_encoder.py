@@ -10,14 +10,14 @@ from __future__ import annotations
 from typing import Optional
 import numpy as np
 
-from domains.multimodal.phoneme_encoder import PhonemeEncoder, BOS as EN_BOS, EOS as EN_EOS, PAD as EN_PAD
-from domains.multimodal.german_phoneme_encoder import (
+from domain.multimodal._internal.phoneme_encoder import PhonemeEncoder, BOS as EN_BOS, EOS as EN_EOS, PAD as EN_PAD
+from domain.multimodal._internal.german_phoneme_encoder import (
     GermanPhonemeEncoder, BOS as DE_BOS, EOS as DE_EOS, PAD as DE_PAD,
 )
-from domains.multimodal.french_phoneme_encoder import FrenchPhonemeEncoder
-from domains.multimodal.spanish_phoneme_encoder import SpanishPhonemeEncoder
-from domains.multimodal.italian_phoneme_encoder import ItalianPhonemeEncoder
-from domains.multimodal.portuguese_phoneme_encoder import PortuguesePhonemeEncoder
+from domain.multimodal._internal.french_phoneme_encoder import FrenchPhonemeEncoder
+from domain.multimodal._internal.spanish_phoneme_encoder import SpanishPhonemeEncoder
+from domain.multimodal._internal.italian_phoneme_encoder import ItalianPhonemeEncoder
+from domain.multimodal._internal.portuguese_phoneme_encoder import PortuguesePhonemeEncoder
 
 
 # Language detection patterns

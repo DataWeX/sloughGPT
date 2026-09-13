@@ -13,7 +13,7 @@ import logging
 
 logger = logging.getLogger("slo.vision")
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloNet, SloConv2D, SloMaxPool2D,
     SloLinear, SloAdam, relu as _relu,
     flatten as _flatten, tensor as _tensor, mse_loss,

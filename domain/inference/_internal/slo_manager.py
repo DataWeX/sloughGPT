@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 import logging
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.soul_manager")
 
@@ -376,7 +376,7 @@ class SloManager:
         soul = self.get_current_soul()
 
         # Always start with canonical defaults from TRAIT_SCHEMA
-        from domains.context.managers import TRAIT_SCHEMA
+        from domain.context._internal.managers import TRAIT_SCHEMA
 
         result = {
             group: {t: 0.5 for t in traits}
@@ -407,7 +407,7 @@ class SloManager:
 
         # Overlay live values from TraitWeightsConfig (feedback-driven)
         try:
-            from domains.context.managers import get_trait_config
+            from domain.context._internal.managers import get_trait_config
             config = get_trait_config()
             live = config.all()
             for group in ("personality", "cognition", "emotion"):

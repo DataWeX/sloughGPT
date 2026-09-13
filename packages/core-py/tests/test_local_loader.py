@@ -6,7 +6,7 @@ chat prompt formatting, error paths, and module-level functions.
 
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
-from domains.training.huggingface.local_loader import (
+from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,
     HuggingFaceLocalLoader,
     HuggingFaceLocalClient,
@@ -311,12 +311,12 @@ class TestAliases:
 
 class TestExports:
     def test_all_exports(self):
-        from domains.training.huggingface import local_loader
+        from domain.training._internal.huggingface import local_loader
         for name in local_loader.__all__:
             assert hasattr(local_loader, name), f"Missing export: {name}"
 
     def test_expected_exports(self):
-        from domains.training.huggingface import local_loader
+        from domain.training._internal.huggingface import local_loader
         expected = {
             "HFLocalConfig",
             "HuggingFaceLocalLoader",
@@ -640,7 +640,7 @@ class TestModuleFunctions:
                 generate_local("hi", model="gpt2")
 
     def test_all_exports_complete(self):
-        from domains.training.huggingface import local_loader
+        from domain.training._internal.huggingface import local_loader
         assert set(local_loader.__all__) == {
             "HFLocalConfig",
             "HuggingFaceLocalLoader",

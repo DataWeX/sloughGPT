@@ -30,8 +30,8 @@ from pathlib import Path
 
 
 
-from domains.shared import find_repo_root
-from domains.training.slonet import (
+from domain.shared import find_repo_root
+from domain.training._internal.slonet import (
     SloTransformer, SloAdam,
     tensor, export_to_sou, import_from_sou,
 )
@@ -134,7 +134,7 @@ class ContinualLearner:
         self.buffer: list[int] = []
 
         # Knowledge ingestion pipeline
-        from domains.learner.knowledge import get_knowledge_ingestor, get_knowledge_memory
+        from domain.learner._internal.knowledge import get_knowledge_ingestor, get_knowledge_memory
         self.ingestor = get_knowledge_ingestor()
         self.knowledge = get_knowledge_memory()
         # Start background RSS polling (every 10 min)
@@ -476,7 +476,7 @@ class ContinualLearner:
         Returns:
             dict with path, soul_name, steps, loss, and file_size
         """
-        from domains.training.slonet import export_to_sou
+        from domain.training._internal.slonet import export_to_sou
         safe = self.soul_name.lower().replace(" ", "_")[:32]
         step = self.train_steps_completed
         name = name or f"learner-{safe}-step-{step}"

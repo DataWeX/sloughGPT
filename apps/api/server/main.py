@@ -720,14 +720,7 @@ if __name__ == "__main__":
         ]
 
     try:
-        import sys as _sys
-        _sys.stderr.write(f"[DEBUG] uvicorn.run host={uvicorn_kw.get('host')} port={uvicorn_kw.get('port')}\n")
-        _sys.stderr.flush()
         uvicorn.run(**uvicorn_kw)
-
-        uvicorn.run(**uvicorn_kw)
-        _sys.stderr.write("[DEBUG] uvicorn.run returned\n")
-        _sys.stderr.flush()
     except KeyboardInterrupt:
         logger.info("Interrupted by user", extra={"tag": "START"})
     except Exception as e:

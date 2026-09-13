@@ -65,7 +65,7 @@ async def maintenance_tick() -> Optional[str]:
         logger.warning("Memory maintenance archive prune failed: %s", e,
                        extra={"tag": "INFRA"})
     try:
-        from domains.infrastructure.task_queue import get_task_queue
+        from domain.infrastructure._internal.task_queue import get_task_queue
         task_id = await submit_memory_consolidate(queue=get_task_queue())
         logger.info("Memory maintenance enqueued consolidate task %s", task_id,
                     extra={"tag": "INFRA"})

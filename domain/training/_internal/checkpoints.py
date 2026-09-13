@@ -70,7 +70,7 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
 
         if meta is None and fp.suffix == ".slo":
             try:
-                from domains.inference.slo_format import SouParser
+                from domain.inference._internal.slo_format import SouParser
                 profile = SouParser.parse(fp.read_text(encoding="utf-8"))
                 meta = {
                     "soul_name": profile.name,
@@ -225,8 +225,8 @@ async def delete_checkpoint(name: str) -> list[str]:
 
 
 async def load_checkpoint(name: str) -> dict:
-    from domains.models.provider import SloTransformerProvider, register_provider
-    from domains.training.slonet import import_from_sou
+    from domain.models._internal.provider import SloTransformerProvider, register_provider
+    from domain.training._internal.slonet import import_from_sou
 
     cp = await asyncio.to_thread(find_checkpoint, name)
     if cp is None:
@@ -313,7 +313,7 @@ async def export_checkpoint_mobile(name: str) -> dict:
     import base64
 
     import numpy as np
-    from domains.training.slonet import import_from_sou
+    from domain.training._internal.slonet import import_from_sou
 
     def _find_ckpt():
         for d in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR):

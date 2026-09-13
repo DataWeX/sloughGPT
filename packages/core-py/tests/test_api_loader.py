@@ -3,7 +3,7 @@
 import os
 import pytest
 from unittest.mock import patch, MagicMock
-from domains.training.huggingface.api_loader import (
+from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
     HuggingFaceAPILoader,
     HFInferenceClient,
@@ -533,7 +533,7 @@ class TestAliases:
         assert result == "result"
 
     def test_module_all(self):
-        import domains.training.huggingface.api_loader as mod
+        import domain.training._internal.huggingface.api_loader as mod
         assert "HFAPIConfig" in mod.__all__
         assert "HuggingFaceAPILoader" in mod.__all__
         assert "HFInferenceClient" in mod.__all__
@@ -542,9 +542,9 @@ class TestAliases:
         assert "chat_via_api" in mod.__all__
 
     def test_module_all_count(self):
-        import domains.training.huggingface.api_loader as mod
+        import domain.training._internal.huggingface.api_loader as mod
         assert len(mod.__all__) == 6
 
     def test_hf_api_base_url(self):
-        import domains.training.huggingface.api_loader as mod
+        import domain.training._internal.huggingface.api_loader as mod
         assert "huggingface.co" in mod.HF_API_BASE

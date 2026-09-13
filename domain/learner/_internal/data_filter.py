@@ -36,7 +36,7 @@ def _get_collection(db_path: Optional[str] = None):
         return _collection
     from mogdb import MogDB
     if db_path is None:
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "data_filter_mogdb")
     _db = MogDB(db_path)

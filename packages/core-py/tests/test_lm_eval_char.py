@@ -10,7 +10,7 @@ import math
 import numpy as np
 import pytest
 
-import domains.training.lm_eval_char as ev
+import domain.training._internal.lm_eval_char as ev
 from domains.models import SloughGPTModel
 
 VOCAB = 64

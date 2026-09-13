@@ -536,8 +536,8 @@ class KnowledgeMemory:
         if vector_store is not None:
             self._vector_store = vector_store
         else:
-            from domains.inference.vector_store import InMemoryVectorStore
-            from domains.infrastructure.embedding_service import get_embedding_service
+            from domain.inference._internal.vector_store import InMemoryVectorStore
+            from domain.infrastructure._internal.embedding_service import get_embedding_service
             dim = get_embedding_service().dimension
             self._vector_store = InMemoryVectorStore(dimension=dim)
             try:
@@ -562,13 +562,13 @@ class KnowledgeMemory:
             logger.warning("Failed to initialize MogDB for knowledge: %s, using JSON fallback", e)
 
     def _zero_vec(self) -> list[float]:
-        from domains.infrastructure.embedding_service import get_embedding_service
+        from domain.infrastructure._internal.embedding_service import get_embedding_service
         return [0.0] * get_embedding_service().dimension
 
     def _get_embedding(self, text: str) -> list[float]:
         if self._embed_fn:
             return self._embed_fn(text)
-        from domains.infrastructure.embedding_service import get_embedding_service
+        from domain.infrastructure._internal.embedding_service import get_embedding_service
         return get_embedding_service().embed(text)
 
     # ---- persistence -------------------------------------------------------
@@ -686,7 +686,7 @@ class KnowledgeMemory:
             return
 
         try:
-            from domains.inference.vector_store import VectorEntry
+            from domain.inference._internal.vector_store import VectorEntry
             expected_dim = self._vector_store.dimension
             entries = []
             skipped = 0
@@ -750,7 +750,7 @@ class KnowledgeMemory:
                 return False
         try:
             vec = self._get_embedding(fact.content)
-            from domains.inference.vector_store import VectorEntry
+            from domain.inference._internal.vector_store import VectorEntry
             metadata = {
                 "topic": fact.topic,
                 "source": fact.source,
@@ -806,7 +806,7 @@ class KnowledgeMemory:
         if vectors is not None and len(vectors) != len(facts):
             raise ValueError("vectors must be aligned with facts")
 
-        from domains.inference.vector_store import VectorEntry
+        from domain.inference._internal.vector_store import VectorEntry
         if vectors is None:
             vectors = [self._get_embedding(f.content) for f in facts]
 
@@ -1145,7 +1145,7 @@ class KnowledgeMemory:
                 if old_hash and old_hash in self._visited:
                     self._visited.discard(old_hash)
                 self._visited.add(new_hash)
-            from domains.inference.vector_store import VectorEntry
+            from domain.inference._internal.vector_store import VectorEntry
             meta = dict(target.metadata)
             meta["content_hash"] = new_hash
             if topic is not None:
@@ -1216,7 +1216,7 @@ class KnowledgeIngestor:
 
     def __init__(self, memory: Optional[KnowledgeMemory] = None, filter_instance=None):
         self.memory = memory or KnowledgeMemory()
-        from domains.learner.data_filter import get_data_filter
+        from domain.learner._internal.data_filter import get_data_filter
         self.filter = filter_instance or get_data_filter()
         self._feeds: list[FeedSubscription] = self._load_feeds()
         self._lock = threading.RLock()

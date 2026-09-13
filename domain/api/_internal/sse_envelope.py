@@ -29,7 +29,7 @@ Token streaming shortcut:
     An event with status=complete signals end of stream.
 
 Usage in routers:
-    from domains.api.sse_envelope import sse_event, SSEEnvelope
+    from domain.api._internal.sse_envelope import sse_event, SSEEnvelope
 
     yield sse_event(
         stream="auto-train",

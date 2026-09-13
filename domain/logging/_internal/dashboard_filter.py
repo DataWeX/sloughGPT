@@ -26,7 +26,7 @@ import logging
 import re
 from typing import Optional
 
-from domains.infrastructure.event_buffer import get_event_buffer
+from domain.infrastructure._internal.event_buffer import get_event_buffer
 
 logger = logging.getLogger(__name__)
 

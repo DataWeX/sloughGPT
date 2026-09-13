@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 from numpy.lib.stride_tricks import sliding_window_view
 
-from domains.training.gpu import accelerator as acc
+from domain.training._internal.gpu import accelerator as acc
 
 
 _CUPY_AVAILABLE = importlib.util.find_spec("cupy") is not None

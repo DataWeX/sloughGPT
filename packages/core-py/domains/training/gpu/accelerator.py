@@ -4,7 +4,7 @@ Supports Metal (macOS), CUDA (NVIDIA), and CPU fallback.
 All tensors stay as numpy arrays backed by GPU buffers when available.
 
 Usage:
-    from domains.training.gpu.accelerator import get_accelerator
+    from domain.training._internal.gpu.accelerator import get_accelerator
 
     acc = get_accelerator()          # auto-detect best backend
     result = acc.matmul(a, b)        # GPU-accelerated matmul

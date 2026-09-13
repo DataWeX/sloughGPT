@@ -682,7 +682,7 @@ class _CPUBackend(_Accelerator):
                 return n
             # Try ResourceManager first, then cpu count - 1
             try:
-                from domains.infrastructure.resource_manager import get_resource_manager
+                from domain.infrastructure._internal.resource_manager import get_resource_manager
                 n = get_resource_manager().omp_num_threads
             except Exception as e:
                 logger.debug("ResourceManager thread count failed: %s", e)
@@ -788,7 +788,7 @@ class _MetalBackend(_Accelerator):
 
     def is_available(self) -> bool:
         try:
-            from domains.infrastructure.ml_types import _mps_available
+            from domain.infrastructure._internal.ml_types import _mps_available
             return _mps_available()
         except Exception as e:
             logger.debug("Metal availability check failed: %s", e)

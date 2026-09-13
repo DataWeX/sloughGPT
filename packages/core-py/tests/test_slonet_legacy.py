@@ -2202,7 +2202,7 @@ class TestSloTransformerNoSoul:
 
 class TestGetAcceleratorOldBackendFailure:
     def test_both_backends_fail_returns_none(self, monkeypatch):
-        import domains.training.gpu.accelerator as _old_acc_mod
+        import domain.training._internal.gpu.accelerator as _old_acc_mod
         monkeypatch.setattr(slonet, "_ACCELERATOR", None)
         monkeypatch.setattr(
             _old_acc_mod,

@@ -1200,7 +1200,7 @@ class TestMultimodalManager:
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
         monkeypatch.setattr(MultimodalManager, "_pretrain_engine", lambda self, **kw: 0.0)
-        import domains.models.provider as provider_mod
+        import domain.models._internal.provider as provider_mod
         def boom(*a, **kw):
             raise RuntimeError("no provider")
         monkeypatch.setattr(provider_mod, "register_provider", boom)

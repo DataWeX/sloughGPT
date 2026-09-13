@@ -12,7 +12,7 @@ Supports passing ``error_code`` and ``tag`` via ``extra``::
 Usage::
 
     import logging
-    from domains.logging import ConsoleLogger, BridgeHandler
+    from domain.logging import ConsoleLogger, BridgeHandler
 
     log = ConsoleLogger("slo", level=LogLevel.DEBUG)
     handler = BridgeHandler(log)

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import domains.ops.wandb_server as ws
+import domain.ops._internal.wandb_server as ws
 from domain.infrastructure._internal.config import get_config
 
 

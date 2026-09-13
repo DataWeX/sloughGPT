@@ -240,7 +240,7 @@ class TestSgemmExtended:
         import sys
         if sys.platform != "linux":
             pytest.skip("not Linux")
-        import domains.inference.ops.blas as blas_mod
+        import domain.inference._internal.ops.blas as blas_mod
         _load = blas_mod._load_accelerate()
         assert blas_mod._unavailable is True
 
@@ -392,7 +392,7 @@ class TestIsAvailable:
         assert r1 == r2
 
     def test_cached_result_matches(self):
-        import domains.inference.ops.blas as blas_mod
+        import domain.inference._internal.ops.blas as blas_mod
         first = is_available()
         if blas_mod._unavailable:
             assert first is False

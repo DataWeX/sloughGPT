@@ -12,7 +12,7 @@ with a single entry point that configures:
 
 Usage::
 
-    from domains.logging.config import setup_logging
+    from domain.logging._internal.config import setup_logging
 
     # At startup (once):
     setup_logging()  # reads SLO_LOG_LEVEL, SLO_LOG_FORMAT, SLO_LOG_DIR env vars
@@ -778,7 +778,7 @@ def _create_file_handler(
 def _install_output_buffer_bridge(root: logging.Logger) -> Optional[Any]:
     """Install the OutputBuffer log handler if available."""
     try:
-        from domains.infrastructure.output_buffer import install_log_bridge, install_stdio_bridge
+        from domain.infrastructure._internal.output_buffer import install_log_bridge, install_stdio_bridge
         buf_handler = install_log_bridge()
         install_stdio_bridge()
         return buf_handler
@@ -830,7 +830,7 @@ def setup_logging(
         else:
             # Default: logs/ relative to repo root
             try:
-                from domains.shared import find_repo_root
+                from domain.shared import find_repo_root
                 repo = find_repo_root(Path(__file__).resolve())
                 log_path = repo / "logs"
             except Exception as e:
@@ -881,7 +881,7 @@ def setup_logging(
 
     # Dashboard event buffer filter (captures tagged events for CLI monitor)
     try:
-        from domains.logging.dashboard_filter import DashboardFilter
+        from domain.logging._internal.dashboard_filter import DashboardFilter
         root.addFilter(DashboardFilter())
     except Exception as exc:
         print(f"Warning: DashboardFilter unavailable: {exc}", file=sys.stderr)

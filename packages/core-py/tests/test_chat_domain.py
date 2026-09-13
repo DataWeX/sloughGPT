@@ -111,7 +111,7 @@ class TestChatDomain:
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = "Hello there!"
 
-        with patch("domains.models.provider.get_provider", return_value=mock_provider):
+        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
             resp = await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
                 model="gpt2",
@@ -123,7 +123,7 @@ class TestChatDomain:
     @pytest.mark.asyncio
     async def test_respond_no_provider(self):
         domain = ChatDomain()
-        with patch("domains.models.provider.get_provider", return_value=None):
+        with patch("domain.models._internal.provider.get_provider", return_value=None):
             resp = await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
             )
@@ -135,7 +135,7 @@ class TestChatDomain:
         mock_provider = AsyncMock()
         mock_provider.chat.side_effect = asyncio.TimeoutError()
 
-        with patch("domains.models.provider.get_provider", return_value=mock_provider):
+        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
             resp = await domain.respond(
                 messages=[{"role": "user", "content": "hi"}],
             )
@@ -167,7 +167,7 @@ class TestSingleton:
 
     def test_get_returns_same(self):
         with patch("domains.chat.domain.ChatDomain"):
-            import domains.chat.domain as mod
+            import domain.chat._internal.domain as mod
             mod._chat_domain = None
             d1 = get_chat_domain()
             d2 = get_chat_domain()

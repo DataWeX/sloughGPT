@@ -95,7 +95,7 @@ class SessionKVManager:
                 self.kv_states.pop(sid, None)
                 self.kv_last_access.pop(sid, None)
             if stale:
-                from domains.infrastructure.structured_log import StructuredLogger
+                from domain.infrastructure._internal.structured_log import StructuredLogger
                 logger = StructuredLogger("slo.inference.kv_cache")
                 logger.info(
                     "Evicted %d stale KV sessions (TTL=%.0fs)",
@@ -123,7 +123,7 @@ class SessionKVManager:
         lru_id = min(evictable, key=evictable.get)
         self.kv_states.pop(lru_id, None)
         self.kv_last_access.pop(lru_id, None)
-        from domains.infrastructure.structured_log import StructuredLogger
+        from domain.infrastructure._internal.structured_log import StructuredLogger
         logger = StructuredLogger("slo.inference.kv_cache")
         logger.info(
             "Evicted LRU session %s (max=%d)",

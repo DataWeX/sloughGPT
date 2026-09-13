@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from domains.training.huggingface.local_loader import (
+from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,
     HuggingFaceLocalLoader,
 )

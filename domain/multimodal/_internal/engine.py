@@ -14,7 +14,7 @@ import numpy as np
 
 logger = logging.getLogger("slo.multimodal.engine")
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloLinear,
     SloEmbedding, SloLayerNorm, SloTransformerBlock, SloCrossAttention,
     SloMultiHeadAttention, SloFeedForward, SloRMSNorm, SloDropout, SloLayer,
@@ -112,7 +112,7 @@ class MultimodalEngine:
 
     @property
     def capabilities(self):
-        from domains.models.provider import ModelCapabilities
+        from domain.models._internal.provider import ModelCapabilities
         return ModelCapabilities(chat=True, streaming=False, embedding=True, vision=True)
 
     def _extract_images(self, messages: list) -> list:

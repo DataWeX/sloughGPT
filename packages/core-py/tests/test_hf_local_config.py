@@ -1,6 +1,6 @@
 """Tests for domains.training.huggingface.local_loader — HFLocalConfig."""
 
-from domains.training.huggingface.local_loader import (
+from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,
     HuggingFaceLocalLoader,
     HuggingFaceLocalClient,

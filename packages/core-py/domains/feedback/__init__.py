@@ -12,6 +12,7 @@ from domain.feedback import (
     ResponseTracker,
     get_response_tracker,
 )
+from domain.feedback._internal.workflow import get_feedback_workflow
 
 __all__ = [
     "FeedbackDB",
@@ -24,4 +25,5 @@ __all__ = [
     "get_meta_weight_manager",
     "ResponseTracker",
     "get_response_tracker",
+    "get_feedback_workflow",
 ]

@@ -25,7 +25,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from domains.shared import find_repo_root, find_server_python
+from domain.shared import find_repo_root, find_server_python
 
 logger = logging.getLogger("slo.shell.runtime")
 
@@ -193,7 +193,7 @@ class APIServerProcess:
         def _log_stderr():
             if _shared_proc and _shared_proc.stderr:
                 try:
-                    from domains.shell.log_buffer import get_log_buffer, LogEntry
+                    from domain.shell._internal.log_buffer import get_log_buffer, LogEntry
                     buf = get_log_buffer()
                     for line in _shared_proc.stderr:
                         stripped = line.rstrip()

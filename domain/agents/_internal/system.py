@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Any
 
 from domain.infrastructure._internal.errors import AppError
 from domain.agents._internal.agents import Agent, AgentConfig, ToolCapability, get_agent
-from domains.infrastructure.repository import FileRepository, JsonSerializer
+from domain.infrastructure._internal.repository import FileRepository, JsonSerializer
 
 logger = logging.getLogger("slo.agents")
 

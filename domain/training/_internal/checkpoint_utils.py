@@ -15,11 +15,11 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-from domains.training.slonet import load_checkpoint_npz as _load_npz
-from domains.training.slonet import save_checkpoint_npz as _save_npz
+from domain.training._internal.slonet import load_checkpoint_npz as _load_npz
+from domain.training._internal.slonet import save_checkpoint_npz as _save_npz
 
 try:
-    from domains.models import SloughGPTModel
+    from domain.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):
     SloughGPTModel = None  # type: ignore[assignment,misc]
 

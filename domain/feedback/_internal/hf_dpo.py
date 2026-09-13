@@ -18,7 +18,7 @@ import numpy as np
 
 logger = logging.getLogger("slo.feedback.hf_dpo")
 
-from domains.feedback.database import get_feedback_db
+from domain.feedback._internal.database import get_feedback_db
 
 DPO_BETA = 0.1
 DEFAULT_LR = 1e-4
@@ -139,7 +139,7 @@ class HFDPOTrainer:
         """Sum of per-token log-probabilities (numpy, no autograd graph)."""
         if len(ids) == 0:
             return 0.0
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
 
         logits = self.model.forward(Tensor(np.array(ids, dtype=np.int64).reshape(1, -1)))
         if isinstance(logits, tuple):
@@ -215,7 +215,7 @@ class HFDPOTrainer:
 
     def _train_slonet(self, pairs: List[Dict], t0: float) -> Dict:
         """Real DPO preference gradient updates on the SloNet model."""
-        from domains.training.slonet import Tensor, SloSGD, cross_entropy
+        from domain.training._internal.slonet import Tensor, SloSGD, cross_entropy
 
         model = self.model
         vocab_size = getattr(model, "vocab_size", None)
@@ -292,7 +292,7 @@ class HFDPOTrainer:
 
     def _forward_logprobs(self, ids: np.ndarray):
         """Sum of per-token log-probabilities as a differentiable Tensor."""
-        from domains.training.slonet import Tensor, cross_entropy
+        from domain.training._internal.slonet import Tensor, cross_entropy
 
         logits = self.model.forward(Tensor(ids.reshape(1, -1)))
         if isinstance(logits, tuple):

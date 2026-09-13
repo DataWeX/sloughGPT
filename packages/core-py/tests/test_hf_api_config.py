@@ -1,6 +1,6 @@
 """Tests for domains.training.huggingface.api_loader — HFAPIConfig."""
 
-from domains.training.huggingface.api_loader import (
+from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
     HuggingFaceAPILoader,
     HFInferenceClient,

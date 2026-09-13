@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from domains.training.huggingface.client import (
+from domain.training._internal.huggingface.client import (
     HFClient, get_model_memory, list_models,
 )
 
@@ -382,7 +382,7 @@ class TestConvenienceFunctions:
             mock_instance = MagicMock()
             mock_instance.return_value = "generated text"
             MockClient.return_value = mock_instance
-            from domains.training.huggingface.client import generate
+            from domain.training._internal.huggingface.client import generate
             result = generate("prompt", model="gpt2")
             MockClient.assert_called_once_with("gpt2", mode="api")
             mock_instance.assert_called_once_with("prompt")
@@ -392,7 +392,7 @@ class TestConvenienceFunctions:
             mock_instance = MagicMock()
             mock_instance.chat.return_value = "chat reply"
             MockClient.return_value = mock_instance
-            from domains.training.huggingface.client import chat
+            from domain.training._internal.huggingface.client import chat
             msgs = [{"role": "user", "content": "hi"}]
             result = chat(msgs, model="gpt2")
             MockClient.assert_called_once_with("gpt2", mode="api")
@@ -403,7 +403,7 @@ class TestConvenienceFunctions:
             mock_instance = MagicMock()
             mock_instance.return_value = "output"
             MockClient.return_value = mock_instance
-            from domains.training.huggingface.client import generate
+            from domain.training._internal.huggingface.client import generate
             generate("prompt")
             MockClient.assert_called_once_with(
                 "meta-llama/Llama-2-7b-chat-hf", mode="api"
@@ -414,7 +414,7 @@ class TestConvenienceFunctions:
             mock_instance = MagicMock()
             mock_instance.chat.return_value = "reply"
             MockClient.return_value = mock_instance
-            from domains.training.huggingface.client import chat
+            from domain.training._internal.huggingface.client import chat
             chat([{"role": "user", "content": "hi"}])
             MockClient.assert_called_once_with(
                 "meta-llama/Llama-2-7b-chat-hf", mode="api"
@@ -425,7 +425,7 @@ class TestConvenienceFunctions:
             mock_instance = MagicMock()
             mock_instance.return_value = "text output"
             MockClient.return_value = mock_instance
-            from domains.training.huggingface.client import generate
+            from domain.training._internal.huggingface.client import generate
             result = generate("prompt")
             assert isinstance(result, str)
 
@@ -434,6 +434,6 @@ class TestConvenienceFunctions:
             mock_instance = MagicMock()
             mock_instance.chat.return_value = "chat output"
             MockClient.return_value = mock_instance
-            from domains.training.huggingface.client import chat
+            from domain.training._internal.huggingface.client import chat
             result = chat([{"role": "user", "content": "hi"}])
             assert isinstance(result, str)

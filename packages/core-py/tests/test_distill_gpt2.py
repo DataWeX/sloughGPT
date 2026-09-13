@@ -839,7 +839,7 @@ class TestDistillGpt2ToSlo:
                 super().__init__(5)
                 self.metadata = {"epoch": 1, "step": 5, "best_loss": 0.25}
 
-        import domains.training.slonet as slonet
+        import domain.training._internal.slonet as slonet
         monkeypatch.setattr(slonet, "import_from_sou", lambda p: _ResumeStudent())
         monkeypatch.setattr(
             dg, "export_to_sou",
@@ -863,7 +863,7 @@ class TestDistillGpt2ToSlo:
         ckpt.write_text("data")
         exported = {}
 
-        import domains.training.slonet as slonet
+        import domain.training._internal.slonet as slonet
         monkeypatch.setattr(slonet, "import_from_sou", lambda p: _StubSloTransformer(5))
         monkeypatch.setattr(
             dg, "export_to_sou",

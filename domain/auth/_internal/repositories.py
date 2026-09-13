@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any
 
-from domains.auth.models import (
+from domain.auth._internal.models import (
     Role,
     User,
     UserRole,

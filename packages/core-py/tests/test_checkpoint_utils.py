@@ -12,7 +12,7 @@ import textwrap
 import numpy as np
 import pytest
 
-import domains.training.checkpoint_utils as cu
+import domain.training._internal.checkpoint_utils as cu
 from domains.models import SloughGPTModel
 
 

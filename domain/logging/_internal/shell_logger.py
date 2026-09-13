@@ -6,7 +6,7 @@ for in-terminal display.
 
 Usage::
 
-    from domains.logging import ShellLogger, LogLevel
+    from domain.logging import ShellLogger, LogLevel
 
     log = ShellLogger("slo.shell")
     log.info("model loaded", model="gpt2")

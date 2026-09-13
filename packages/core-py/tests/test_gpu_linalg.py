@@ -1,7 +1,7 @@
 """Tests for domains.training.gpu.accelerator — pure-numpy linear algebra functions."""
 
 import numpy as np
-from domains.training.gpu.accelerator import (
+from domain.training._internal.gpu.accelerator import (
     cholesky, solve_triangular, solve_cholesky, dominant_eigen,
 )
 

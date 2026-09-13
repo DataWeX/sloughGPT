@@ -440,7 +440,7 @@ class TestBlasInternals:
         assert first is second
 
     def test_load_accelerate_when_unavailable(self):
-        import domains.inference.ops.blas as blas_mod
+        import domain.inference._internal.ops.blas as blas_mod
         old = blas_mod._accelerate
         old_unavail = blas_mod._unavailable
         try:
@@ -453,7 +453,7 @@ class TestBlasInternals:
             blas_mod._unavailable = old_unavail
 
     def test_load_accelerate_cache_hit(self):
-        import domains.inference.ops.blas as blas_mod
+        import domain.inference._internal.ops.blas as blas_mod
         old = blas_mod._accelerate
         old_unavail = blas_mod._unavailable
         try:

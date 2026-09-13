@@ -6,7 +6,7 @@ quality, sync status, and timestamp.
 
 Usage::
 
-    from domains.training.mobile_training_store import get_training_store
+    from domain.training._internal.mobile_training_store import get_training_store
 
     store = get_training_store()
     store.add_pair("hello", "hi there", "s1", quality=1)
@@ -20,7 +20,7 @@ import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.mobile_store")
 

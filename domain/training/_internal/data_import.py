@@ -681,7 +681,7 @@ class HuggingFaceImporter:
     def search_datasets(self, query: str, limit: int = 10) -> List[Dict]:
         """Search HuggingFace datasets via the Hub REST API."""
         try:
-            from domains.infrastructure.hf_hub import fetch_dataset_search
+            from domain.infrastructure._internal.hf_hub import fetch_dataset_search
         except ImportError:
             logger.warning("downcraft not available — dataset search disabled",
                 extra={"tag": "TRAIN"},)

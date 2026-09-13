@@ -8,7 +8,7 @@ import os
 import threading
 from typing import Any, Callable, Dict, Optional
 
-from domains.infrastructure.config import get_config
+from domain.infrastructure._internal.config import get_config
 
 logger = logging.getLogger("slo.wandb.server")
 
@@ -20,7 +20,7 @@ _inference_tokens_sum = 0.0
 
 def record_inference_call(latency_s: float, approx_tokens: float) -> None:
     """Accumulate inference stats for the next W&B flush (no-op if server W&B disabled)."""
-    from domains.training.wandb_helpers import wandb_server_enabled_from_env
+    from domain.training._internal.wandb_helpers import wandb_server_enabled_from_env
 
     if not wandb_server_enabled_from_env():
         return
@@ -58,7 +58,7 @@ def _wandb_log_payload(payload: Dict[str, Any], step: int) -> None:
 def _wandb_init_server_run() -> None:
     import wandb
 
-    from domains.training.wandb_helpers import default_wandb_project
+    from domain.training._internal.wandb_helpers import default_wandb_project
 
     cfg = get_config().tracking
     wandb.init(
@@ -91,7 +91,7 @@ async def start_wandb_server_background(
 
     ``extra_metrics`` is called in a worker thread each flush (e.g. psutil host snapshot aligned with ``GET /info``).
     """
-    from domains.training.wandb_helpers import wandb_server_enabled_from_env
+    from domain.training._internal.wandb_helpers import wandb_server_enabled_from_env
 
     if not wandb_server_enabled_from_env():
         return None

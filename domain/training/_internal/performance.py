@@ -17,7 +17,7 @@ def get_optimal_device() -> str:
     Delegates to ``ml_types.auto_device()`` — platform-based detection
     (MPS via Apple Silicon, CUDA via CuPy) with no torch import.
     """
-    from domains.infrastructure.ml_types import auto_device
+    from domain.infrastructure._internal.ml_types import auto_device
     return auto_device()
 
 

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import logging
 
 from mogdb import MogDB
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.feedback.per_user_lora")
 
@@ -589,7 +589,7 @@ class PerUserLoRAStore:
         # Run eval if enabled
         if self.run_eval:
             try:
-                from domains.feedback.lora_eval import get_lora_evaluator
+                from domain.feedback._internal.lora_eval import get_lora_evaluator
 
                 evaluator = get_lora_evaluator()
                 if not evaluator.available():

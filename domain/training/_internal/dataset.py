@@ -47,7 +47,7 @@ class TrainingDataset:
 
     def _build(self) -> None:
         """Chunk source text and index into vector store."""
-        from domains.inference.vector_store import (
+        from domain.inference._internal.vector_store import (
             InMemoryVectorStore,
             VectorEntry,
             simple_embed,
@@ -105,7 +105,7 @@ class TrainingDataset:
         Returns:
             Concatenated relevant passages, or empty string.
         """
-        from domains.inference.vector_store import simple_embed
+        from domain.inference._internal.vector_store import simple_embed
 
         if self.store is None or self.store.count_sync() == 0:
             return ""

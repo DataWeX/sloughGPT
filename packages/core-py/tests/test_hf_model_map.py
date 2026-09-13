@@ -1,6 +1,6 @@
 """Tests for domains.training.huggingface.model_map — ModelSize, HFModelInfo, lookup functions."""
 
-from domains.training.huggingface.model_map import (
+from domain.training._internal.huggingface.model_map import (
     ModelSize, HFModelInfo, HF_MODELS, get_model_info, search_models,
     get_recommended_quantization, get_model_requirements, map_to_sloughgpt_config,
 )

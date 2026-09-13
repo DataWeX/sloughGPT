@@ -15,7 +15,7 @@ import json
 import logging
 from pathlib import Path
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.pair_extractor")
 
@@ -141,7 +141,7 @@ def extract_pairs_from_logs(
 
     # Try MogDB first
     try:
-        from domains.feedback.response_tracker import get_response_tracker
+        from domain.feedback._internal.response_tracker import get_response_tracker
         tracker = get_response_tracker()
         if tracker._coll is not None:
             query = {}

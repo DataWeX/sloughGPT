@@ -192,7 +192,7 @@ class NativeEngine:
         if not model_id:
             return None
         try:
-            from domains.infrastructure.morph_tokenizer import MorphTokenizer
+            from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
             return MorphTokenizer.from_pretrained(model_id)
         except Exception as exc:
             logger.warning("could not load tokenizer for %s: %s", model_id, exc,
@@ -500,7 +500,7 @@ class NativeTransformerProvider:
 
     @property
     def capabilities(self):
-        from domains.models.provider import ModelCapabilities
+        from domain.models._internal.provider import ModelCapabilities
         return ModelCapabilities(chat=True, streaming=True, embedding=False, vision=False)
 
     async def chat_stream(self, messages, max_tokens=512, temperature=0.8,

@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from domains.training.huggingface import api_loader
-from domains.training.huggingface.api_loader import (
+from domain.training._internal.huggingface import api_loader
+from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,
     HFInferenceClient,
     HuggingFaceAPILoader,
@@ -18,8 +18,8 @@ from domains.training.huggingface.api_loader import (
     create_api_client,
     generate_via_api,
 )
-from domains.training.huggingface import local_loader
-from domains.training.huggingface.local_loader import (
+from domain.training._internal.huggingface import local_loader
+from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,
     HuggingFaceLocalClient,
     HuggingFaceLocalLoader,
@@ -27,8 +27,8 @@ from domains.training.huggingface.local_loader import (
     generate_local,
     load_model,
 )
-from domains.training.huggingface import model_map
-from domains.training.huggingface.model_map import (
+from domain.training._internal.huggingface import model_map
+from domain.training._internal.huggingface.model_map import (
     HFModelInfo,
     HF_MODELS,
     ModelSize,
@@ -38,7 +38,7 @@ from domains.training.huggingface.model_map import (
     map_to_sloughgpt_config,
     search_models,
 )
-from domains.training.huggingface.client import (
+from domain.training._internal.huggingface.client import (
     HFClient,
     chat,
     generate,

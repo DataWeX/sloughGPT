@@ -53,7 +53,7 @@ class HDMemoryStore:
         """Lazy-load hyperdimensional processor."""
         if self._hyperdim is None:
             try:
-                from domains.soul.quantum import HyperdimensionalProcessor
+                from domain.soul._internal.quantum import HyperdimensionalProcessor
 
                 self._hyperdim = HyperdimensionalProcessor(dim=self.dim)
                 self._initialize_role_vectors()

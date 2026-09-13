@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.shell.commands")
 

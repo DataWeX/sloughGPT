@@ -108,7 +108,7 @@ class MultimodalManager:
 
             # Register as a model provider
             try:
-                from domains.models.provider import register_provider
+                from domain.models._internal.provider import register_provider
                 register_provider("multimodal", self._multimodal_engine)
             except Exception as exc:
                 logger.warning("Failed to register multimodal engine as provider: %s", exc,
@@ -417,7 +417,7 @@ class MultimodalManager:
                 raw_text = ground_truth.strip()
                 result = engine.generate(img_np, max_len=16, temperature=0.8)
                 generated_text = result.text.strip()
-                from domains.feedback.lora_eval import BLEUScorer
+                from domain.feedback._internal.lora_eval import BLEUScorer
                 accuracy = BLEUScorer.score(generated_text, raw_text)
                 self._accuracy_history.append(accuracy)
                 logger.debug("Supervised training: BLEU=%.2f", accuracy)

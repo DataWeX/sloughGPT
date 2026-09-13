@@ -24,6 +24,7 @@ _lazy_imports = {
     "ChatResponse": "domain.chat",
     "ChatDomain": "domain.chat",
     "get_chat_domain": "domain.chat",
+    "domain": "domain.chat._internal",
 }
 
 

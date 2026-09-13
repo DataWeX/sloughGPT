@@ -152,7 +152,7 @@ class TokenBillingService:
         self._load_accounts()
 
     def _load_accounts(self) -> None:
-        from domains.core.database import get_db; db = get_db()
+        from domain.core._internal.database import get_db; db = get_db()
         accounts = db.find("token_accounts", {})
         for acc_data in accounts:
             account = TokenAccount(
@@ -167,7 +167,7 @@ class TokenBillingService:
             self._accounts[account.user_id] = account
 
     def _save_account(self, account: TokenAccount) -> None:
-        from domains.core.database import get_db; db = get_db()
+        from domain.core._internal.database import get_db; db = get_db()
         db.upsert("token_accounts", {"user_id": account.user_id}, account.to_dict())
 
     def get_or_create_account(self, user_id: str) -> TokenAccount:
@@ -207,7 +207,7 @@ class TokenBillingService:
         )
         self._usage.append(record)
 
-        from domains.core.database import get_db; db = get_db()
+        from domain.core._internal.database import get_db; db = get_db()
         db.insert("token_usage", record.to_dict())
         self._save_account(account)
 

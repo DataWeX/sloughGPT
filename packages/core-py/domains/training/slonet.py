@@ -212,7 +212,7 @@ def _get_accelerator():
     except Exception as e:
         logger.debug("slolib GPU accelerator unavailable, trying legacy: %s", e)
     try:
-        from domains.training.gpu.accelerator import get_accelerator as _get_old_acc
+        from domain.training._internal.gpu.accelerator import get_accelerator as _get_old_acc
         _ACCELERATOR = _get_old_acc()
     except Exception as e:
         logger.debug("Legacy GPU accelerator unavailable: %s", e)

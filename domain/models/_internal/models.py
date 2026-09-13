@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional, Tuple, Callable
 import logging
 import numpy as np
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     SloTransformer as SloTransformer,
     Tensor as Tensor,
     SloRMSNorm as SloRMSNorm,
@@ -131,7 +131,7 @@ class ModelLoader:
 
     @classmethod
     def _load_sou(cls, path: str, device: str, **kwargs) -> ModelInterface:
-        from domains.infrastructure.weight_loader import SoulWeightLoader
+        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
 
         loader = SoulWeightLoader(path)
         meta = loader.load_metadata()
@@ -246,7 +246,7 @@ class SloughGPTModel(SloTransformer, ModelInterface):
     def forward(
         self, input_ids, targets=None, **kwargs
     ):
-        from domains.training.slonet import Tensor as SloTensor
+        from domain.training._internal.slonet import Tensor as SloTensor
         logits_t, loss_t = super().forward(input_ids, targets)
         if loss_t is not None:
             if isinstance(loss_t, (np.ndarray, float, np.floating)):
@@ -302,11 +302,11 @@ SloughGPTBlock = SloTransformerBlock
 SwiGLU = SloFeedForward
 
 def rotate_half(x):
-    from domains.training.slonet import _rotate_half
+    from domain.training._internal.slonet import _rotate_half
     return _rotate_half(x)
 
 def apply_rotary_pos_emb(q, k, cos, sin):
-    from domains.training.slonet import _apply_rope
+    from domain.training._internal.slonet import _apply_rope
     return _apply_rope(q, k, cos, sin)
 
 

@@ -6,7 +6,7 @@ monitoring: captures console logs, network requests, performance metrics,
 and error events during navigation.
 
 Usage:
-    from domains.agents.computer_use import ComputerUseAgent
+    from domain.agents._internal.computer_use import ComputerUseAgent
 
     async with ComputerUseAgent() as agent:
         await agent.navigate("/training")

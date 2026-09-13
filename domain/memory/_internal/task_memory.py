@@ -287,7 +287,7 @@ def register_memory_handlers(queue=None) -> None:
     Args:
         queue: target queue; defaults to the global task queue.
     """
-    from domains.infrastructure.task_queue import get_task_queue
+    from domain.infrastructure._internal.task_queue import get_task_queue
     tq = queue or get_task_queue()
     tq.register_handler(TASK_REMEMBER, remember_handler)
     tq.register_handler(TASK_STORE, store_handler)
@@ -302,7 +302,7 @@ def unregister_memory_handlers(queue=None) -> None:
     Args:
         queue: target queue; defaults to the global task queue.
     """
-    from domains.infrastructure.task_queue import get_task_queue
+    from domain.infrastructure._internal.task_queue import get_task_queue
     tq = queue or get_task_queue()
     tq.unregister_handler(TASK_REMEMBER)
     tq.unregister_handler(TASK_STORE)
@@ -330,7 +330,7 @@ async def submit_memory_remember(
     Side effects:
         - enqueues work on the queue; the handler persists facts later.
     """
-    from domains.infrastructure.task_queue import Priority, Task, get_task_queue
+    from domain.infrastructure._internal.task_queue import Priority, Task, get_task_queue
     q = queue or get_task_queue()
     priority = priority if priority is not None else Priority.NORMAL
     task = Task(
@@ -368,7 +368,7 @@ async def submit_memory_store(
     Side effects:
         - enqueues work on the queue; the handler persists the fact later.
     """
-    from domains.infrastructure.task_queue import Priority, Task, get_task_queue
+    from domain.infrastructure._internal.task_queue import Priority, Task, get_task_queue
     q = queue or get_task_queue()
     priority = priority if priority is not None else Priority.NORMAL
     task = Task(
@@ -404,7 +404,7 @@ async def submit_memory_consolidate(
     Side effects:
         - enqueues work on the queue; the handler consolidates later.
     """
-    from domains.infrastructure.task_queue import Priority, Task, get_task_queue
+    from domain.infrastructure._internal.task_queue import Priority, Task, get_task_queue
     q = queue or get_task_queue()
     priority = priority if priority is not None else Priority.NORMAL
     payload: Dict[str, Any] = {}

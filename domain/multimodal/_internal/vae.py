@@ -14,7 +14,7 @@ import logging
 
 logger = logging.getLogger("slo.multimodal.vae")
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     Tensor, SloNet, SloConv2D,
     SloAdam, relu as _relu, sigmoid as _sigmoid,
     tensor as _tensor,

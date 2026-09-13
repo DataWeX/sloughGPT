@@ -57,7 +57,7 @@ class TestSpawnShell:
         assert calls == [{"greeting": "hi"}, "run"]
 
     def test_spawn_shell_default_class_lazy_import(self, monkeypatch):
-        import domains.shell.repl as repl
+        import domain.shell._internal.repl as repl
 
         ran = []
 

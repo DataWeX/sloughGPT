@@ -35,17 +35,17 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 
 if TYPE_CHECKING:
-    from domains.training.tracking import ExperimentTracker
+    from domain.training._internal.tracking import ExperimentTracker
 
 try:
-    from domains.models import SloughGPTModel
+    from domain.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
-from domains.training.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
-from domains.training.lora import LoRAConfig, apply_lora_to_model
-from domains.training.quality_scorer import compute_data_quality
-from domains.training.slonet import load_checkpoint_npz
-from domains.training.trainer_protocol import TrainResult
+from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
+from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
+from domain.training._internal.quality_scorer import compute_data_quality
+from domain.training._internal.slonet import load_checkpoint_npz
+from domain.training._internal.trainer_protocol import TrainResult
 
 logger = logging.getLogger("slo.trainer")
 
@@ -417,7 +417,7 @@ def _load_soul_checkpoint(path: str) -> Optional[Dict[str, Any]]:
         Dict with keys: model_state_dict, step, epoch, optimizer_state_dict (optional),
         scheduler_state_dict (optional), accumulation_step (optional).
     """
-    from domains.inference.slo_format import load_soul
+    from domain.inference._internal.slo_format import load_soul
 
     soul_profile, state_dict = load_soul(path)
     result: Dict[str, Any] = {
@@ -948,7 +948,7 @@ class SloughGPTTrainer:
         # Initialize EWC if enabled (prevents catastrophic forgetting)
         self._ewc = None
         if self.config.use_ewc:
-            from domains.training.ewc import EwcContinualLearner, EWCParameters
+            from domain.training._internal.ewc import EwcContinualLearner, EWCParameters
             ewc_params = EWCParameters(
                 lambda_ewc=self.config.ewc_lambda,
                 num_samples=self.config.ewc_num_samples,
@@ -961,7 +961,7 @@ class SloughGPTTrainer:
 
     def _create_optimizer(self):
         """Create SloAdamW optimizer with decoupled weight decay."""
-        from domains.training.slonet import SloAdamW
+        from domain.training._internal.slonet import SloAdamW
 
         return SloAdamW(
             lr=self.config.learning_rate,
@@ -970,7 +970,7 @@ class SloughGPTTrainer:
 
     def _create_scheduler(self):
         """Create learning rate scheduler with adaptive defaults."""
-        from domains.training.lr_schedulers import create_scheduler
+        from domain.training._internal.lr_schedulers import create_scheduler
 
         if self.config.max_steps:
             total_steps = self.config.max_steps
@@ -1053,7 +1053,7 @@ class SloughGPTTrainer:
 
         # Record loss to training monitor
         try:
-            from domains.training.monitor import get_training_monitor
+            from domain.training._internal.monitor import get_training_monitor
             monitor = get_training_monitor()
             monitor.record_loss(loss_val, epoch=getattr(self, "current_epoch", 0), step=self.global_step)
         except Exception:
@@ -1090,7 +1090,7 @@ class SloughGPTTrainer:
 
                 # Record gradient norm to training monitor
                 try:
-                    from domains.training.monitor import get_training_monitor
+                    from domain.training._internal.monitor import get_training_monitor
                     monitor = get_training_monitor()
                     monitor.record_gradient(total_norm, epoch=getattr(self, "current_epoch", 0), step=self.global_step)
                 except Exception:
@@ -1398,7 +1398,7 @@ class SloughGPTTrainer:
 
         # Record dashboard event
         try:
-            from domains.infrastructure.event_buffer import get_event_buffer
+            from domain.infrastructure._internal.event_buffer import get_event_buffer
             epochs = self.config.epochs
             max_steps = self.config.max_steps or "unlimited"
             get_event_buffer().record("TRAIN", f"started epochs={epochs} max_steps={max_steps}")
@@ -1499,7 +1499,7 @@ class SloughGPTTrainer:
 
                     # Check convergence
                     try:
-                        from domains.training.monitor import get_training_monitor
+                        from domain.training._internal.monitor import get_training_monitor
                         monitor = get_training_monitor()
                         monitor.check_convergence(epoch=getattr(self, "current_epoch", 0))
                     except Exception:
@@ -1629,7 +1629,7 @@ class SloughGPTTrainer:
 
         # Record dashboard event
         try:
-            from domains.infrastructure.event_buffer import get_event_buffer
+            from domain.infrastructure._internal.event_buffer import get_event_buffer
             final_loss_str = f"{final_loss:.4f}" if final_loss is not None else "n/a"
             get_event_buffer().record("TRAIN", f"completed step={self.global_step} loss={final_loss_str}")
         except Exception as exc:
@@ -1645,7 +1645,7 @@ class SloughGPTTrainer:
 
         # Record training outcome for adaptive learning
         try:
-            from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+            from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
             import time as _outcome_time
             outcome = TrainingOutcome(
                 run_id=f"train_{int(_outcome_time.time() * 1000)}",
@@ -1869,8 +1869,8 @@ class SloughGPTTrainer:
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
-        from domains.inference import create_soul_profile, save_soul
-        from domains.inference.slo_format import PersonalityCore
+        from domain.inference import create_soul_profile, save_soul
+        from domain.inference._internal.slo_format import PersonalityCore
 
         # Honest metadata: only claim a loss that was actually observed. A save
         # before any training step has neither a train loss nor an eval loss,
@@ -1957,7 +1957,7 @@ class SloughGPTTrainer:
 
         # Auto-compress checkpoint into pugqeep Points for efficient inference
         try:
-            from domains.training.executor import compress_checkpoint
+            from domain.training._internal.executor import compress_checkpoint
             result = compress_checkpoint(output_path, n_clusters=16)
             if result:
                 logger.info(

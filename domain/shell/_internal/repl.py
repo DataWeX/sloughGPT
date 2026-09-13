@@ -303,7 +303,7 @@ class ShellREPL(LinuxCommandsMixin):
         self.console = Console(self.io, has_readline=_HAS_READLINE)
 
         # Structured logger — inherit from domains.logging
-        from domains.logging import ShellLogger, LogLevel
+        from domain.logging import ShellLogger, LogLevel
         self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)
 
         # Log buffer — captures infra + API server logs for the console panel
@@ -874,7 +874,7 @@ class ShellREPL(LinuxCommandsMixin):
 
     def _log_ok(self, msg: str, **ctx) -> None:
         """Log a success message (green checkmark)."""
-        from domains.logging import LogLevel
+        from domain.logging import LogLevel
         self.log.emit(self.log._make_record(LogLevel.INFO, msg, ctx))
 
     def _log_warn(self, msg: str, **ctx) -> None:
@@ -2014,7 +2014,7 @@ Examples:
         if not arg:
             # Show current setting
             try:
-                from domains.infrastructure.config import get_config
+                from domain.infrastructure._internal.config import get_config
                 cfg = get_config()
                 current = cfg.features.auto_download
             except Exception:
@@ -2039,7 +2039,7 @@ Examples:
 
         # Update config file
         try:
-            from domains.infrastructure.config import _REPO_ROOT, get_config
+            from domain.infrastructure._internal.config import _REPO_ROOT, get_config
             config_path = _REPO_ROOT / "config" / "defaults.yaml"
             if config_path.exists():
                 with open(config_path) as f:
@@ -2131,7 +2131,7 @@ Examples:
                 self._print(f"  ✗ {result.get('error', 'Unknown error')}")
 
         try:
-            from domains.infrastructure.conversion_tracker import get_tracker
+            from domain.infrastructure._internal.conversion_tracker import get_tracker
             from apps.cli.src.utils.progress import ProgressBar
             import threading
 
@@ -2215,7 +2215,7 @@ Examples:
           events circuit 10    — filter by "circuit", show last 10
         """
         try:
-            from domains.infrastructure.event_bus import get_event_bus
+            from domain.infrastructure._internal.event_bus import get_event_bus
             bus = get_event_bus()
         except Exception:
             self._print("  EventBus not available")
@@ -2460,7 +2460,7 @@ Examples:
             self._print("  Makes model files read-only + drops .nomodeldelete marker")
             return
         try:
-            from domains.infrastructure.model_protector import protect_model
+            from domain.infrastructure._internal.model_protector import protect_model
             result = protect_model(model_id)
             n = len(result["protected"])
             errs = result["errors"]
@@ -2481,7 +2481,7 @@ Examples:
             self._print("  Usage: unprotect <model_id>")
             return
         try:
-            from domains.infrastructure.model_protector import unprotect_model
+            from domain.infrastructure._internal.model_protector import unprotect_model
             result = unprotect_model(model_id)
             n = result["unprotected"]
             errs = result["errors"]
@@ -3282,7 +3282,7 @@ Examples:
 
     def _cmd_agents(self, args: str = "") -> None:
         """Multi-agent orchestration: agents <goal> or agents list."""
-        from domains.agents.multi import get_orchestrator, SpecializedAgent
+        from domain.agents._internal.multi import get_orchestrator, SpecializedAgent
         orch = get_orchestrator()
         parts = args.strip().split(maxsplit=1)
         verb = parts[0].lower() if parts else ""
@@ -3815,7 +3815,7 @@ Examples:
 
     def _format_error(self, e: Exception, cmd: str = "") -> str:
         """Format an exception into a user-friendly error message."""
-        from domains.shell.error import format_error
+        from domain.shell._internal.error import format_error
         return format_error(e, cmd)
 
     def _cmd_boot(self, args: str = "") -> None:
@@ -3934,7 +3934,7 @@ Examples:
         file_path = args.strip() if args else ""
 
         if file_path == "--test" or file_path == "--self-test":
-            from domains.shell.vm import self_test as _vm_self_test
+            from domain.shell._internal.vm import self_test as _vm_self_test
             results = _vm_self_test()
             self._print("  VM Self-Test:")
             for line in results:
@@ -3965,7 +3965,7 @@ Examples:
             return
 
         try:
-            from domains.shell.vm import VMRunner, VMFault
+            from domain.shell._internal.vm import VMRunner, VMFault
             runner = VMRunner(devices=self.os.devices)
             output = runner.assemble_and_run(source)
             for line in output:
@@ -3981,7 +3981,7 @@ Examples:
 
     def _cmd_vmperms(self, args: str = "") -> None:
         """Show x86 VM RBAC permission matrix."""
-        from domains.shell.vm_permissions import Permission, Role, _ROLE_PERMISSIONS
+        from domain.shell._internal.vm_permissions import Permission, Role, _ROLE_PERMISSIONS
         perms = list(Permission)
         roles = [Role.USER, Role.ADMIN, Role.KERNEL]
         col_w = max(len(p.name) for p in perms) + 2
@@ -4159,8 +4159,8 @@ nl: db 10
             return
 
         try:
-            from domains.shell.vm import X86VirtualSystem
-            from domains.shell.vm_permissions import Role
+            from domain.shell._internal.vm import X86VirtualSystem
+            from domain.shell._internal.vm_permissions import Role
             vs = X86VirtualSystem()
 
             pid = vs.spawn("user_prog", source)

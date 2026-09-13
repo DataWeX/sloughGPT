@@ -13,16 +13,16 @@ from typing import Optional
 
 logger = logging.getLogger("slo.lr_schedulers")
 
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     LinearWarmupScheduler as SloLinearWarmup,
 )
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     PolynomialDecayScheduler as SloPolynomial,
 )
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     WarmupCosineScheduler as SloWarmupCosine,
 )
-from domains.training.slonet import (
+from domain.training._internal.slonet import (
     create_scheduler as soul_create_scheduler,
 )
 

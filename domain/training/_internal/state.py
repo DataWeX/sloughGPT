@@ -61,7 +61,7 @@ _auto_train_cancel_event: threading.Event | None = None
 _auto_train_pause_event: threading.Event | None = None
 
 try:
-    from domains.infrastructure.pugqeep import PGQ
+    from domain.infrastructure._internal.pugqeep import PGQ
     _auto_train_pgq = PGQ(
         name="auto-train",
         storage_dir=REPO_ROOT / "models" / "auto-training" / ".pgq",

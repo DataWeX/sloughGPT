@@ -347,7 +347,7 @@ class TuiRepl:
         self._history_pos = len(self._cmd_history)
 
         try:
-            from domains.logging.cli_logger import set_cli_terminal
+            from domain.logging._internal.cli_logger import set_cli_terminal
         except ImportError:
             set_cli_terminal = None
         if set_cli_terminal is not None:

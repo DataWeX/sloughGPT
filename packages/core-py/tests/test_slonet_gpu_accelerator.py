@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import numpy as np
-from domains.training.gpu.accelerator import (
+from domain.training._internal.gpu.accelerator import (
     _MetalAccelerator,
     _CUDAAccelerator,
     _CPUAccelerator,

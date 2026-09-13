@@ -511,7 +511,7 @@ class TestSetEngine:
 
 class TestGetChatDomainSingleton:
     def test_returns_same_instance(self):
-        import domains.chat.domain as mod
+        import domain.chat._internal.domain as mod
         original = mod._chat_domain
         mod._chat_domain = None
         try:
@@ -522,7 +522,7 @@ class TestGetChatDomainSingleton:
             mod._chat_domain = original
 
     def test_returns_chat_domain_type(self):
-        import domains.chat.domain as mod
+        import domain.chat._internal.domain as mod
         original = mod._chat_domain
         mod._chat_domain = None
         try:

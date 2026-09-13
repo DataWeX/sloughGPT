@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from domains.infrastructure.entity_repositories import (
+from domain.infrastructure._internal.entity_repositories import (
     KnowledgeEntry,
     KnowledgeRepository,
     FeedState,

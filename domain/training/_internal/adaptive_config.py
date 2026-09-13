@@ -11,7 +11,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+from domain.training._internal.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
 
 logger = logging.getLogger("slo.training.adaptive")
 

@@ -6,7 +6,7 @@ its methods.  The manager owns the singleton ``SloBPE`` or ``SloUnigram``
 instance, handles training, caching, persistence, and integration.
 
 Usage:
-    from domains.training.tokenizer_manager import get_tokenizer_manager
+    from domain.training._internal.tokenizer_manager import get_tokenizer_manager
 
     mgr = get_tokenizer_manager()
     mgr.train(["hello world", "test data"], vocab_size=512, algo="bpe")
@@ -63,7 +63,7 @@ class TokenizerManager:
     def get_tokenizer(self) -> Any:
         """Return the current tokenizer, creating a default one if needed."""
         if self._tokenizer is None:
-            from domains.training.tokenizer import SloBPE
+            from domain.training._internal.tokenizer import SloBPE
             self._tokenizer = SloBPE()
         return self._tokenizer
 
@@ -93,7 +93,7 @@ class TokenizerManager:
             vocab_stats dict from the trained tokenizer
         """
         if algo == "unigram":
-            from domains.training.tokenizer import SloUnigram
+            from domain.training._internal.tokenizer import SloUnigram
             self._tokenizer = SloUnigram(pretokenizer=pretokenizer)
             self._tokenizer.train(
                 texts,
@@ -102,7 +102,7 @@ class TokenizerManager:
                 **algo_kwargs,
             )
         else:
-            from domains.training.tokenizer import SloBPE
+            from domain.training._internal.tokenizer import SloBPE
             self._tokenizer = SloBPE(pretokenizer=pretokenizer)
             self._tokenizer.train(
                 texts,
@@ -221,10 +221,10 @@ class TokenizerManager:
     def from_dict(self, data: dict) -> None:
         algo = data.get(_TOKENIZER_ALGO_KEY, "bpe")
         if algo == "unigram":
-            from domains.training.tokenizer import SloUnigram
+            from domain.training._internal.tokenizer import SloUnigram
             self._tokenizer = SloUnigram.from_dict(data)
         else:
-            from domains.training.tokenizer import SloBPE
+            from domain.training._internal.tokenizer import SloBPE
             self._tokenizer = SloBPE.from_dict(data)
         self._algo = algo
 
@@ -246,7 +246,7 @@ class TokenizerManager:
         if self._tokenizer is not None and self._tokenizer.vocab_size > 0:
             return True
         try:
-            from domains.training.service import get_state
+            from domain.training._internal.service import get_state
             at_state = get_state()
             at_tok = at_state.student_tokenizer
             if at_tok is not None and hasattr(at_tok, "vocab_size") and at_tok.vocab_size > 10:
@@ -264,7 +264,7 @@ class TokenizerManager:
         self._tokenizer = tokenizer
 
     def reset(self) -> None:
-        from domains.training.tokenizer import SloBPE
+        from domain.training._internal.tokenizer import SloBPE
         self._tokenizer = SloBPE()
         self._algo = "bpe"
 

@@ -21,7 +21,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.auto_trainer")
 
@@ -120,7 +120,7 @@ class AutoTrainer:
 
     def _do_train(self) -> bool:
         """Extract pairs and spawn training subprocess."""
-        from domains.training.pair_extractor import (
+        from domain.training._internal.pair_extractor import (
             extract_pairs_from_sessions,
             extract_pairs_from_corpus,
             extract_pairs_from_logs,
@@ -215,8 +215,8 @@ class AutoTrainer:
 
                 # Store pairs in MogDB (with quality scoring)
                 try:
-                    from domains.training.mobile_training_store import get_training_store
-                    from domains.training.quality_scorer import score_batch
+                    from domain.training._internal.mobile_training_store import get_training_store
+                    from domain.training._internal.quality_scorer import score_batch
                     quality_scores = score_batch(pairs)
                     store = get_training_store()
                     store.add_batch([
@@ -264,7 +264,7 @@ class AutoTrainer:
         """Return current auto-trainer status."""
         session_count = len(list(_SESSIONS_DIR.glob("*.json"))) if _SESSIONS_DIR.exists() else 0
         log_count = len(list(_RESPONSE_LOGS_DIR.glob("*.jsonl"))) if _RESPONSE_LOGS_DIR.exists() else 0
-        from domains.training.pair_extractor import count_pairs_in_corpus
+        from domain.training._internal.pair_extractor import count_pairs_in_corpus
         return {
             "enabled": self._thread is not None and self._thread.is_alive(),
             "threshold": self.threshold,

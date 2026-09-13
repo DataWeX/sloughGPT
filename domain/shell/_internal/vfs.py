@@ -3,7 +3,7 @@ Dait Virtual File System — unified I/O abstraction layer.
 
 This module is a thin re-export layer. The canonical implementation lives
 in ``addons.filesystem``. This module exists so that legacy imports like
-``from domains.shell.vfs import VFS`` continue to work.
+``from domain.shell._internal.vfs import VFS`` continue to work.
 """
 
 from __future__ import annotations

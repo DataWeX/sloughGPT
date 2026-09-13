@@ -155,7 +155,7 @@ async def extract_facts_neural(user_msg: str, assistant_msg: str) -> List[str]:
     Returns a list of natural-language facts.
     """
     try:
-        from domains.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure._internal.model_registry import get_model_registry
         registry = get_model_registry()
         if not registry or not registry.list_models():
             return []
@@ -210,9 +210,9 @@ async def extract_and_store(user_msg: str, assistant_msg: str, knowledge_memory=
         if not facts:
             return 0
 
-        from domains.learner.knowledge import KnowledgeFact
+        from domain.learner._internal.knowledge import KnowledgeFact
         if knowledge_memory is None:
-            from domains.learner.knowledge import get_knowledge_memory
+            from domain.learner._internal.knowledge import get_knowledge_memory
             knowledge_memory = get_knowledge_memory()
 
         stored = 0

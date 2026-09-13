@@ -28,7 +28,7 @@ def _get_devices_col(db_path: Optional[str] = None):
     if _devices_col is not None:
         return _devices_col
     if db_path is None:
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "mogdb" / "mobile_notifications")
     from mogdb import MogDB
@@ -42,7 +42,7 @@ def _get_history_col(db_path: Optional[str] = None):
     if _history_col is not None:
         return _history_col
     if db_path is None:
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
         repo = find_repo_root(Path(__file__).resolve())
         db_path = str(repo / "data" / "mogdb" / "mobile_notifications")
     from mogdb import MogDB

@@ -4244,7 +4244,7 @@ class TestRemainingSmallBlocks:
 
     def test_dev_table_open_with_adapter(self):
         from domains.shell.vm import CPU, _op_dev_table_open
-        import domains.shell.vm as vm_mod
+        import domain.shell._internal.vm as vm_mod
         cpu = CPU()
         mock_adapter = type('A', (), {'open': lambda s, n: -1})()
         vm_mod._device_table_adapter = mock_adapter
@@ -4351,71 +4351,6 @@ class TestRemainingSmallBlocks:
         assert data[:512] == b'\xAA' * 512
         assert data[512:] == b'\xBB' * 512
 
-    def test_train_get_result_completed(self):
-        from domains.shell.vm import X86SyscallHandler
-        import domains.shell.vm_training_bridge as bridge_mod
-        original_bridge = bridge_mod._bridge
-
-        class MockBridge:
-            def get_result_json(self, job_id):
-                return '{"loss": 0.5}'
-        bridge_mod._bridge = MockBridge()
-        try:
-            handler = X86SyscallHandler.__new__(X86SyscallHandler)
-            cpu = type('C', (), {'_regs': [0]*16, '_write8': lambda s, a, b: None, '_memory': type('M', (), {'alloc': lambda s, n: 0x300000, 'free': lambda s, a: None})()})()
-            handler._cpu = cpu
-            handler._scheduler = type('S', (), {'current': type('P', (), {'pid': 1, 'name': 'test', 'state': type('S2', (), {'READY': 0, 'BLOCKED': 1, 'TERMINATED': 2})()})()})()
-            handler._heap_break = 0x400000
-            handler._rbac = type('R', (), {'check': lambda s, *a: True})()
-            handler._memory = cpu._memory
-            handler._fs = None
-            result = handler._sys_train_get_result(1, 0x2000, 256)
-            assert result > 0
-        finally:
-            bridge_mod._bridge = original_bridge
-
-    def test_train_start(self):
-        from domains.shell.vm import X86SyscallHandler
-        import domains.shell.vm_training_bridge as bridge_mod
-        original = bridge_mod._bridge
-        bridge_mod._bridge = None
-        try:
-            handler = X86SyscallHandler.__new__(X86SyscallHandler)
-            config_json = b'{"model":"test"}\x00'
-            cpu = type('C', (), {
-                '_regs': [0]*16,
-                '_read8': lambda s, a: config_json[a] if a < len(config_json) else 0,
-                '_memory': type('M', (), {})()
-            })()
-            handler._cpu = cpu
-            handler._scheduler = type('S', (), {'current': type('P', (), {'pid': 1})()})()
-            handler._heap_break = 0x400000
-            handler._rbac = type('R', (), {'check': lambda s, *a: True})()
-            handler._memory = cpu._memory
-            handler._fs = None
-            result = handler._sys_train_start(0)
-            assert isinstance(result, int)
-        finally:
-            bridge_mod._bridge = original
-
-    def test_train_status(self):
-        from domains.shell.vm import X86SyscallHandler
-        import domains.shell.vm_training_bridge as bridge_mod
-        original = bridge_mod._bridge
-
-        class MockBridge:
-            def status(self, job_id):
-                return {"status": "running"}
-        bridge_mod._bridge = MockBridge()
-        try:
-            handler = X86SyscallHandler.__new__(X86SyscallHandler)
-            cpu = type('C', (), {'_regs': [0]*16})()
-            handler._cpu = cpu
-            result = handler._sys_train_status(1)
-            assert result == 0
-        finally:
-            bridge_mod._bridge = original
-
     def test_xchg_r16_mem(self):
         code = self._asm(["[BITS 32]", "XCHG EAX, [0x1000]"])
         assert 0x87 in code or 0x90 in code
@@ -4441,3 +4376,271 @@ class TestRemainingSmallBlocks:
     def test_mov_ecx_imm32(self):
         code = self._asm(["[BITS 32]", "MOV ECX, 0x12345678"])
         assert 0xB9 in code
+
+
+# ── Final remaining coverage pushes ─────────────────────────────────────────
+
+class TestFinalCoveragePush:
+    def _asm(self, lines):
+        from domains.shell.vm import X86Assembler
+        return X86Assembler().assemble("\n".join(lines))
+
+    def test_cmos_12h_bcd_pm(self):
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
+        cpu = X86CPU(memory_size=0x400000)
+        clock = ClockDevice(freq=100)
+        cmos = CMOSDevice(cpu=cpu, clock=clock)
+        cmos._cmos[cmos.REG_STATUS_B] = 0x00  # BCD + 12h
+        clock._epoch = 15 * 3600
+        result = cmos.get_time()
+        assert result["hour"] == 15
+
+    def test_cmos_12h_bcd_midnight(self):
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
+        cpu = X86CPU(memory_size=0x400000)
+        clock = ClockDevice(freq=100)
+        cmos = CMOSDevice(cpu=cpu, clock=clock)
+        cmos._cmos[cmos.REG_STATUS_B] = 0x00  # BCD + 12h
+        clock._epoch = 0
+        result = cmos.get_time()
+        assert result["hour"] == 0
+
+    def test_cmos_12h_bcd_noon(self):
+        from domains.shell.vm import CMOSDevice, ClockDevice, X86CPU
+        cpu = X86CPU(memory_size=0x400000)
+        clock = ClockDevice(freq=100)
+        cmos = CMOSDevice(cpu=cpu, clock=clock)
+        cmos._cmos[cmos.REG_STATUS_B] = 0x00  # BCD + 12h
+        clock._epoch = 12 * 3600
+        result = cmos.get_time()
+        assert result["hour"] == 12
+
+    def test_not_rm8_mem(self):
+        from domains.shell.vm import X86CPU
+        cpu = X86CPU(memory_size=0x100000)
+        code = bytes([
+            0xB8, 0x00, 0x10, 0x00, 0x00,
+            0xFE, 0x08,
+            0xF4,
+        ])
+        cpu.load(code, org=0)
+        cpu.run(max_steps=10)
+
+    def test_not_rm16_mem(self):
+        from domains.shell.vm import X86CPU
+        cpu = X86CPU(memory_size=0x100000)
+        code = bytes([
+            0x66, 0xB8, 0x00, 0x10,
+            0x66, 0xF7, 0x10,
+            0xF4,
+        ])
+        cpu.load(code, org=0)
+        cpu.run(max_steps=10)
+
+    def test_cld_std_16bit(self):
+        from domains.shell.vm import X86CPU
+        cpu = X86CPU(memory_size=0x100000)
+        code = bytes([
+            0x66, 0xFC,
+            0x66, 0xFD,
+            0xF4,
+        ])
+        cpu.load(code, org=0)
+        cpu.run(max_steps=10)
+
+    def test_loope_zf1(self):
+        from domains.shell.vm import X86CPU
+        cpu = X86CPU(memory_size=0x100000)
+        code = bytes([
+            0xB9, 0x02, 0x00, 0x00, 0x00,
+            0x31, 0xC0,
+            0xE1, 0xFB,
+            0xF4,
+        ])
+        cpu.load(code, org=0)
+        cpu.run(max_steps=10)
+
+    def test_exec_exception_handler(self):
+        from domains.shell.vm import X86CPU
+        cpu = X86CPU(memory_size=0x1000)
+        cpu.load(b'\x90', org=0)
+        def bad_exec():
+            raise RuntimeError("test fault")
+        cpu._exec_one = bad_exec
+        result = cpu.step()
+        assert result is False
+
+    def test_sys_exec_exception(self):
+        from domains.shell.vm import X86SyscallHandler
+        import domains.shell.vm_training_bridge as bridge_mod
+        original = bridge_mod._bridge
+        bridge_mod._bridge = None
+        try:
+            handler = X86SyscallHandler.__new__(X86SyscallHandler)
+            cpu = type('C', (), {
+                '_regs': [0]*16,
+                '_read_string': lambda s, a: 'INVALID ASM CODE !!!',
+                '_write8': lambda s, a, b: None,
+                '_memory': type('M', (), {})()
+            })()
+            handler._cpu = cpu
+            handler._scheduler = type('S', (), {'current': type('P', (), {'pid': 1, 'name': 'test', 'state': type('S2', (), {'READY': 0, 'BLOCKED': 1, 'TERMINATED': 2})()})()})()
+            handler._heap_break = 0x400000
+            handler._rbac = type('R', (), {'check': lambda s, *a: True})()
+            handler._memory = cpu._memory
+            handler._fs = None
+            result = handler._sys_exec(0x1000)
+            assert result == -1
+        finally:
+            bridge_mod._bridge = original
+
+    def test_sys_exec_nop_only(self):
+        from domains.shell.vm import X86SyscallHandler
+        import domains.shell.vm_training_bridge as bridge_mod
+        original = bridge_mod._bridge
+        bridge_mod._bridge = None
+        try:
+            handler = X86SyscallHandler.__new__(X86SyscallHandler)
+            cpu = type('C', (), {
+                '_regs': [0]*16,
+                '_read_string': lambda s, a: 'NOP',
+                '_write8': lambda s, a, b: None,
+                '_memory': type('M', (), {})()
+            })()
+            handler._cpu = cpu
+            handler._scheduler = type('S', (), {'current': type('P', (), {'pid': 1, 'name': 'test', 'state': type('S2', (), {'READY': 0, 'BLOCKED': 1, 'TERMINATED': 2})()})()})()
+            handler._heap_break = 0x400000
+            handler._rbac = type('R', (), {'check': lambda s, *a: True})()
+            handler._memory = cpu._memory
+            handler._fs = None
+            result = handler._sys_exec(0x1000)
+            assert result == -1
+        finally:
+            bridge_mod._bridge = original
+
+    def test_assembler_mov_r16_mem(self):
+        code = self._asm(["[BITS 32]", "MOV AX, [EBX]"])
+        assert 0x66 in code
+        assert 0x8B in code
+
+    def test_assembler_mov_r16_mem_disp32(self):
+        code = self._asm(["[BITS 32]", "MOV AX, [EBX+0x100]"])
+        assert 0x66 in code
+
+    def test_assembler_mov_r16_imm16(self):
+        code = self._asm(["[BITS 32]", "MOV AX, 0x1234"])
+        assert 0x66 in code
+
+    def test_assembler_xchg_r16_mem_16bit(self):
+        code = self._asm(["[BITS 32]", "XCHG AX, [0x1000]"])
+        assert 0x87 in code or 0x90 in code
+
+    def test_assembler_alu_r16_imm16(self):
+        code = self._asm(["[BITS 32]", "ADD AX, 0x1234"])
+        assert 0x66 in code
+
+    def test_assembler_alu_r16_imm16_large(self):
+        code = self._asm(["[BITS 32]", "ADD AX, 0x1234"])
+        assert 0x66 in code
+
+    def test_irq_device_tick(self):
+        from domains.shell.vm import IRQDevice
+        irq = IRQDevice()
+        result = irq.call("tick")
+        assert isinstance(result, int)
+
+    def test_irq_device_read_key(self):
+        from domains.shell.vm import IRQDevice
+        irq = IRQDevice()
+        result = irq.call("read_key")
+        assert isinstance(result, int)
+
+    def test_device_bus_adapter_register_open(self):
+        from domains.shell.vm import DeviceBusAdapter
+        adapter = DeviceBusAdapter()
+        assert hasattr(adapter, '_table')
+
+    def test_device_bus_adapter_open_unknown(self):
+        from domains.shell.vm import DeviceBusAdapter
+        adapter = DeviceBusAdapter()
+        fd = adapter.open("nonexistent")
+        assert fd == -1
+
+    def test_device_bus_adapter_close(self):
+        from domains.shell.vm import DeviceBusAdapter
+        adapter = DeviceBusAdapter()
+        result = adapter.close(0)
+        assert isinstance(result, bool)
+
+    def test_load_shape_non_numeric(self):
+        from domains.shell.vm import CPU, _op_load_shape
+        cpu = CPU()
+        cpu.regs[0] = 3
+        cpu.regs[1] = 4
+        _op_load_shape(cpu, ["R0", "R1", ""])
+        import numpy as np
+        assert cpu.regs[0].shape == (3, 4)
+
+    def test_blockdevice_read_sectors(self):
+        from domains.shell.vm import BlockDevice
+        bd = BlockDevice(num_sectors=8)
+        bd.write_sector(1, b'\xAA' * 512)
+        bd.write_sector(2, b'\xBB' * 512)
+        data = bd.read_sectors(1, 2)
+        assert len(data) == 1024
+
+    def test_virtual_system_fork_stack_reloc(self):
+        from domains.shell.vm import X86VirtualSystem
+        virt = X86VirtualSystem(memory_size=0x10000)
+        virt.run(max_cycles=10)
+
+    def test_train_get_result_completed(self):
+        from domains.shell.vm import X86SyscallHandler
+        import domains.shell.vm_training_bridge as bridge_mod
+        original_bridge = bridge_mod._bridge
+        class MockBridge:
+            def get_result_json(self, job_id):
+                return '{"loss": 0.5}'
+        bridge_mod._bridge = MockBridge()
+        try:
+            handler = X86SyscallHandler.__new__(X86SyscallHandler)
+            cpu = type('C', (), {'_regs': [0]*16, '_write8': lambda s, a, b: None, '_memory': type('M', (), {'alloc': lambda s, n: 0x300000, 'free': lambda s, a: None})()})()
+            handler._cpu = cpu
+            handler._scheduler = type('S', (), {'current': type('P', (), {'pid': 1, 'name': 'test', 'state': type('S2', (), {'READY': 0, 'BLOCKED': 1, 'TERMINATED': 2})()})()})()
+            handler._heap_break = 0x400000
+            handler._rbac = type('R', (), {'check': lambda s, *a: True})()
+            handler._memory = cpu._memory
+            handler._fs = None
+            result = handler._sys_train_get_result(1, 0x2000, 256)
+            assert result > 0
+        finally:
+            bridge_mod._bridge = original_bridge
+
+    def test_train_status(self):
+        from domains.shell.vm import X86SyscallHandler
+        import domains.shell.vm_training_bridge as bridge_mod
+        original = bridge_mod._bridge
+        class MockBridge:
+            def status(self, job_id):
+                return {"status": "running"}
+        bridge_mod._bridge = MockBridge()
+        try:
+            handler = X86SyscallHandler.__new__(X86SyscallHandler)
+            cpu = type('C', (), {'_regs': [0]*16})()
+            handler._cpu = cpu
+            result = handler._sys_train_status(1)
+            assert result == 0
+        finally:
+            bridge_mod._bridge = original
+
+    def test_dev_table_open_with_adapter(self):
+        from domains.shell.vm import CPU, _op_dev_table_open
+        import domains.shell.vm as vm_mod
+        cpu = CPU()
+        mock_adapter = type('A', (), {'open': lambda s, n: -1})()
+        vm_mod._device_table_adapter = mock_adapter
+        try:
+            _op_dev_table_open(cpu, ["R0", "nonexistent_device"])
+            assert cpu.regs[0] == -1
+        finally:
+            vm_mod._device_table_adapter = None

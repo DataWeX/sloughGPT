@@ -6,7 +6,7 @@ and timestamps. Runs are stored in a MogDB collection under
 ``data/mogdb/agent_runs`` so history survives restarts and is queryable.
 
 Usage:
-    from domains.agents.run_history import get_agent_run_store
+    from domain.agents._internal.run_history import get_agent_run_store
 
     store = get_agent_run_store()
     run_id = store.start(goal="Research AI agents", context="")
@@ -54,7 +54,7 @@ def _get_collection(db_path: Optional[str] = None):
     if _collection is not None:
         return _collection
     if db_path is None:
-        from domains.shared import find_repo_root
+        from domain.shared import find_repo_root
         repo = find_repo_root(os.path.dirname(__file__))
         db_path = os.path.join(repo, "data", "mogdb", "agent_runs")
     from mogdb import MogDB

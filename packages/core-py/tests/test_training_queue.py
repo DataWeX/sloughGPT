@@ -298,7 +298,7 @@ class TestTrainingHandler:
 
     def test_cancel_immediately_returns_cancelled(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -317,7 +317,7 @@ class TestTrainingHandler:
 
     def test_emits_train_sse_events(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -339,7 +339,7 @@ class TestTrainingHandler:
 
     def test_emits_complete_event(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -358,7 +358,7 @@ class TestTrainingHandler:
 
     def test_defaults_applied(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -384,7 +384,7 @@ class TestTrainingHandler:
 
     def test_custom_config_passed_through(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -414,7 +414,7 @@ class TestTrainingHandler:
 
     def test_resume_defaults_false(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -431,7 +431,7 @@ class TestTrainingHandler:
 
     def test_resume_true_passed(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -449,7 +449,7 @@ class TestTrainingHandler:
 
     def test_cancel_event_passed_to_trainer(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -466,7 +466,7 @@ class TestTrainingHandler:
 
     def test_pause_event_passed_to_trainer(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -483,7 +483,7 @@ class TestTrainingHandler:
 
     def test_on_progress_callback_called(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -509,7 +509,7 @@ class TestTrainingHandler:
             def train(self, **kwargs):
                 raise RuntimeError("Simulated training failure")
 
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", RaisingConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", RaisingTrainer)
 
@@ -536,7 +536,7 @@ class TestTrainingHandler:
             def train(self, **kwargs):
                 raise ValueError("Bad data")
 
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", RaisingConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", RaisingTrainer)
 
@@ -554,7 +554,7 @@ class TestTrainingHandler:
 
     def test_output_dir_created(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -571,7 +571,7 @@ class TestTrainingHandler:
 
     def test_default_checkpoint_dir(self, tmp_path, monkeypatch):
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -1111,7 +1111,7 @@ class TestTrainingDataPathValidation:
     def test_valid_data_path_proceeds(self, tmp_path, monkeypatch):
         """training_handler proceeds when data_path is valid."""
         captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
         monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
         monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
 
@@ -1135,7 +1135,7 @@ class TestCheckpointPruning:
 
     def test_prune_keeps_max_checkpoints(self, tmp_path, monkeypatch):
         """During training, max_checkpoints newest files are kept."""
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
 
         config = tp.TrainerConfig(
             checkpoint_dir=str(tmp_path),
@@ -1158,7 +1158,7 @@ class TestCheckpointPruning:
 
     def test_prune_final_keeps_one(self, tmp_path, monkeypatch):
         """On final save, only the newest checkpoint is kept."""
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
 
         config = tp.TrainerConfig(checkpoint_dir=str(tmp_path))
         trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
@@ -1183,7 +1183,7 @@ class TestCheckpointPruning:
 
     def test_prune_final_rewires_best_model_path(self, tmp_path):
         """After final prune, _best_model_path points to final checkpoint."""
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
 
         config = tp.TrainerConfig(checkpoint_dir=str(tmp_path))
         trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
@@ -1207,7 +1207,7 @@ class TestCheckpointPruning:
 
     def test_prune_empty_dir_no_crash(self, tmp_path):
         """Pruning an empty directory doesn't crash."""
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
 
         config = tp.TrainerConfig(checkpoint_dir=str(tmp_path))
         trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
@@ -1220,7 +1220,7 @@ class TestCheckpointPruning:
 
     def test_prune_nonexistent_dir_no_crash(self, tmp_path):
         """Pruning a nonexistent directory doesn't crash."""
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
 
         config = tp.TrainerConfig(checkpoint_dir=str(tmp_path / "nonexistent"))
         trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
@@ -1232,7 +1232,7 @@ class TestCheckpointPruning:
 
     def test_prune_cleans_meta_files(self, tmp_path):
         """Pruning removes associated .meta.json files."""
-        import domains.training.train_pipeline as tp
+        import domain.training._internal.train_pipeline as tp
 
         config = tp.TrainerConfig(checkpoint_dir=str(tmp_path), max_checkpoints=1)
         trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)

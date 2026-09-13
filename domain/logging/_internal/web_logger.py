@@ -7,7 +7,7 @@ stored in ``localStorage`` / ``IndexedDB``.
 
 Usage::
 
-    from domains.logging import WebLogger, LogLevel
+    from domain.logging import WebLogger, LogLevel
 
     log = WebLogger("slo.web.chat")
     log.info("message sent", session_id="abc123")

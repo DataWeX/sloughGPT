@@ -27,8 +27,8 @@ from pathlib import Path
 from typing import AsyncIterator, Optional, Dict, List, Tuple, Union, Any
 import numpy as np
 
-from domains.infrastructure.structured_log import StructuredLogger
-from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT
+from domain.infrastructure._internal.structured_log import StructuredLogger
+from domain.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT
 
 logger = StructuredLogger("slo.inference.slonet_provider")
 
@@ -42,7 +42,7 @@ _SloLayerNorm = None
 def _get_slo_layernorm():
     global _SloLayerNorm
     if _SloLayerNorm is None:
-        from domains.training.slonet import SloLayerNorm
+        from domain.training._internal.slonet import SloLayerNorm
         _SloLayerNorm = SloLayerNorm
     return _SloLayerNorm
 
@@ -240,7 +240,7 @@ def convert_hf_to_slonet(
         Empty dict when param_map is provided (writes done in-place).
     """
     import time as _time
-    from domains.infrastructure.arch_config import build_arch
+    from domain.infrastructure._internal.arch_config import build_arch
 
     _t0 = _time.monotonic()
 
@@ -435,7 +435,7 @@ class SloNetChatProvider:
         Returns:
             SloNetServer bound to this provider's model/tokenizer.
         """
-        from domains.infrastructure.slonet_server import SloNetServer
+        from domain.infrastructure._internal.slonet_server import SloNetServer
 
         # Lazy providers (created via lazy_from_slnc) keep _model == None until
         # first use. Hand the server a factory so it can load the weights in the
@@ -532,7 +532,7 @@ class SloNetChatProvider:
         import time as _time
 
         from domains.infrastructure.slnc.parser import SLNCParser
-        from domains.infrastructure.weight_loader import build_model_from_config
+        from domain.infrastructure._internal.weight_loader import build_model_from_config
 
         _t0 = _time.monotonic()
         parser = SLNCParser(slnc_path)
@@ -545,7 +545,7 @@ class SloNetChatProvider:
 
         # Unified loading path: DirectWeightLoader (single-pass mmap→parameter)
         try:
-            from domains.infrastructure.weight_loader import DirectWeightLoader, build_load_plan
+            from domain.infrastructure._internal.weight_loader import DirectWeightLoader, build_load_plan
             weights_dict = parser.get_weights_dict_parallel()
             plan = build_load_plan(weights_dict, n_layer, config)
             loader = DirectWeightLoader._from_plan(parser, plan, weights_dict)
@@ -560,7 +560,7 @@ class SloNetChatProvider:
         except Exception as e:
             logger.debug("DirectWeightLoader failed, falling back to load_into_model: %s", e, extra={"tag": "INF"})
             # Fallback: build plan + generic loader (same mapping, no mmap optimization)
-            from domains.infrastructure.weight_loader import build_load_plan, load_into_model
+            from domain.infrastructure._internal.weight_loader import build_load_plan, load_into_model
             weights_dict = parser.get_weights_dict_parallel()
             _t_weights = _time.monotonic()
             plan = build_load_plan(weights_dict, n_layer, config)
@@ -595,7 +595,7 @@ class SloNetChatProvider:
         # silently skip quantization — float32 BLAS is both faster and exact.
         if quantize:
             from domains.infrastructure.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
-            from domains.infrastructure.quantization import Quantine, walk_slo_linears
+            from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
             from pathlib import Path as PathlibPath
 
             if not bool(_HAS_AVX2):
@@ -740,7 +740,7 @@ class SloNetChatProvider:
 
         # Apply ResourceManager compute limits (BLAS threads, OMP_NUM_THREADS, etc.)
         try:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure._internal.resource_manager import get_resource_manager
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
@@ -769,7 +769,7 @@ class SloNetChatProvider:
 
         # Record dashboard event
         try:
-            from domains.infrastructure.event_buffer import get_event_buffer
+            from domain.infrastructure._internal.event_buffer import get_event_buffer
             get_event_buffer().record("MODEL", f"loaded {model_id} ({n_layer} layers)")
         except Exception as exc:
             logger.debug("Failed to record model load event: %s", exc)
@@ -908,7 +908,7 @@ class SloNetChatProvider:
             FileNotFoundError: If soul_path does not exist
             ValueError: If the .soul file is invalid or missing model config
         """
-        from domains.infrastructure.weight_loader import SoulWeightLoader, build_model_from_config
+        from domain.infrastructure._internal.weight_loader import SoulWeightLoader, build_model_from_config
 
         loader = SoulWeightLoader(soul_path)
         meta = loader.load_metadata()
@@ -937,7 +937,7 @@ class SloNetChatProvider:
 
         # Apply ResourceManager compute limits
         try:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure._internal.resource_manager import get_resource_manager
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
@@ -951,7 +951,7 @@ class SloNetChatProvider:
             and tokenizer_meta.get("type") == "token_tree"
             and isinstance(tokenizer_meta.get("tree"), dict)
         ):
-            from domains.training.token_tree import TokenTree
+            from domain.training._internal.token_tree import TokenTree
             instance._tokenizer = _TreeTokenizer(
                 TokenTree.from_dict(tokenizer_meta["tree"])
             )
@@ -1018,8 +1018,8 @@ class SloNetChatProvider:
             target_modules = ["W_q", "W_k", "W_v", "W_o"]
 
         # Apply LoRA layers
-        from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
-        from domains.training.hf_lora_finetune import load_lora_adapter
+        from domain.training._internal.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
+        from domain.training._internal.hf_lora_finetune import load_lora_adapter
 
         lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
         self._model = apply_lora_to_model(self._model, lora_config)
@@ -1043,7 +1043,7 @@ class SloNetChatProvider:
 
         # Optionally merge for faster inference
         if merge:
-            from domains.training.hf_lora_finetune import merge_lora_adapter
+            from domain.training._internal.hf_lora_finetune import merge_lora_adapter
             self._model = merge_lora_adapter(self._model)
             result["merged"] = True
             logger.info(
@@ -1141,7 +1141,7 @@ class SloNetChatProvider:
     @property
     def capabilities(self):
         """What this model supports."""
-        from domains.models.provider import ModelCapabilities
+        from domain.models._internal.provider import ModelCapabilities
         return ModelCapabilities(
             chat=True, streaming=True, embedding=False,
             vision=False, functions=False,
@@ -1180,7 +1180,7 @@ class SloNetChatProvider:
         falls back to the base HuggingFace model id's tokenizer.
         """
         try:
-            from domains.infrastructure.morph_tokenizer import MorphTokenizer
+            from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
             if model_dir and Path(model_dir).is_dir() and (Path(model_dir) / "tokenizer.json").exists():
                 logger.info("Using fine-tuned model tokenizer from %s", model_dir,
                             extra={"tag": "INF"})
@@ -1342,7 +1342,7 @@ class SloNetChatProvider:
         )
         # Record dashboard event
         try:
-            from domains.infrastructure.event_buffer import get_event_buffer
+            from domain.infrastructure._internal.event_buffer import get_event_buffer
             get_event_buffer().record("MODEL", f"unloaded {self._model_id}")
         except Exception as exc:
             logger.debug("Failed to record model unload event: %s", exc)

@@ -6,7 +6,7 @@ formatted terminal output. No Rich dependency — pure TTY.
 
 Usage::
 
-    from domains.logging import CLILogger, LogLevel
+    from domain.logging import CLILogger, LogLevel
 
     log = CLILogger("slo.cli")
     log.info("model loaded", model="gpt2", params="124M")

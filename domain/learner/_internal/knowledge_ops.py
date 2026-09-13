@@ -47,7 +47,7 @@ class FileIndex:
     MAX_FILE_SIZE = 500_000  # 500KB
 
     def __init__(self, embedder=None):
-        from domains.inference.vector_store import InMemoryVectorStore
+        from domain.inference._internal.vector_store import InMemoryVectorStore
         self._store = InMemoryVectorStore(dimension=384)
         self._embedder = embedder
         self._file_meta: Dict[str, Dict] = {}  # entry_id → {path, line, chunk_idx}
@@ -55,7 +55,7 @@ class FileIndex:
     def _embed(self, text: str) -> List[float]:
         if self._embedder:
             return self._embedder.embed(text)
-        from domains.inference.vector_store import simple_embed
+        from domain.inference._internal.vector_store import simple_embed
         return simple_embed(text)
 
     def _chunk_code(self, content: str, filepath: str, max_lines: int = 20) -> List[Tuple[str, int]]:
@@ -87,7 +87,7 @@ class FileIndex:
         if not chunks:
             return 0
 
-        from domains.inference.vector_store import VectorEntry
+        from domain.inference._internal.vector_store import VectorEntry
         entries = []
         for text, line_no in chunks:
             entry_id = f"file_{hashlib.md5(f'{filepath}:{line_no}'.encode()).hexdigest()[:12]}"
@@ -211,7 +211,7 @@ class DuplicateDetector:
         elif embed_fn:
             q_vec = embed_fn(text)
         else:
-            from domains.inference.vector_store import simple_embed
+            from domain.inference._internal.vector_store import simple_embed
             q_vec = simple_embed(text)
 
         results = self._store.query_sync(q_vec, top_k=1)
@@ -302,7 +302,7 @@ class AutoCategorizer:
         if not texts:
             return None
 
-        from domains.inference.vector_store import simple_embed
+        from domain.inference._internal.vector_store import simple_embed
         vecs = [simple_embed(t) for t in texts[:20]]  # cap at 20 examples
         return np.mean(vecs, axis=0)
 
@@ -317,7 +317,7 @@ class AutoCategorizer:
         if embed_fn:
             q_vec = np.asarray(embed_fn(text), dtype=np.float64)
         else:
-            from domains.inference.vector_store import simple_embed
+            from domain.inference._internal.vector_store import simple_embed
             q_vec = np.asarray(simple_embed(text), dtype=np.float64)
 
         best_topic = "general"
@@ -341,7 +341,7 @@ class AutoCategorizer:
         if not self._topic_examples:
             return []
 
-        from domains.inference.vector_store import simple_embed
+        from domain.inference._internal.vector_store import simple_embed
         q_vec = np.asarray(simple_embed(text), dtype=np.float64)
 
         scored = []
@@ -600,7 +600,7 @@ class BulkProcessor:
         self._skipped = 0
         self._errors = 0
 
-        from domains.learner.knowledge import KnowledgeFact
+        from domain.learner._internal.knowledge import KnowledgeFact
 
         facts = []
         vectors = []

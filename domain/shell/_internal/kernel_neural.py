@@ -6,7 +6,7 @@ Neural Kernel — re-export shim.
 Canonical source is addons.neural. This module exists for backward compatibility.
 
 Migration:
-    from domains.shell.addons.neural import NeuralProcess, NeuralKVCache, ...
+    from domain.shell._internal.addons.neural import NeuralProcess, NeuralKVCache, ...
 """
 
 from .addons.neural import (  # noqa: F401

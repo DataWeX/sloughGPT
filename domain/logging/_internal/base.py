@@ -6,7 +6,7 @@ and implements ``emit()`` to route output to its native destination.
 
 Usage::
 
-    from domains.logging import Logger, LogLevel, LogRecord
+    from domain.logging import Logger, LogLevel, LogRecord
 
     class MyLogger(Logger):
         def emit(self, record: LogRecord) -> None:

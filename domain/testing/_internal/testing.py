@@ -5,7 +5,7 @@ A framework-agnostic library for testing web UI flows.
 Works with any web application - sloughGPT, React apps, Next.js, etc.
 
 Usage:
-    from domains.testing import Journey, Step, Page, SiteConfig
+    from domain.testing import Journey, Step, Page, SiteConfig
 
     # Define your site
     config = SiteConfig(

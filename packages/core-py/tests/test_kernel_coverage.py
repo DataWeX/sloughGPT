@@ -105,14 +105,14 @@ class TestLifecycle:
         assert k.boot() == "Already booted"
 
     def test_boot_neural_addon_failure(self, monkeypatch):
-        import domains.shell.addons.neural as neural_mod
+        import domain.shell._internal.addons.neural as neural_mod
         monkeypatch.setattr(neural_mod, "setup", _boom)
         k = Kernel()
         msg = k.boot()
         assert "Kernel booted" in msg
 
     def test_boot_shell_ui_addon_failure(self, monkeypatch):
-        import domains.shell.addons.shell_ui as shell_ui_mod
+        import domain.shell._internal.addons.shell_ui as shell_ui_mod
         monkeypatch.setattr(shell_ui_mod, "setup", _boom)
         k = Kernel()
         msg = k.boot()

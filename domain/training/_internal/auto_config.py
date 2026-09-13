@@ -251,7 +251,7 @@ def auto_configure(
 
     # Try adaptive engine — if history exists, use learned recommendations
     try:
-        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domain.training._internal.adaptive_config import AdaptiveConfigEngine
         engine = AdaptiveConfigEngine()
         adaptive = engine.recommend(
             dataset_size=analysis.word_count,

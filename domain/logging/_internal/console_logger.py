@@ -5,7 +5,7 @@ Uses LogFormatter for all formatting. Routes records to stderr with ANSI colors.
 
 Usage::
 
-    from domains.logging import ConsoleLogger, LogLevel
+    from domain.logging import ConsoleLogger, LogLevel
 
     log = ConsoleLogger("slo.api", level=LogLevel.DEBUG)
     log.info("server started", port=8000)

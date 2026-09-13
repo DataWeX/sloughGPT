@@ -22,8 +22,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from domain.cognitive._internal.rag import ProductionRAG
-from domains.inference.vector_store import simple_embed
-from domains.shared import find_repo_root
+from domain.inference._internal.vector_store import simple_embed
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.rag_service")
 
@@ -153,7 +153,7 @@ class RAGService:
     def _ensure_kg(self) -> None:
         """Lazily initialize the knowledge graph on first access."""
         if self._kg is None:
-            from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph
+            from domain.cognitive._internal.knowledge_graph_v2 import KnowledgeGraph
             self._kg = KnowledgeGraph()
 
     def _extract_kg_claims(self, content: str, metadata: Dict[str, Any]) -> None:
@@ -339,7 +339,7 @@ class RAGService:
     def auto_ingest_directory(self, root_path: str, max_files: int = 200) -> int:
         """Scan a directory and ingest code/docs into RAG."""
         try:
-            from domains.infrastructure.auto_ingest import RepoScanner
+            from domain.infrastructure._internal.auto_ingest import RepoScanner
         except ImportError:
             logger.debug("RepoScanner unavailable, skipping auto-ingest")
             return 0

@@ -18,7 +18,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence, Union
 from pathlib import Path
 import logging
-from domains.shared import find_repo_root  # noqa: F401 — kept for compatibility
+from domain.shared import find_repo_root  # noqa: F401 — kept for compatibility
 from domain.inference._internal.forward_pass import ForwardPassResult
 from dataclasses import dataclass, field
 
@@ -111,7 +111,7 @@ def _check_numba():
 
 # Numba-accelerated inference kernels (lazy import, graceful fallback)
 try:
-    from domains.training.slonet_kernels import (
+    from domain.training._internal.slonet_kernels import (
         nb_layernorm as _nb_layernorm,
         nb_swi_glu_mul as _nb_swi_glu_mul,
         fused_attention_single as _nb_fused_attention_single,
@@ -204,7 +204,7 @@ def _get_accelerator():
     if _ACCELERATOR is not None:
         return _ACCELERATOR if _ACCELERATOR != "none" else None
     try:
-        from domains.slolib.gpu import get_accelerator as _get_slolib_acc
+        from domain.slolib._internal.gpu import get_accelerator as _get_slolib_acc
         acc = _get_slolib_acc()
         if acc is not None and acc.name != "cpu":
             _ACCELERATOR = acc
@@ -212,7 +212,7 @@ def _get_accelerator():
     except Exception as e:
         logger.debug("slolib GPU accelerator unavailable, trying legacy: %s", e)
     try:
-        from domains.training.gpu.accelerator import get_accelerator as _get_old_acc
+        from domain.training._internal.gpu.accelerator import get_accelerator as _get_old_acc
         _ACCELERATOR = _get_old_acc()
     except Exception as e:
         logger.debug("Legacy GPU accelerator unavailable: %s", e)
@@ -1491,7 +1491,7 @@ class SloLinear(SloLayer):
                 self._lock.acquire()
                 try:
                     if self._quant_unpacked is None:
-                        from domains.infrastructure.quantization import _unpack_int4
+                        from domain.infrastructure._internal.quantization import _unpack_int4
                         signed = self._quant_info.meta.mode == "symmetric"
                         n_total = int(np.prod(self._quant_info.meta.original_shape))
                         arr = self._quant_info.array
@@ -1566,7 +1566,7 @@ class SloLinear(SloLayer):
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         if self._quant_info is not None and self._quant_info.is_quantized:
-            from domains.infrastructure.quantization import (
+            from domain.infrastructure._internal.quantization import (
                 quantized_linear, int4_quantized_linear,
             )
             bias_arr = self.bias.data if self.use_bias else None
@@ -1587,7 +1587,7 @@ class SloLinear(SloLayer):
 
     def forward(self, x: Tensor) -> Tensor:
         if self._quant_info is not None and self._quant_info.is_quantized:
-            from domains.infrastructure.quantization import (
+            from domain.infrastructure._internal.quantization import (
                 quantized_linear, int4_quantized_linear,
             )
             bias_arr = self.bias.data if self.use_bias else None
@@ -2144,7 +2144,7 @@ class SloLayerNorm(SloLayer):
 
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         if _KERNELS_AVAILABLE:
-            from domains.training.slonet_kernels import fused_layer_norm
+            from domain.training._internal.slonet_kernels import fused_layer_norm
             return fused_layer_norm(
                 x.astype(np.float32),
                 self.weight.data.astype(np.float32),
@@ -2401,7 +2401,7 @@ def _fuse_quant_weights_int4(linears):
     zps = [qi.meta.zero_point for qi in infos]
     if any(z != zps[0] for z in zps):
         return None
-    from domains.infrastructure.quantization import _ensure_2d_packed
+    from domain.infrastructure._internal.quantization import _ensure_2d_packed
     K = infos[0].meta.original_shape[-1]
     if K % 2 != 0:
         return None
@@ -2644,7 +2644,7 @@ class SloMultiHeadAttention(SloLayer):
         H, E, K_H = self.n_heads, self.head_dim, self.n_kv_head
         fused = self._fused_qkv()
         if fused is not None and q is k and k is v:
-            from domains.infrastructure.quantization import quantized_linear
+            from domain.infrastructure._internal.quantization import quantized_linear
             W, S, B_f, qd, kd = fused
             qkv = quantized_linear(q, W, S, 0, B_f)  # (B, N, qd + 2*kd)
             Q_r = qkv[..., :qd].reshape(B, N, H, E)
@@ -2669,7 +2669,7 @@ class SloMultiHeadAttention(SloLayer):
         scale_f = 1.0 / math.sqrt(E)
         if _KERNELS_AVAILABLE and B == 1 and N == 1:
             # Single-token decode: fused kernel has no causal masking needed
-            from domains.training.slonet_kernels import fused_attention_single, gqa_expand
+            from domain.training._internal.slonet_kernels import fused_attention_single, gqa_expand
             # K_r: (B, seq, K_H, E) → (K_H, seq, E) for fused kernel
             K_np = K_r[0].transpose(1, 0, 2).astype(np.float32)
             V_np = V_r[0].transpose(1, 0, 2).astype(np.float32)
@@ -2681,7 +2681,7 @@ class SloMultiHeadAttention(SloLayer):
             out = out_h.reshape(1, 1, H * E)
         elif _KERNELS_AVAILABLE and B == 1 and mask is None:
             # Multi-token prompt: fused kernel applies built-in causal masking
-            from domains.training.slonet_kernels import fused_attention_multi, gqa_expand
+            from domain.training._internal.slonet_kernels import fused_attention_multi, gqa_expand
             K_np = K_r[0].transpose(1, 0, 2).astype(np.float32)  # (K_H, seq, E)
             V_np = V_r[0].transpose(1, 0, 2).astype(np.float32)
             if K_H < H:
@@ -2920,7 +2920,7 @@ class SloFeedForward(SloLayer):
     def forward_numpy(self, x: np.ndarray) -> np.ndarray:
         fused = self._fused_gate_up()
         if fused is not None:
-            from domains.infrastructure.quantization import quantized_linear
+            from domain.infrastructure._internal.quantization import quantized_linear
             W, S, B, mid = fused
             gu = quantized_linear(x, W, S, 0, B)  # (..., mid + mid)
             g = gu[..., :mid]
@@ -3698,7 +3698,7 @@ def _layernorm_state_dict(x: Tensor, weight: np.ndarray, eps: float = 1e-5) -> T
 
 def _invalidate_gpu_cache():
     try:
-        from domains.slolib.gpu import get_accelerator
+        from domain.slolib._internal.gpu import get_accelerator
         acc = get_accelerator()
         if hasattr(acc, 'clear_cache'):
             acc.clear_cache()
@@ -4661,7 +4661,7 @@ class SloTransformer(SloNet):
         Returns:
             Number of layers whose float32 weights were released.
         """
-        from domains.infrastructure.quantization import walk_slo_linears
+        from domain.infrastructure._internal.quantization import walk_slo_linears
         freed = 0
         for lin in walk_slo_linears(self).values():
             if lin.free_quantized_originals():
@@ -4677,7 +4677,7 @@ class SloTransformer(SloNet):
         ``_freed_shape``.
         """
         total = sum(p.data.size for p in self.parameters())
-        from domains.infrastructure.quantization import walk_slo_linears
+        from domain.infrastructure._internal.quantization import walk_slo_linears
         for lin in walk_slo_linears(self).values():
             shape = getattr(lin, "_freed_shape", None)
             if shape is not None:
@@ -5160,7 +5160,7 @@ class SloTransformer(SloNet):
         # int8 KV cache: auto-enabled for quantized models, forceable either way.
         _use_kvq = _is_quantized if quantize_kv is None else bool(quantize_kv)
         if _use_kvq:
-            from domains.infrastructure.quantization import (
+            from domain.infrastructure._internal.quantization import (
                 quantize_kv_tensor as _qkv_t, dequantize_kv_tensor as _dqkv_t,
             )
 
@@ -5262,7 +5262,7 @@ class SloTransformer(SloNet):
         f_qkv4 = []
         f_ff4 = []
         if _is_quantized:
-            from domains.infrastructure.quantization import (
+            from domain.infrastructure._internal.quantization import (
                 quantized_linear as _ql, int4_quantized_linear as _ql4,
             )
             for _fb in self.layers[1:-2]:
@@ -5741,7 +5741,7 @@ class SloTransformer(SloNet):
         # int8 KV cache: auto-enabled for quantized models, forceable either way.
         _use_kvq = _is_quantized if quantize_kv is None else bool(quantize_kv)
         if _use_kvq:
-            from domains.infrastructure.quantization import (
+            from domain.infrastructure._internal.quantization import (
                 quantize_kv_tensor as _qkv_t, dequantize_kv_tensor as _dqkv_t,
             )
 
@@ -5806,7 +5806,7 @@ class SloTransformer(SloNet):
         f_qkv4 = []
         f_ff4 = []
         if _is_quantized:
-            from domains.infrastructure.quantization import (
+            from domain.infrastructure._internal.quantization import (
                 quantized_linear as _ql, int4_quantized_linear as _ql4,
             )
             for _fb in self.layers[1:-2]:

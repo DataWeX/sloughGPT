@@ -10,7 +10,7 @@ Parallel-aware orchestration:
   6. Final response composed and returned
 
 Usage:
-    from domains.agents.multi import MultiAgentOrchestrator, get_orchestrator
+    from domain.agents._internal.multi import MultiAgentOrchestrator, get_orchestrator
 
     orch = get_orchestrator()
     result = orch.execute("research transformers and write a summary")

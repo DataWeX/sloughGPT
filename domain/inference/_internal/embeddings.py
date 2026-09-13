@@ -8,7 +8,7 @@ Supports:
 - OpenAI (text-embedding-ada-002, text-embedding-3-small, text-embedding-3-large)
 
 Usage:
-    from domains.inference.embeddings import Embedder, EmbeddingModel
+    from domain.inference._internal.embeddings import Embedder, EmbeddingModel
 
     # Default: in-memory (zero-dependency)
     embedder = Embedder()
@@ -28,7 +28,7 @@ from enum import Enum
 import logging
 import numpy as np
 
-from domains.infrastructure.config import get_config
+from domain.infrastructure._internal.config import get_config
 
 logger = logging.getLogger("slo.embeddings")
 

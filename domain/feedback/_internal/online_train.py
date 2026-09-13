@@ -168,7 +168,7 @@ class OnlineLoRAUpdater:
             return gradients
 
         try:
-            from domains.training.slonet import Tensor
+            from domain.training._internal.slonet import Tensor
 
             positive = [f for f in feedback_batch if f["rating"] == "thumbs_up"]
             negative = [f for f in feedback_batch if f["rating"] == "thumbs_down"]
