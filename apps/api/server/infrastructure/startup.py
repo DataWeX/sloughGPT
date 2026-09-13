@@ -1022,6 +1022,7 @@ def _start_parent_preload(model_type: str):
     uvicorn binds the server socket (``loop.create_server()`` hangs when
     the event loop is starved by heavy C-extension weight loading).
     """
+    import time
     import state as server_state
 
     def _preload():

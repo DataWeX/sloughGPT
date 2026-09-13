@@ -537,7 +537,7 @@ class TestStackCrossTurn:
     @pytest.fixture
     def stack(self, tiny_model):
         from types import MethodType
-        from domains.infrastructure.slonet_server import SloNetServer
+        from domain.infrastructure._internal.slonet_server import SloNetServer
         from domain.inference._internal.slonet_provider import SloNetChatProvider
 
         provider = self._StubProvider(tiny_model)

@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from domains.infrastructure.model_loader import (
+from domain.infrastructure._internal.model_loader import (
     LoadResult,
     ModelLoader,
     get_model_loader,
@@ -94,7 +94,7 @@ class TestModelLoader:
 
     def test_init_default(self):
         loader = ModelLoader()
-        from domains.infrastructure.model_loader import _REPO_ROOT
+        from domain.infrastructure._internal.model_loader import _REPO_ROOT
         assert loader.models_dir == _REPO_ROOT / "models"
 
     def test_init_custom_dir(self, tmp_path):
@@ -168,11 +168,11 @@ class TestModelLoaderSlncLoad:
         """has_slnc True when model.slnc exists; no tracker.fail on failure."""
         (tmp_path / "model.slnc").write_bytes(b"SLNC")
         monkeypatch.setattr(
-            "domains.infrastructure.safetensors_loader._get_model_dir",
+            "domain.infrastructure.safetensors_loader._get_model_dir",
             lambda model_id: tmp_path,
         )
         monkeypatch.setattr(
-            "domains.inference.slonet_provider.SloNetChatProvider.from_slnc",
+            "domain.inference.slonet_provider.SloNetChatProvider.from_slnc",
             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("corrupt")),
         )
         loader = ModelLoader(models_dir=tmp_path)
@@ -186,7 +186,7 @@ class TestModelLoaderSlncLoad:
         def _raise(model_id):
             raise OSError("boom")
 
-        monkeypatch.setattr("domains.infrastructure.safetensors_loader._get_model_dir", _raise)
+        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir", _raise)
         loader = ModelLoader(models_dir=tmp_path)
         result = loader.load("gpt2")
         assert not result.success
@@ -196,7 +196,7 @@ class TestModelLoaderSlncLoad:
         """Full load() success: slnc exists, provider mocked, verify runs."""
         (tmp_path / "model.slnc").write_bytes(b"SLNC")
         monkeypatch.setattr(
-            "domains.infrastructure.safetensors_loader._get_model_dir",
+            "domain.infrastructure.safetensors_loader._get_model_dir",
             lambda model_id: tmp_path,
         )
         fake_model = MagicMock()
@@ -205,7 +205,7 @@ class TestModelLoaderSlncLoad:
         fake_provider._model = fake_model
         fake_provider._tokenizer = MagicMock()
         monkeypatch.setattr(
-            "domains.inference.slonet_provider.SloNetChatProvider.from_slnc",
+            "domain.inference.slonet_provider.SloNetChatProvider.from_slnc",
             lambda *a, **k: fake_provider,
         )
         loader = ModelLoader(models_dir=tmp_path)
@@ -221,7 +221,7 @@ class TestModelLoaderSlncLoad:
     def test_try_load_slnc_returns_none_when_convert_fails(self, tmp_path, monkeypatch):
         """Missing slnc + failed conversion returns None."""
         monkeypatch.setattr(
-            "domains.infrastructure.safetensors_loader._get_model_dir",
+            "domain.infrastructure.safetensors_loader._get_model_dir",
             lambda model_id: tmp_path,
         )
         loader = ModelLoader(models_dir=tmp_path)
@@ -231,7 +231,7 @@ class TestModelLoaderSlncLoad:
     def test_try_load_slnc_converts_when_missing(self, tmp_path, monkeypatch):
         """Missing slnc + successful conversion loads the new file."""
         monkeypatch.setattr(
-            "domains.infrastructure.safetensors_loader._get_model_dir",
+            "domain.infrastructure.safetensors_loader._get_model_dir",
             lambda model_id: tmp_path,
         )
         converted = tmp_path / "model.slnc"
@@ -239,7 +239,7 @@ class TestModelLoaderSlncLoad:
         fake_provider._model = MagicMock()
         fake_provider._tokenizer = MagicMock()
         monkeypatch.setattr(
-            "domains.inference.slonet_provider.SloNetChatProvider.from_slnc",
+            "domain.inference.slonet_provider.SloNetChatProvider.from_slnc",
             lambda *a, **k: fake_provider,
         )
         loader = ModelLoader(models_dir=tmp_path)
@@ -255,11 +255,11 @@ class TestModelLoaderSlncLoad:
         """from_slnc raising produces an error LoadResult, not None."""
         (tmp_path / "model.slnc").write_bytes(b"SLNC")
         monkeypatch.setattr(
-            "domains.infrastructure.safetensors_loader._get_model_dir",
+            "domain.infrastructure.safetensors_loader._get_model_dir",
             lambda model_id: tmp_path,
         )
         monkeypatch.setattr(
-            "domains.inference.slonet_provider.SloNetChatProvider.from_slnc",
+            "domain.inference.slonet_provider.SloNetChatProvider.from_slnc",
             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("corrupt slnc")),
         )
         loader = ModelLoader(models_dir=tmp_path)
@@ -273,7 +273,7 @@ class TestModelLoaderConversion:
 
     def test_try_convert_returns_none_when_no_safetensors(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "domains.infrastructure.safetensors_loader._find_safetensors",
+            "domain.infrastructure.safetensors_loader._find_safetensors",
             lambda cache_dir: None,
         )
         loader = ModelLoader()
@@ -295,11 +295,11 @@ class TestModelLoaderConversion:
             metadata={"format": "pt"},
         )
         monkeypatch.setattr(
-            "domains.infrastructure.safetensors_loader._find_safetensors",
+            "domain.infrastructure.safetensors_loader._find_safetensors",
             lambda cache_dir: st_path,
         )
         monkeypatch.setattr(
-            "domains.infrastructure.safetensors_loader.load_model_config",
+            "domain.infrastructure.safetensors_loader.load_model_config",
             lambda model_id: {"model_type": "gpt2"},
         )
         compiled = {}
@@ -310,10 +310,10 @@ class TestModelLoaderConversion:
             compiled["path"] = path
 
         monkeypatch.setattr(
-            "domains.infrastructure.slnc.compiler.SLNCCompiler.compile_from_dict", _compile
+            "domain.infrastructure._internal.slnc.compiler.SLNCCompiler.compile_from_dict", _compile
         )
         monkeypatch.setattr(
-            "domains.infrastructure.model_protector.protect_model",
+            "domain.infrastructure.model_protector.protect_model",
             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("protect failed")),
         )
         loader = ModelLoader()
@@ -333,7 +333,7 @@ class TestModelLoaderConversion:
         bad = tmp_path / "model.safetensors"
         bad.write_bytes(b"\x00\x00\x00\x00\x00\x00\x00\x00")
         monkeypatch.setattr(
-            "domains.infrastructure.safetensors_loader._find_safetensors",
+            "domain.infrastructure.safetensors_loader._find_safetensors",
             lambda cache_dir: bad,
         )
         loader = ModelLoader()

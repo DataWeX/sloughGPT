@@ -185,7 +185,7 @@ class TestHuggingFaceAPILoader:
 
     # ── generate ───────────────────────────────────────────────────────
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_list_response(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -198,7 +198,7 @@ class TestHuggingFaceAPILoader:
         assert result == "hello world"
         mock_post.assert_called_once()
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_dict_response(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -210,7 +210,7 @@ class TestHuggingFaceAPILoader:
         result = loader.generate("hi")
         assert result == "test output"
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_503_raises(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 503
@@ -220,7 +220,7 @@ class TestHuggingFaceAPILoader:
         with pytest.raises(RuntimeError, match="loading"):
             loader.generate("hi")
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_401_raises(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 401
@@ -230,7 +230,7 @@ class TestHuggingFaceAPILoader:
         with pytest.raises(RuntimeError, match="token"):
             loader.generate("hi")
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_passthrough_response(self, mock_post):
         """Non-list, non-dict response falls through to str()."""
         mock_resp = MagicMock()
@@ -243,7 +243,7 @@ class TestHuggingFaceAPILoader:
         result = loader.generate("hi")
         assert result == "plain string"
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_custom_params(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -259,7 +259,7 @@ class TestHuggingFaceAPILoader:
         assert payload["parameters"]["temperature"] == 0.1
         assert payload["parameters"]["top_p"] == 0.5
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_list_empty_text(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -271,7 +271,7 @@ class TestHuggingFaceAPILoader:
         result = loader.generate("hi")
         assert result == ""
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_empty_list_returns_empty(self, mock_post):
         """Empty list response returns empty string."""
         mock_resp = MagicMock()
@@ -284,7 +284,7 @@ class TestHuggingFaceAPILoader:
         result = loader.generate("hi")
         assert result == "[]"
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_dict_no_generated_text(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -296,7 +296,7 @@ class TestHuggingFaceAPILoader:
         result = loader.generate("hi")
         assert result == ""
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_extra_kwargs_forwarded(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -311,7 +311,7 @@ class TestHuggingFaceAPILoader:
         assert payload["parameters"]["do_sample"] is True
         assert payload["parameters"]["num_beams"] == 3
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_repetition_penalty(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -324,7 +324,7 @@ class TestHuggingFaceAPILoader:
         payload = mock_post.call_args[1]["json"]
         assert payload["parameters"]["repetition_penalty"] == 1.5
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_uses_config_defaults(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -340,7 +340,7 @@ class TestHuggingFaceAPILoader:
         assert payload["parameters"]["temperature"] == 0.2
         assert payload["parameters"]["top_p"] == 0.8
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_return_full_text_false(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -353,7 +353,7 @@ class TestHuggingFaceAPILoader:
         payload = mock_post.call_args[1]["json"]
         assert payload["parameters"]["return_full_text"] is False
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_use_cache(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -368,7 +368,7 @@ class TestHuggingFaceAPILoader:
 
     # ── chat ───────────────────────────────────────────────────────────
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_chat_calls_generate(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -380,7 +380,7 @@ class TestHuggingFaceAPILoader:
         result = loader.chat([{"role": "user", "content": "hi"}])
         assert result == "chat reply"
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_chat_custom_params(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -395,7 +395,7 @@ class TestHuggingFaceAPILoader:
         )
         assert result == "ok"
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_chat_formats_prompt(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -410,7 +410,7 @@ class TestHuggingFaceAPILoader:
 
     # ── _make_request ──────────────────────────────────────────────────
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_make_request_url(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -423,7 +423,7 @@ class TestHuggingFaceAPILoader:
         call_args = mock_post.call_args
         assert "mymodel" in call_args[0][0]
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_make_request_timeout(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -436,7 +436,7 @@ class TestHuggingFaceAPILoader:
         call_kwargs = mock_post.call_args
         assert call_kwargs[1]["timeout"] == 15
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_make_request_sends_headers(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -449,7 +449,7 @@ class TestHuggingFaceAPILoader:
         call_kwargs = mock_post.call_args
         assert call_kwargs[1]["headers"]["Authorization"] == "Bearer tok"
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_make_request_post_method(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -487,7 +487,7 @@ class TestAliases:
         client = create_api_client("gpt2", timeout=30)
         assert client.config.timeout == 30
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_via_api(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -498,7 +498,7 @@ class TestAliases:
         result = generate_via_api("hi", model="gpt2")
         assert result == "via_api"
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_chat_via_api(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -509,7 +509,7 @@ class TestAliases:
         result = chat_via_api([{"role": "user", "content": "hi"}], model="gpt2")
         assert result == "chat_via"
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_generate_via_api_with_key(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -521,7 +521,7 @@ class TestAliases:
         assert result == "result"
         assert mock_post.call_args[1]["headers"]["Authorization"] == "Bearer k1"
 
-    @patch("domains.training.huggingface.api_loader.requests.post")
+    @patch("domain.training._internal.huggingface.api_loader.requests.post")
     def test_chat_via_api_with_key(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200

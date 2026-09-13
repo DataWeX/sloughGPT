@@ -5,10 +5,10 @@ import time
 import numpy as np
 import pytest
 
-from domains.infrastructure.pugqeep.model_tree import ModelTree
-from domains.infrastructure.pugqeep.tree import decompress_tree
-from domains.infrastructure.pugqeep.library import PointLibrary
-from domains.infrastructure.pugqeep.facade import PGQ
+from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+from domain.infrastructure._internal.pugqeep.tree import decompress_tree
+from domain.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.infrastructure._internal.pugqeep.facade import PGQ
 
 
 # -- ModelTree parallel compression --

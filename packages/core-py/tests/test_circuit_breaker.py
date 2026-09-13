@@ -2,7 +2,7 @@
 
 import threading
 import time
-from domains.infrastructure.model_server import CircuitBreaker, CircuitBreakerState
+from domain.infrastructure._internal.model_server import CircuitBreaker, CircuitBreakerState
 
 
 class TestCircuitBreakerInitialState:

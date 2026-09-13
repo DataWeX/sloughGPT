@@ -1,4 +1,4 @@
-"""Tests for domains.training — DistillConfig, TextDataset, DistillEvalResult; domain.training._internal.lr_schedulers — SchedulerConfig, CosineAnnealingConfig, WarmupConfig, OneCycleConfig, CyclicConfig."""
+"""Tests for domain.training — DistillConfig, TextDataset, DistillEvalResult; domain.training._internal.lr_schedulers — SchedulerConfig, CosineAnnealingConfig, WarmupConfig, OneCycleConfig, CyclicConfig."""
 
 import numpy as np
 from domain.training._internal.distill_gpt2 import (

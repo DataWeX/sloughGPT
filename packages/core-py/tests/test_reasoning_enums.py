@@ -1,7 +1,7 @@
-"""Tests for domains.cognitive.reasoning.deep — LogicalOperator; domains.cognitive.reasoning.advanced — ReasoningMode, ThoughtStep."""
+"""Tests for domain.cognitive.reasoning.deep — LogicalOperator; domain.cognitive.reasoning.advanced — ReasoningMode, ThoughtStep."""
 
 import pytest
-from domains.cognitive.reasoning.deep import (
+from domain.cognitive._internal.reasoning.deep import (
     LogicalOperator,
     Term,
     Predicate,
@@ -13,7 +13,7 @@ from domains.cognitive.reasoning.deep import (
     WorkingMemory,
     FormalLogicEngine,
 )
-from domains.cognitive.reasoning.advanced import (
+from domain.cognitive._internal.reasoning.advanced import (
     ReasoningMode,
     ThoughtStep,
     ReasoningResult,

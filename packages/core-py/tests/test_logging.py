@@ -1,4 +1,4 @@
-"""Tests for domains.logging — LogLevel, LogRecord, Logger ABC, formatters, config, and serialization."""
+"""Tests for domain.logging — LogLevel, LogRecord, Logger ABC, formatters, config, and serialization."""
 
 import io
 import json
@@ -929,7 +929,7 @@ class TestDeriveOp:
 
 # ── __init__.py: factory and global logger ────────────────────────────────
 
-from domains.logging import (
+from domain.logging import (
     get_logger,
     set_global,
     get_global,

@@ -1,5 +1,5 @@
 """
-Comprehensive tests for domains.shell.vm_engine.
+Comprehensive tests for domain.shell.vm_engine.
 
 Pure-logic tests for Breakpoint, StepEvent, BreakpointEvent, FaultEvent,
 SyscallEvent, ExecutionTrace, DeviceBus, ConsoleDevice, and VMEngine.

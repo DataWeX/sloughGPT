@@ -1,4 +1,4 @@
-"""Tests for domains.shell.addons.filesystem — VFS, VFSEntry, VFSDirectory."""
+"""Tests for domain.shell.addons.filesystem — VFS, VFSEntry, VFSDirectory."""
 
 from __future__ import annotations
 

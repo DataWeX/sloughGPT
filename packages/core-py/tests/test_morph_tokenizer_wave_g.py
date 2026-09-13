@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from domains.infrastructure.morph_tokenizer import MorphTokenizer
+from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
 
 def _make_tok(vocab=None, merges=(), **kw):

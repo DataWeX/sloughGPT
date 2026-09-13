@@ -63,7 +63,7 @@ class TestGetHealthSummary:
         ss.get_requests_per_minute.return_value = 25.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domains.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
 
         result = _get_health_summary()
         assert result["model_loaded"] is True
@@ -91,7 +91,7 @@ class TestGetHealthSummary:
         ss.get_requests_per_minute.return_value = 0.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domains.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
 
         result = _get_health_summary()
         assert result["model_loaded"] is False
@@ -157,9 +157,9 @@ class TestDashboardSummary:
         ss.get_requests_per_minute.return_value = 5.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domains.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
         _mock("training.jobs", {"training_jobs": {}})
-        _mock("domains.training.outcome_tracker", {
+        _mock("domain.training.outcome_tracker", {
             "TrainingOutcomeTracker": MagicMock(return_value=MagicMock(get_stats=lambda: {"total_runs": 3}))
         })
         _mock("domain.settings._internal.persistent", {
@@ -192,9 +192,9 @@ class TestDashboardSummary:
         ss.get_requests_per_minute.return_value = 0.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domains.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
         _mock("training.jobs", {"training_jobs": {}})
-        _mock("domains.training.outcome_tracker", {
+        _mock("domain.training.outcome_tracker", {
             "TrainingOutcomeTracker": MagicMock(return_value=MagicMock(get_stats=lambda: {"total_runs": 0}))
         })
         _mock("domain.settings._internal.persistent", {
@@ -226,9 +226,9 @@ class TestDashboardSummary:
         ss.get_requests_per_minute.return_value = 5.0
 
         _mock("state", {"_self_train_proc": None})
-        _mock("domains.infrastructure.server_state", {"get_server_state": lambda: ss})
+        _mock("domain.infrastructure.server_state", {"get_server_state": lambda: ss})
         _mock("training.jobs", {"training_jobs": {}})
-        _mock("domains.training.outcome_tracker", {
+        _mock("domain.training.outcome_tracker", {
             "TrainingOutcomeTracker": MagicMock(return_value=MagicMock(get_stats=lambda: {"total_runs": 3}))
         })
         _mock("domain.settings._internal.persistent", {
@@ -243,7 +243,7 @@ class TestDashboardSummary:
 
 class TestDashboardEvents:
     def test_returns_events_list(self):
-        _mock("domains.infrastructure.event_buffer", {
+        _mock("domain.infrastructure.event_buffer", {
             "get_event_buffer": MagicMock(return_value=MagicMock(recent=lambda n: [{"type": "info", "msg": "test"}]))
         })
 

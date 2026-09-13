@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domains.learner import continual
+from domain.learner import continual
 from domain.learner._internal.continual import (
     CHAR_SET,
     STOI,
@@ -27,7 +27,7 @@ from domain.learner._internal.knowledge import KnowledgeFact
 @pytest.fixture(autouse=True)
 def isolated_knowledge_paths(tmp_path, monkeypatch):
     """Keep ContinualLearner's KnowledgeMemory persistence off the real data dir."""
-    from domains.learner import knowledge as K
+    from domain.learner import knowledge as K
     monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
     monkeypatch.setattr(K, "VISITED_PATH", tmp_path / "visited.json")
     monkeypatch.setattr(K, "ENTRIES_PATH", tmp_path / "entries.json")

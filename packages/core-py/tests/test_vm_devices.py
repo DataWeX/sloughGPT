@@ -1,5 +1,5 @@
 """
-Comprehensive tests for domains.shell.vm_devices.
+Comprehensive tests for domain.shell.vm_devices.
 
 Pure-logic tests for all device abstractions: TensorDevice, PythonExecDevice,
 SlonetDevice, MultimodalDevice, EngineDevice, SlonetTrainingDevice, NPUVMDevice.

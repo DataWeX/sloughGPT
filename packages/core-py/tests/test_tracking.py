@@ -32,7 +32,7 @@ def fake_config(monkeypatch):
         {"tracking": FakeTracking()},
     )
     monkeypatch.setattr(
-        "domains.infrastructure.config.get_config", lambda: cfg
+        "domain.infrastructure.config.get_config", lambda: cfg
     )
     monkeypatch.setattr(
         "domain.training._internal.tracking.get_config", lambda: cfg
@@ -184,7 +184,7 @@ class TestWandbBackend:
         monkeypatch.setitem(sys.modules, "wandb", FakeWandb)
         monkeypatch.setitem(
             sys.modules,
-            "domains.training.wandb_helpers",
+            "domain.training.wandb_helpers",
             FakeWandbHelpers,
         )
         tracker = ExperimentTracker(
@@ -219,7 +219,7 @@ class TestWandbBackend:
         monkeypatch.setitem(sys.modules, "wandb", FakeWandb)
         monkeypatch.setitem(
             sys.modules,
-            "domains.training.wandb_helpers",
+            "domain.training.wandb_helpers",
             type("H", (), {"default_wandb_project": staticmethod(lambda: "p")}),
         )
         tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
@@ -243,7 +243,7 @@ class TestWandbBackend:
         monkeypatch.setitem(sys.modules, "wandb", FakeWandb)
         monkeypatch.setitem(
             sys.modules,
-            "domains.training.wandb_helpers",
+            "domain.training.wandb_helpers",
             type("H", (), {"default_wandb_project": staticmethod(lambda: "p")}),
         )
         tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))

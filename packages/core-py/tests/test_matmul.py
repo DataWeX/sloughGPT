@@ -1,4 +1,4 @@
-"""Tests for domains.inference.ops.matmul — matmul dispatch."""
+"""Tests for domain.inference.ops.matmul — matmul dispatch."""
 
 import numpy as np
 import pytest

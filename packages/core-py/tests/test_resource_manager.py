@@ -7,14 +7,14 @@ import types
 from unittest.mock import patch
 
 import pytest
-from domains.infrastructure.resource_manager import (
+from domain.infrastructure._internal.resource_manager import (
     ResourceAllocation,
     ResourceManager,
     compute_allocation,
     get_resource_manager,
     reset_resource_manager,
 )
-from domains.infrastructure.cpu_topology import CpuTopology, detect_topology
+from domain.infrastructure._internal.cpu_topology import CpuTopology, detect_topology
 
 
 # ── Fixtures ──
@@ -266,14 +266,14 @@ class TestResourceManager:
         rm.apply_compute_limits()  # must not raise
 
     def test_lazy_init_when_singleton_none(self, monkeypatch):
-        import domains.infrastructure.resource_manager as rm_mod
+        import domain.infrastructure.resource_manager as rm_mod
 
         monkeypatch.setattr(rm_mod, "_global_manager", None)
         rm = rm_mod.get_resource_manager()
         assert rm_mod._global_manager is rm
 
     def test_singleton_is_global_variable(self, monkeypatch):
-        import domains.infrastructure.resource_manager as rm_mod
+        import domain.infrastructure.resource_manager as rm_mod
 
         rm = get_resource_manager()
         assert rm_mod._global_manager is rm

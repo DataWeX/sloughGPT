@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.infrastructure.auto_ingest import (
+from domain.infrastructure._internal.auto_ingest import (
     AutoIngester,
     CodeChunker,
     FileChunk,

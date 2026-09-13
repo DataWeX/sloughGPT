@@ -1,14 +1,14 @@
-"""Tests for domains.infrastructure.pugqeep.queue — ModelQueue."""
+"""Tests for domain.infrastructure._internal.pugqeep.queue — ModelQueue."""
 
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
-from domains.infrastructure.pugqeep.queue import ModelQueue
-from domains.infrastructure.pugqeep.model_tree import ModelTree
-from domains.infrastructure.pugqeep.library import PointLibrary
-from domains.infrastructure.pugqeep.config import QueueConfig, TreeConfig
+from domain.infrastructure._internal.pugqeep.queue import ModelQueue
+from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+from domain.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.infrastructure._internal.pugqeep.config import QueueConfig, TreeConfig
 
 
 @pytest.fixture

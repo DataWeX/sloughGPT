@@ -29,7 +29,7 @@ def _app(mr: MobileRouter):
 
 
 class TestTrainingStats:
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training.mobile_training_store.get_training_store")
     def test_get_training_stats(self, mock_get_store):
         store = MagicMock()
         store.stats.return_value = {"total": 100, "pending": 5, "synced": 90, "used": 80}
@@ -45,7 +45,7 @@ class TestTrainingStats:
         assert body["pending"] == 5
         assert body["by_quality"]["good"] == 70
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training.mobile_training_store.get_training_store")
     def test_get_training_stats_empty(self, mock_get_store):
         store = MagicMock()
         store.stats.return_value = {"total": 0, "pending": 0, "synced": 0, "used": 0}
@@ -63,7 +63,7 @@ class TestTrainingStats:
 
 
 class TestNotificationHistory:
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile.notifications.get_notification_service")
     def test_notification_history(self, mock_get_svc):
         svc = MagicMock()
         svc.get_history.return_value = [
@@ -81,7 +81,7 @@ class TestNotificationHistory:
         assert "history" in body
         assert len(body["history"]) == 2
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile.notifications.get_notification_service")
     def test_notification_history_with_limit(self, mock_get_svc):
         svc = MagicMock()
         svc.get_history.return_value = [{"title": "Only", "body": "One", "sent_at": 1000}]
@@ -98,7 +98,7 @@ class TestNotificationHistory:
 
 
 class TestDeviceManagement:
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile.notifications.get_notification_service")
     def test_list_devices(self, mock_get_svc):
         svc = MagicMock()
         svc.get_devices.return_value = [
@@ -114,7 +114,7 @@ class TestDeviceManagement:
         body = resp.json()["data"]
         assert len(body["devices"]) == 2
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile.notifications.get_notification_service")
     def test_list_devices_with_topic_filter(self, mock_get_svc):
         svc = MagicMock()
         svc.get_devices.return_value = [{"token": "abc", "platform": "ios"}]
@@ -126,7 +126,7 @@ class TestDeviceManagement:
         assert resp.status_code == 200
         svc.get_devices.assert_called_once_with(topic="training")
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile.notifications.get_notification_service")
     def test_register_device(self, mock_get_svc):
         svc = MagicMock()
         svc.register_device.return_value = {"status": "registered"}
@@ -143,7 +143,7 @@ class TestDeviceManagement:
         assert resp.status_code == 200
         svc.register_device.assert_called_once()
 
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile.notifications.get_notification_service")
     def test_unregister_device(self, mock_get_svc):
         svc = MagicMock()
         svc.unregister_device.return_value = {"status": "unregistered"}
@@ -160,7 +160,7 @@ class TestDeviceManagement:
 
 
 class TestCompact:
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training.mobile_training_store.get_training_store")
     def test_compact_training_store(self, mock_get_store):
         store = MagicMock()
         store.compact.return_value = 42
@@ -179,7 +179,7 @@ class TestCompact:
 
 
 class TestAutoTrainStatus:
-    @patch("domains.training.auto_trainer.get_auto_trainer")
+    @patch("domain.training.auto_trainer.get_auto_trainer")
     def test_get_auto_train_status(self, mock_get_trainer):
         trainer = MagicMock()
         trainer.status.return_value = {
@@ -198,7 +198,7 @@ class TestAutoTrainStatus:
         assert body["enabled"] is True
         assert body["threshold"] == 10
 
-    @patch("domains.training.auto_trainer.get_auto_trainer")
+    @patch("domain.training.auto_trainer.get_auto_trainer")
     def test_update_auto_train_config(self, mock_get_trainer):
         trainer = MagicMock()
         trainer.status.return_value = {"enabled": True, "threshold": 20, "interval_s": 120}
@@ -215,7 +215,7 @@ class TestAutoTrainStatus:
 
 
 class TestSendNotification:
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile.notifications.get_notification_service")
     def test_send_notification(self, mock_get_svc):
         svc = MagicMock()
         svc.send_notification_async = AsyncMock(return_value={"sent": 5, "failed": 0})
@@ -236,7 +236,7 @@ class TestSendNotification:
 
 
 class TestCleanupDevices:
-    @patch("domains.mobile.notifications.get_notification_service")
+    @patch("domain.mobile.notifications.get_notification_service")
     def test_cleanup_devices(self, mock_get_svc):
         svc = MagicMock()
         svc.cleanup_stale.return_value = 3
@@ -254,7 +254,7 @@ class TestCleanupDevices:
 
 
 class TestPendingPairs:
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training.mobile_training_store.get_training_store")
     def test_get_pending_pairs(self, mock_get_store):
         store = MagicMock()
         store.get_pending_pairs.return_value = [
@@ -270,7 +270,7 @@ class TestPendingPairs:
         body = resp.json()["data"]
         assert len(body["pairs"]) == 2
 
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training.mobile_training_store.get_training_store")
     def test_get_pending_pairs_with_limit(self, mock_get_store):
         store = MagicMock()
         store.get_pending_pairs.return_value = [{"id": "p1"}]
@@ -287,7 +287,7 @@ class TestPendingPairs:
 
 
 class TestExportTrainingPairs:
-    @patch("domains.training.mobile_training_store.get_training_store")
+    @patch("domain.training.mobile_training_store.get_training_store")
     def test_export_training_pairs(self, mock_get_store):
         store = MagicMock()
         store.list_pairs.return_value = [

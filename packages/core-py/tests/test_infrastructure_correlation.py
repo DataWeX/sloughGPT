@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 
-from domains.infrastructure.correlation import get_correlation_id, set_correlation_id
+from domain.infrastructure._internal.correlation import get_correlation_id, set_correlation_id
 
 
 class TestCorrelationId:

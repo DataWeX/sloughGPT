@@ -4,7 +4,7 @@ import asyncio
 import time
 
 import pytest
-from domains.infrastructure.model_server import PriorityRequestQueue, Priority
+from domain.infrastructure._internal.model_server import PriorityRequestQueue, Priority
 
 
 @pytest.fixture
@@ -181,7 +181,7 @@ class TestMetrics:
         """Items queued should appear in depth before execution."""
         q2 = PriorityRequestQueue(max_concurrent=1, max_queue=32)
         import heapq
-        from domains.infrastructure.model_server import _QueueItem
+        from domain.infrastructure._internal.model_server import _QueueItem
         loop = asyncio.get_running_loop()
         for p in range(3):
             heapq.heappush(q2._heap,
@@ -229,7 +229,7 @@ class TestEdgeCases:
     async def test_depth_api(self, queue):
         q2 = PriorityRequestQueue(max_concurrent=1)
         import heapq
-        from domains.infrastructure.model_server import _QueueItem
+        from domain.infrastructure._internal.model_server import _QueueItem
         loop = asyncio.get_running_loop()
         heapq.heappush(q2._heap,
             _QueueItem(priority=0, enqueue_order=-1, coro=None, future=loop.create_future(), request_id="r0"))

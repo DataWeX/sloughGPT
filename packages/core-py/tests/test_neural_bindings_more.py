@@ -1,4 +1,4 @@
-"""Coverage-completing tests for the neural facade (domains.shell.addons.neural_bindings).
+"""Coverage-completing tests for the neural facade (domain.shell.addons.neural_bindings).
 
 Run: PYTHONPATH=packages/core-py python -m pytest tests/test_neural_bindings_more.py -q
 """

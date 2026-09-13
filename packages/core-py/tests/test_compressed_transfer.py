@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.compressed_transfer — streaming compression, integrity, roundtrip."""
+"""Tests for domain.infrastructure.compressed_transfer — streaming compression, integrity, roundtrip."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from domains.infrastructure.compressed_transfer import (
+from domain.infrastructure._internal.compressed_transfer import (
     MAGIC,
     HEADER_SIZE,
     CHUNK_SIZE,
@@ -348,7 +348,7 @@ class TestEdgeCases:
 class TestCompressedDownloaderRoundtrip:
     def test_known_size_compresses_smaller(self, tmp_path):
         """Create a file with known size, compress, download, verify smaller on wire."""
-        from domains.infrastructure.compressed_transfer import CompressedDownloader
+        from domain.infrastructure._internal.compressed_transfer import CompressedDownloader
 
         # 1MB of repeated data — compresses very well
         original_data = b"ABCDEFGHIJ" * (1024 * 1024 // 10)
@@ -384,7 +384,7 @@ class TestCompressedDownloaderRoundtrip:
 
     def test_various_sizes_compress_and_verify(self, tmp_path):
         """Roundtrip across sizes from 1KB to 512KB with compressible data."""
-        from domains.infrastructure.compressed_transfer import CompressedDownloader
+        from domain.infrastructure._internal.compressed_transfer import CompressedDownloader
 
         for size in [1024, 10_240, 102_400, 512_000]:
             # Use repeated pattern (compressible) for each size
@@ -416,7 +416,7 @@ class TestCompressedDownloaderRoundtrip:
 
     def test_compressed_bandwidth_savings(self, tmp_path):
         """Verify compressed transfer uses less bandwidth than raw."""
-        from domains.infrastructure.compressed_transfer import CompressedDownloader
+        from domain.infrastructure._internal.compressed_transfer import CompressedDownloader
 
         # Highly compressible data (text-like, repeated)
         line = b"The quick brown fox jumps over the lazy dog. "

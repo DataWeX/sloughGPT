@@ -1,7 +1,7 @@
 """Tests for the plugin framework."""
 
 import pytest
-from domains.plugins import (
+from domain.plugins import (
     Plugin,
     PluginHook,
     PluginManager,

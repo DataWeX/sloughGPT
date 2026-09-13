@@ -1,6 +1,6 @@
 """Tests for serving profiles module."""
 
-from domains.infrastructure.serving_profiles import (
+from domain.infrastructure._internal.serving_profiles import (
     ProfileTier,
     ServingProfile,
     apply_profile,

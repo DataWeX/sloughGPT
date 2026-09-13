@@ -1,4 +1,4 @@
-"""Tests for domains.benchmark.domain — pure logic, no external mocks."""
+"""Tests for domain.benchmark.domain — pure logic, no external mocks."""
 
 import json
 import os

@@ -1,4 +1,4 @@
-"""Comprehensive tests for domains.chat.domain — dataclasses, prompt building, logging, stats, singleton, respond logic."""
+"""Comprehensive tests for domain.chat.domain — dataclasses, prompt building, logging, stats, singleton, respond logic."""
 
 import json
 import pytest

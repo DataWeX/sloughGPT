@@ -1,4 +1,4 @@
-"""Tests for domains.shell.cmds.models_cmd — models, unload, precision, quantize, dequantize."""
+"""Tests for domain.shell.cmds.models_cmd — models, unload, precision, quantize, dequantize."""
 
 from __future__ import annotations
 

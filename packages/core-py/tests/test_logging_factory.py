@@ -1,4 +1,4 @@
-"""Tests for domains.logging — factory functions, global logger, LogLevel, LogRecord, Logger ABC, ChildLogger, TaggedLogger, CompositeLogger, ErrorCode, LogTag."""
+"""Tests for domain.logging — factory functions, global logger, LogLevel, LogRecord, Logger ABC, ChildLogger, TaggedLogger, CompositeLogger, ErrorCode, LogTag."""
 
 import io
 import time
@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from domains.logging import (
+from domain.logging import (
     get_logger, set_global, get_global,
     ConsoleLogger, CLILogger, ShellLogger, WebLogger,
     LogLevel,
@@ -305,7 +305,7 @@ class TestGlobalLogger:
 
     def test_get_creates_default(self):
         set_global(None)
-        import domains.logging as pkg
+        import domain.logging as pkg
         pkg._global_logger = None
         log = get_global()
         assert isinstance(log, ConsoleLogger)

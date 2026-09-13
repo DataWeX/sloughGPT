@@ -1,4 +1,4 @@
-"""Tests for domains.shell.addons.module_loader — ModuleLoader, ModuleInfo, hot-reload."""
+"""Tests for domain.shell.addons.module_loader — ModuleLoader, ModuleInfo, hot-reload."""
 
 from __future__ import annotations
 

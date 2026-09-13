@@ -1,10 +1,10 @@
-"""Tests for domains.agents — SecurityBoundary, SecurityConfig, ToolCapability, ToolDefinition, AgentConfig."""
+"""Tests for domain.agents — SecurityBoundary, SecurityConfig, ToolCapability, ToolDefinition, AgentConfig."""
 
 import asyncio
 import os
 import tempfile
 import time
-from domains.agents import (
+from domain.agents import (
     SecurityConfig, SecurityBoundary, ToolCapability,
     ToolDefinition, ToolExecutionContext, AgentConfig,
     Agent, get_agent, get_runner,
@@ -537,26 +537,26 @@ class TestToolRunner:
 
 class TestSingletons:
     def test_get_agent_returns_agent(self):
-        import domains.agents as mod
+        import domain.agents as mod
         mod._agent = None
         agent = get_agent()
         assert isinstance(agent, Agent)
 
     def test_get_agent_returns_same_instance(self):
-        import domains.agents as mod
+        import domain.agents as mod
         mod._agent = None
         a1 = get_agent()
         a2 = get_agent()
         assert a1 is a2
 
     def test_get_runner_returns_runner(self):
-        import domains.agents as mod
+        import domain.agents as mod
         mod._runner = None
         runner = get_runner()
         assert isinstance(runner, ToolRunner)
 
     def test_get_runner_returns_same_instance(self):
-        import domains.agents as mod
+        import domain.agents as mod
         mod._runner = None
         r1 = get_runner()
         r2 = get_runner()

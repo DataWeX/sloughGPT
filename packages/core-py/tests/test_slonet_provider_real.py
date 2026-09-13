@@ -18,7 +18,7 @@ import zlib
 import numpy as np
 import pytest
 
-from domains.infrastructure.slnc.spec import compute_header_size
+from domain.infrastructure._internal.slnc.spec import compute_header_size
 from domain.inference._internal.slonet_provider import (
     SloNetChatProvider,
     _get_slo_layernorm,
@@ -336,7 +336,7 @@ def test_generate_batch_real(provider):
 
 @pytest.fixture
 def avx2_available(monkeypatch):
-    monkeypatch.setattr("domains.infrastructure.quant_core.wrapper.HAS_AVX2", True)
+    monkeypatch.setattr("domain.infrastructure._internal.quant_core.wrapper.HAS_AVX2", True)
 
 
 @pytest.fixture
@@ -403,7 +403,7 @@ def test_fused_gemm_generation_bit_identical(quantized_provider, monkeypatch):
 
 def test_quantize_skipped_without_avx2(slnc, tmp_path, monkeypatch):
     monkeypatch.setenv("HF_HOME", str(tmp_path))
-    monkeypatch.setattr("domains.infrastructure.quant_core.wrapper.HAS_AVX2", False)
+    monkeypatch.setattr("domain.infrastructure._internal.quant_core.wrapper.HAS_AVX2", False)
     _build_tokenizer(str(tmp_path))
     provider = SloNetChatProvider.from_slnc(slnc, model_id="gpt2", quantize=True)
     assert provider.quantization_report() == {"quantized": False}

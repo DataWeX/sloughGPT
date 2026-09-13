@@ -10,13 +10,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.infrastructure.pugqeep.config import (
+from domain.infrastructure._internal.pugqeep.config import (
     EngineConfig,
     MonitorConfig,
     RestartPolicy,
     SubprocessConfig,
 )
-from domains.infrastructure.pugqeep.engine import (
+from domain.infrastructure._internal.pugqeep.engine import (
     Engine,
     EngineMetrics,
     Process,
@@ -615,7 +615,7 @@ class TestSubprocessPipeProtocol:
 
 class TestEngineMetrics:
     def test_record_spawn(self):
-        from domains.infrastructure.pugqeep.engine import EngineMetrics
+        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
         m = EngineMetrics()
         m.record_spawn()
         m.record_spawn()
@@ -623,7 +623,7 @@ class TestEngineMetrics:
         assert s["spawned"] == 2
 
     def test_record_complete(self):
-        from domains.infrastructure.pugqeep.engine import EngineMetrics
+        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
         m = EngineMetrics()
         proc = Process(fn=_noop)
         proc.running()
@@ -635,7 +635,7 @@ class TestEngineMetrics:
         assert s["avg_latency_s"] > 0
 
     def test_record_fail(self):
-        from domains.infrastructure.pugqeep.engine import EngineMetrics
+        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
         m = EngineMetrics()
         m.record_fail()
         s = m.snapshot()
@@ -643,7 +643,7 @@ class TestEngineMetrics:
         assert s["error_rate"] == 1.0
 
     def test_throughput(self):
-        from domains.infrastructure.pugqeep.engine import EngineMetrics
+        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
         m = EngineMetrics()
         m.record_complete(Process(fn=_noop))
         m.record_complete(Process(fn=_noop))
@@ -651,7 +651,7 @@ class TestEngineMetrics:
         assert s["throughput_per_s"] > 0
 
     def test_reset(self):
-        from domains.infrastructure.pugqeep.engine import EngineMetrics
+        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
         m = EngineMetrics()
         m.record_spawn()
         m.record_fail()
@@ -661,7 +661,7 @@ class TestEngineMetrics:
         assert s["failed"] == 0
 
     def test_cancel_and_timeout(self):
-        from domains.infrastructure.pugqeep.engine import EngineMetrics
+        from domain.infrastructure._internal.pugqeep.engine import EngineMetrics
         m = EngineMetrics()
         m.record_cancel()
         m.record_timeout()
@@ -1162,7 +1162,7 @@ class TestCancelManagerIntegration:
         # Dispatch to start the process
         engine.dispatch()
         # Cancel via CancelManager
-        from domains.infrastructure.cancel_manager import get_cancel_manager
+        from domain.infrastructure._internal.cancel_manager import get_cancel_manager
         mgr = get_cancel_manager()
         mgr.cancel(proc.id)
         # Wait for process to finish (cancellation sets CANCELLED status)
@@ -1178,7 +1178,7 @@ class TestCancelManagerIntegration:
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         # After completion, process should still be tracked by CancelManager
-        from domains.infrastructure.cancel_manager import get_cancel_manager
+        from domain.infrastructure._internal.cancel_manager import get_cancel_manager
         mgr = get_cancel_manager()
         assert mgr.get(proc.id) is not None
         engine.stop()
@@ -1191,7 +1191,7 @@ class TestCancelManagerIntegration:
         engine.wait(timeout=5)
         engine.stop()
         # Should not be registered with CancelManager
-        from domains.infrastructure.cancel_manager import get_cancel_manager
+        from domain.infrastructure._internal.cancel_manager import get_cancel_manager
         mgr = get_cancel_manager()
         assert mgr.get(proc.id) is None
 
@@ -1576,7 +1576,7 @@ class TestWorkerPool:
 
 class TestProcessMonitorRestart:
     def test_restart_callback_fires(self):
-        from domains.infrastructure.pugqeep.config import RestartPolicy
+        from domain.infrastructure._internal.pugqeep.config import RestartPolicy
         policy = RestartPolicy(max_restarts=2, restart_delay=0.01)
         monitor = ProcessMonitor(poll_interval=0.01, stall_timeout=0.1)
         monitor.start()
@@ -2073,7 +2073,7 @@ class TestWaitForAnyExtended:
 class TestSubprocessCwdAndCapture:
     def test_subprocess_cwd(self):
         import os
-        from domains.infrastructure.pugqeep.config import EngineConfig, SubprocessConfig
+        from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(cwd="/tmp"))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
@@ -2089,7 +2089,7 @@ class TestSubprocessCwdAndCapture:
         assert p.result == "/tmp"
 
     def test_subprocess_cwd_nonexistent(self):
-        from domains.infrastructure.pugqeep.config import EngineConfig, SubprocessConfig
+        from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(cwd="/nonexistent/path"))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
@@ -2106,7 +2106,7 @@ class TestSubprocessCwdAndCapture:
         assert p.status == ProcessStatus.COMPLETED
 
     def test_subprocess_capture_output(self):
-        from domains.infrastructure.pugqeep.config import EngineConfig, SubprocessConfig
+        from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(capture_output=True))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
@@ -2124,7 +2124,7 @@ class TestSubprocessCwdAndCapture:
         assert p.result == "done"
 
     def test_subprocess_env(self):
-        from domains.infrastructure.pugqeep.config import EngineConfig, SubprocessConfig
+        from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(env={"MY_TEST_VAR": "hello"}))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
@@ -2141,7 +2141,7 @@ class TestSubprocessCwdAndCapture:
         assert p.result == "hello"
 
     def test_run_subprocess_convenience(self):
-        from domains.infrastructure.pugqeep.config import EngineConfig, SubprocessConfig
+        from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(cwd="/tmp"))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
@@ -2157,7 +2157,7 @@ class TestSubprocessCwdAndCapture:
         assert p.result == 5
 
     def test_subprocess_health_with_stdout(self):
-        from domains.infrastructure.pugqeep.config import EngineConfig, SubprocessConfig
+        from domain.infrastructure._internal.pugqeep.config import EngineConfig, SubprocessConfig
         cfg = EngineConfig(name="test", subprocess=SubprocessConfig(capture_output=True))
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)

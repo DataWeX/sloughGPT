@@ -19,7 +19,7 @@ _CORE_PY = Path(__file__).resolve().parents[1]
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domains.infrastructure.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.point import Point
 
 
 # ── generate() ────────────────────────────────────────────────────────

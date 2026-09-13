@@ -1,7 +1,7 @@
 """Tests for cognitive/reasoning/deep.py — dataclasses + FormalLogicEngine + WorkingMemory."""
 
 import pytest
-from domains.cognitive.reasoning.deep import (
+from domain.cognitive._internal.reasoning.deep import (
     RetrievalSource,
     RetrievedKnowledge,
     DeepReasoningContext,

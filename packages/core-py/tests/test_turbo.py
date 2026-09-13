@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
 
-from domains.training import state as _state_mod
+from domain.training import state as _state_mod
 from domain.training._internal.state import (
     _state, _turbo_lock, _turbo_cancel_event, _turbo_pause_event, _turbo_state,
     CHECKPOINTS_DIR, TURBO_DIR, REPO_ROOT,
@@ -123,7 +123,7 @@ class TestStartTurboTraining:
             import shutil
             shutil.rmtree(tmp, ignore_errors=True)
 
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     def test_success(self, mock_get_rt):
         mock_rt = MagicMock()
         mock_get_rt.return_value = mock_rt
@@ -141,7 +141,7 @@ class TestStartTurboTraining:
         finally:
             data_file.unlink(missing_ok=True)
 
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     def test_resume(self, mock_get_rt):
         mock_rt = MagicMock()
         mock_get_rt.return_value = mock_rt
@@ -164,7 +164,7 @@ class TestStartTurboTraining:
             data_file.unlink(missing_ok=True)
             soul_file.unlink(missing_ok=True)
 
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     @patch("domain.training._internal.turbo.resolve_dataset_path")
     def test_dataset_id_fallback(self, mock_resolve, mock_get_rt):
         mock_get_rt.return_value = MagicMock()
@@ -180,7 +180,7 @@ class TestStartTurboTraining:
         finally:
             data_file.unlink(missing_ok=True)
 
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     def test_sets_state_running(self, mock_get_rt):
         mock_rt = MagicMock()
         mock_get_rt.return_value = mock_rt
@@ -222,14 +222,14 @@ class TestRunTurboWorker:
         mock_update.assert_called_once()
 
     @patch("domain.training._internal.turbo.update_job")
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     def test_trainer_exception(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
         mock_get_rt.return_value = mock_rt
         with _turbo_lock:
             _turbo_state["job_id"] = "test_job"
 
-        with patch("domains.training.train_pipeline.SloughGPTTrainer", side_effect=RuntimeError("boom")):
+        with patch("domain.training.train_pipeline.SloughGPTTrainer", side_effect=RuntimeError("boom")):
             run_turbo_worker({"data_path": "/tmp/fake.jsonl"})
 
         with _turbo_lock:
@@ -237,7 +237,7 @@ class TestRunTurboWorker:
             assert "boom" in _turbo_state["error"]
 
     @patch("domain.training._internal.turbo.update_job")
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     def test_trainer_result_error(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
         mock_get_rt.return_value = mock_rt
@@ -246,7 +246,7 @@ class TestRunTurboWorker:
 
         mock_trainer = MagicMock()
         mock_trainer.train.return_value = {"status": "error", "message": "train failed"}
-        with patch("domains.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
+        with patch("domain.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
             run_turbo_worker({"data_path": "/tmp/fake.jsonl"})
 
         with _turbo_lock:
@@ -254,7 +254,7 @@ class TestRunTurboWorker:
             assert _turbo_state["error"] == "train failed"
 
     @patch("domain.training._internal.turbo.update_job")
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     def test_cancel_during_training(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
         mock_get_rt.return_value = mock_rt
@@ -267,7 +267,7 @@ class TestRunTurboWorker:
 
         mock_trainer = MagicMock()
         mock_trainer.train.side_effect = set_cancel
-        with patch("domains.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
+        with patch("domain.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
             run_turbo_worker({"data_path": "/tmp/fake.jsonl"})
 
         with _turbo_lock:
@@ -275,7 +275,7 @@ class TestRunTurboWorker:
             assert _turbo_state["error"] == "Training cancelled"
 
     @patch("domain.training._internal.turbo.update_job")
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     def test_successful_training(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
         mock_get_rt.return_value = mock_rt
@@ -288,7 +288,7 @@ class TestRunTurboWorker:
 
         mock_trainer = MagicMock()
         mock_trainer.train.return_value = {"loss": 0.5}
-        with patch("domains.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
+        with patch("domain.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
             run_turbo_worker({"data_path": "/tmp/fake.jsonl"})
 
         with _turbo_lock:
@@ -297,7 +297,7 @@ class TestRunTurboWorker:
         soul_file.unlink(missing_ok=True)
 
     @patch("domain.training._internal.turbo.update_job")
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     def test_on_progress_callback(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
         mock_get_rt.return_value = mock_rt
@@ -323,7 +323,7 @@ class TestRunTurboWorker:
 
         mock_trainer = MagicMock()
         mock_trainer.train.side_effect = fake_train
-        with patch("domains.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
+        with patch("domain.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
             run_turbo_worker({"data_path": "/tmp/fake.jsonl"})
 
         with _turbo_lock:
@@ -337,7 +337,7 @@ class TestRunTurboWorker:
             assert _turbo_state["avg_quality"] == 0.7
 
     @patch("domain.training._internal.turbo.update_job")
-    @patch("domains.training.runtime_protocol.get_training_runtime")
+    @patch("domain.training.runtime_protocol.get_training_runtime")
     def test_state_running_false_after_worker(self, mock_get_rt, mock_update):
         mock_rt = MagicMock()
         mock_get_rt.return_value = mock_rt
@@ -346,7 +346,7 @@ class TestRunTurboWorker:
 
         mock_trainer = MagicMock()
         mock_trainer.train.side_effect = RuntimeError("fail")
-        with patch("domains.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
+        with patch("domain.training.train_pipeline.SloughGPTTrainer", return_value=mock_trainer):
             run_turbo_worker({"data_path": "/tmp/fake.jsonl"})
 
         assert _state.running is False

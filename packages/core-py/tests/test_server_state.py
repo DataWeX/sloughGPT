@@ -13,7 +13,7 @@ from threading import Thread
 
 import pytest
 
-from domains.infrastructure.server_state import (
+from domain.infrastructure._internal.server_state import (
     AtomicRef,
     ServerState,
     get_server_state,

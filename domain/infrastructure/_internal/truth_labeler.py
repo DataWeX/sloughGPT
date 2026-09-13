@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.truth_labeler import *  # noqa: F401,F403
+import domains.infrastructure.truth_labeler as _mod
+globals().update(vars(_mod))

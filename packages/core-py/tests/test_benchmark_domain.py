@@ -18,7 +18,7 @@ from domain.benchmark._internal.domain import (
 @pytest.fixture
 def bench(tmp_path, monkeypatch):
     """Create a BenchmarkDomain using a temp directory."""
-    monkeypatch.setattr("domains.benchmark.domain._RESPONSES_DIR", tmp_path)
+    monkeypatch.setattr("domain.benchmark.domain._RESPONSES_DIR", tmp_path)
     reset_benchmark_domain()
     yield BenchmarkDomain()
     reset_benchmark_domain()

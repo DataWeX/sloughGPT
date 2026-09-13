@@ -1,8 +1,8 @@
-"""Tests for domains.infrastructure.quant_core.wrapper — numpy fallback matmul."""
+"""Tests for domain.infrastructure._internal.quant_core.wrapper — numpy fallback matmul."""
 
 import numpy as np
 import pytest
-from domains.infrastructure.quant_core.wrapper import _fallback, _fallback_int4
+from domain.infrastructure._internal.quant_core.wrapper import _fallback, _fallback_int4
 
 
 class TestFallback:

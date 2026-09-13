@@ -242,7 +242,7 @@ class TestGGUFWrappers:
             rec["config"] = config
             return output_path
 
-        monkeypatch.setattr("domains.training.gguf_export.export_to_gguf", stub)
+        monkeypatch.setattr("domain.training.gguf_export.export_to_gguf", stub)
         tok = object()
         r = export_to_gguf(object(), "out.gguf", "Q8_0", tok)
         assert r == "out.gguf"
@@ -256,7 +256,7 @@ class TestGGUFWrappers:
             rec["config"] = config
             return output_path
 
-        monkeypatch.setattr("domains.training.gguf_export.export_to_gguf", stub)
+        monkeypatch.setattr("domain.training.gguf_export.export_to_gguf", stub)
         export_to_gguf(object(), "out.gguf")
         assert rec["config"].quantization == "Q4_K_M"
 
@@ -267,7 +267,7 @@ class TestGGUFWrappers:
             rec["tokenizer"] = tokenizer
             return output_path
 
-        monkeypatch.setattr("domains.training.gguf_export.export_to_gguf_fp16", stub)
+        monkeypatch.setattr("domain.training.gguf_export.export_to_gguf_fp16", stub)
         tok = object()
         r = export_to_gguf_fp16(object(), "out.gguf", tok)
         assert r == "out.gguf"
@@ -280,7 +280,7 @@ class TestGGUFWrappers:
             rec["tokenizer"] = tokenizer
             return output_path
 
-        monkeypatch.setattr("domains.training.gguf_export.export_to_gguf_q4_k_m", stub)
+        monkeypatch.setattr("domain.training.gguf_export.export_to_gguf_q4_k_m", stub)
         r = export_to_gguf_q4_k_m(object(), "out.gguf")
         assert r == "out.gguf"
 
@@ -304,7 +304,7 @@ class TestExportToSou:
         assert Path(out).exists()
 
     def test_with_soul_profile(self, tmp_path):
-        from domains.inference import create_soul_profile
+        from domain.inference import create_soul_profile
 
         model = FakeModel(state={"w": np.ones((1,))})
         profile = create_soul_profile(name="profile-name", lineage="base")

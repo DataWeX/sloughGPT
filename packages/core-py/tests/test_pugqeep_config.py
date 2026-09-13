@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.pugqeep.config — compression configuration dataclasses.
+"""Tests for domain.infrastructure._internal.pugqeep.config — compression configuration dataclasses.
 
 Covers: PointConfig, CompressorConfig, LibraryConfig, TreeConfig, QueueConfig,
 SubprocessConfig, RestartPolicy, MonitorConfig, EngineConfig defaults and edges.
@@ -14,7 +14,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.infrastructure.pugqeep.config import (
+from domain.infrastructure._internal.pugqeep.config import (
     PointConfig,
     CompressorConfig,
     LibraryConfig,

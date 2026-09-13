@@ -6,7 +6,7 @@ import json
 import time
 import pytest
 from dataclasses import dataclass
-from domains.infrastructure.repository import (
+from domain.infrastructure._internal.repository import (
     FileRepository, MemoryRepository, CachedRepository,
     Migration, MigrationRunner, JsonSerializer,
 )

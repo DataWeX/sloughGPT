@@ -1,4 +1,4 @@
-"""Tests for domains.training.huggingface.local_loader — HFLocalConfig."""
+"""Tests for domain.training._internal.huggingface.local_loader — HFLocalConfig."""
 
 from domain.training._internal.huggingface.local_loader import (
     HFLocalConfig,

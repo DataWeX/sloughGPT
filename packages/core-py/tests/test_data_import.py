@@ -493,11 +493,11 @@ class TestHuggingFaceImporter:
         assert HuggingFaceImporter()._hf_available is True
 
     def test_search_datasets_import_error(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.hf_hub", None)
+        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub", None)
         assert HuggingFaceImporter().search_datasets("anything") == []
 
     def test_search_datasets_success(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.hf_hub",
+        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub",
                             SimpleNamespace(fetch_dataset_search=lambda q, limit: [{"id": q}]))
         assert HuggingFaceImporter().search_datasets("cats") == [{"id": "cats"}]
 
@@ -505,7 +505,7 @@ class TestHuggingFaceImporter:
         def boom(q, limit):
             raise RuntimeError("hub down")
 
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.hf_hub",
+        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub",
                             SimpleNamespace(fetch_dataset_search=boom))
         assert HuggingFaceImporter().search_datasets("cats") == []
 
@@ -1542,7 +1542,7 @@ class TestHuggingFaceImporterExtended:
         assert result.name == "my_dataset"
 
     def test_search_datasets_returns_list(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.hf_hub",
+        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub",
                             SimpleNamespace(fetch_dataset_search=lambda q, limit: [
                                 {"id": "a"}, {"id": "b"}
                             ]))

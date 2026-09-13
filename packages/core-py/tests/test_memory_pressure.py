@@ -1,11 +1,11 @@
-"""Tests for domains.infrastructure.memory_pressure — MemoryPressureMonitor."""
+"""Tests for domain.infrastructure.memory_pressure — MemoryPressureMonitor."""
 
 import gc
 import time
 import sys
 from unittest.mock import MagicMock, patch
 import pytest
-from domains.infrastructure.memory_pressure import (
+from domain.infrastructure._internal.memory_pressure import (
     MemoryPressureMonitor,
     PressureLevel,
     get_memory_pressure_monitor,

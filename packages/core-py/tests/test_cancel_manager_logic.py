@@ -2,7 +2,7 @@
 
 import threading
 import time
-from domains.infrastructure.cancel_manager import (
+from domain.infrastructure._internal.cancel_manager import (
     CancelManager, OpType, OpStatus, Operation, get_cancel_manager, reset_cancel_manager,
 )
 

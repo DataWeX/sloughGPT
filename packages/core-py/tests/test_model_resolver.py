@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.infrastructure.model_resolver import (
+from domain.infrastructure._internal.model_resolver import (
     get_model_dir,
     find_safetensors,
     load_model_config,
@@ -23,7 +23,7 @@ class TestGetModelDir:
     def test_returns_first_candidate_when_none_exist(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
         monkeypatch.setattr(
-            "domains.infrastructure.model_resolver.find_repo_root",
+            "domain.infrastructure.model_resolver.find_repo_root",
             lambda _: tmp_path,
         )
         result = get_model_dir("gpt2")
@@ -35,7 +35,7 @@ class TestGetModelDir:
         model_dir.mkdir(parents=True)
         monkeypatch.setenv("HF_HOME", str(hf_home))
         monkeypatch.setattr(
-            "domains.infrastructure.model_resolver.find_repo_root",
+            "domain.infrastructure.model_resolver.find_repo_root",
             lambda _: tmp_path,
         )
         result = get_model_dir("gpt2")
@@ -46,7 +46,7 @@ class TestGetModelDir:
         project_cache = tmp_path / "models" / "hf-cache" / "hub" / "models--gpt2"
         project_cache.mkdir(parents=True)
         monkeypatch.setattr(
-            "domains.infrastructure.model_resolver.find_repo_root",
+            "domain.infrastructure.model_resolver.find_repo_root",
             lambda _: tmp_path,
         )
         result = get_model_dir("gpt2")
@@ -55,7 +55,7 @@ class TestGetModelDir:
     def test_slashed_model_id_becomes_double_dash(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
         monkeypatch.setattr(
-            "domains.infrastructure.model_resolver.find_repo_root",
+            "domain.infrastructure.model_resolver.find_repo_root",
             lambda _: tmp_path,
         )
         result = get_model_dir("meta-llama/Llama-2-7b")
@@ -103,7 +103,7 @@ class TestLoadModelConfig:
         config = {"model_type": "llama", "hidden_size": 4096}
         (snap / "config.json").write_text(json.dumps(config))
         monkeypatch.setattr(
-            "domains.infrastructure.model_resolver.get_model_dir",
+            "domain.infrastructure.model_resolver.get_model_dir",
             lambda _: tmp_path,
         )
         result = load_model_config("test-model")
@@ -113,7 +113,7 @@ class TestLoadModelConfig:
         config = {"model_type": "gpt2", "hidden_size": 768}
         (tmp_path / "config.json").write_text(json.dumps(config))
         monkeypatch.setattr(
-            "domains.infrastructure.model_resolver.get_model_dir",
+            "domain.infrastructure.model_resolver.get_model_dir",
             lambda _: tmp_path,
         )
         result = load_model_config("test-model")
@@ -121,7 +121,7 @@ class TestLoadModelConfig:
 
     def test_raises_when_missing(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "domains.infrastructure.model_resolver.get_model_dir",
+            "domain.infrastructure.model_resolver.get_model_dir",
             lambda _: tmp_path,
         )
         with pytest.raises(FileNotFoundError, match="No config.json"):

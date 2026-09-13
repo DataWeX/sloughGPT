@@ -1,10 +1,10 @@
-"""Tests for domains.training — ModelManager, ModelConfig, ModelType, ModelArchitecture."""
+"""Tests for domain.training — ModelManager, ModelConfig, ModelType, ModelArchitecture."""
 
 import json
 import os
 import tempfile
 import pytest
-from domains.training import (
+from domain.training import (
     ModelManager, ModelConfig, ModelType, ModelArchitecture,
     DatasetType, DatasetConfig, DatasetManager, DataFormat,
     DataPreprocessor, PreprocessingStepType,

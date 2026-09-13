@@ -1,5 +1,5 @@
 """
-Coverage-completion tests for the VM device layer (domains.shell.vm.py).
+Coverage-completion tests for the VM device layer (domain.shell.vm.py).
 
 Instantiates Memory, Device, and each device driver directly and exercises the
 specific branches/error paths that were previously uncovered.  Fast — no CPU

@@ -1,4 +1,4 @@
-"""Tests for domains.shell.cmds.data_cmds — datasets, checkpoints, finetuned, knowledge, remember, recall, tokenizer."""
+"""Tests for domain.shell.cmds.data_cmds — datasets, checkpoints, finetuned, knowledge, remember, recall, tokenizer."""
 
 from __future__ import annotations
 

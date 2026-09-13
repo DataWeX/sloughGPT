@@ -1,8 +1,8 @@
-"""Tests for domains.ai_personality — personality config and manager."""
+"""Tests for domain.ai_personality — personality config and manager."""
 
 import pytest
 
-from domains.ai_personality import (
+from domain.ai_personality import (
     PersonalityType,
     Personality,
     PersonalityManager,
@@ -142,5 +142,5 @@ class TestModuleSingletons:
         assert get_personality_manager() is get_personality_manager()
 
     def test_list_personalities_matches_manager(self):
-        from domains.ai_personality import _default_manager
+        from domain.ai_personality import _default_manager
         assert list_personalities() == _default_manager.list_personalities()

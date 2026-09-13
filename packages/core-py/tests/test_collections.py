@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 
-from domains.collections import (
+from domain.collections import (
     Record, FileSource, MemoryStore, CallbackStore, Collector,
     LengthFilter, DedupFilter, KeywordFilter, RegexFilter,
     LanguageFilter, FilterChain, CollectionPipeline, CollectionRegistry,

@@ -5,7 +5,7 @@ import struct
 
 import numpy as np
 import pytest
-from domains.infrastructure.safetensors_loader import (
+from domain.infrastructure._internal.safetensors_loader import (
     load_model_weights,
     load_model_config,
     list_cached_models,
@@ -215,7 +215,7 @@ class TestLoadModelWeightsPaths:
 
     def test_loads_via_raw_parser(self, tmp_path, monkeypatch):
         model_dir = self._fake_model_dir(tmp_path)
-        monkeypatch.setattr("domains.infrastructure.safetensors_loader._get_model_dir",
+        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
                             lambda model_id: model_dir)
         weights = load_model_weights("fake/model", dtype=np.float32)
         assert set(weights) == {"wte.weight", "w2"}
@@ -224,7 +224,7 @@ class TestLoadModelWeightsPaths:
     def test_raises_value_error_when_no_safetensors(self, tmp_path, monkeypatch):
         model_dir = tmp_path / "empty"
         model_dir.mkdir()
-        monkeypatch.setattr("domains.infrastructure.safetensors_loader._get_model_dir",
+        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
                             lambda model_id: model_dir)
         with pytest.raises(ValueError):
             load_model_weights("fake/model")
@@ -316,7 +316,7 @@ class TestLoadModelWeightsFakeSafetensorsPackage:
             "c": ("plain", np.arange(6, dtype=np.float32).reshape(2, 3)),
         }
         self._install_fake_safetensors(monkeypatch, spec)
-        monkeypatch.setattr("domains.infrastructure.safetensors_loader._get_model_dir",
+        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
                             lambda model_id: p)
         weights = load_model_weights("fake/model", dtype=np.float32)
         assert set(weights) == {"a", "b", "c"}
@@ -328,7 +328,7 @@ class TestLoadModelWeightsFakeSafetensorsPackage:
         p, arr = self._write_fake_file(tmp_path)
         spec = {"a": np.arange(6, dtype=np.float32).reshape(2, 3)}
         self._install_fake_safetensors(monkeypatch, spec)
-        monkeypatch.setattr("domains.infrastructure.safetensors_loader._get_model_dir",
+        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
                             lambda model_id: p)
         weights = load_model_weights("fake/model", dtype=np.float32)
         assert set(weights) == {"a"}
@@ -342,7 +342,7 @@ class TestLoadModelConfigSnapshots:
         snap = model_dir / "snapshots" / "abcdef"
         snap.mkdir(parents=True)
         (snap / "config.json").write_text(json.dumps({"model_type": "fake"}))
-        monkeypatch.setattr("domains.infrastructure.safetensors_loader._get_model_dir",
+        monkeypatch.setattr("domain.infrastructure.safetensors_loader._get_model_dir",
                             lambda model_id: model_dir)
         cfg = load_model_config("fake/model")
         assert cfg["model_type"] == "fake"
@@ -388,7 +388,7 @@ class TestListCachedModels:
         fake_file = (repo / "packages" / "core-py" / "domains" / "infrastructure"
                      / "safetensors_loader.py")
         fake_file.parent.mkdir(parents=True)
-        monkeypatch.setattr("domains.infrastructure.safetensors_loader.__file__",
+        monkeypatch.setattr("domain.infrastructure.safetensors_loader.__file__",
                             str(fake_file))
         models = list_cached_models()
         ids = [m["id"] for m in models]

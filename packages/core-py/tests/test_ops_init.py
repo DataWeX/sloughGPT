@@ -28,7 +28,7 @@ _CORE_PY = Path(__file__).resolve().parents[1]
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domains.ops import (
+from domain.ops import (
     FusedLayerNorm,
     FusedRMSNorm,
     FusedCrossEntropyLoss,

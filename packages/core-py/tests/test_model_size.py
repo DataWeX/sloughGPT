@@ -78,7 +78,7 @@ def _model_info(*siblings):
 
 
 def _patch_fetch(monkeypatch, info):
-    import domains.infrastructure.hf_hub as hub
+    import domain.infrastructure.hf_hub as hub
     monkeypatch.setattr(hub, "fetch_model_info", lambda model_id: info)
 
 
@@ -102,7 +102,7 @@ class TestGetHubFileSize:
         assert ms._get_hub_file_size_gb("org/model") is None
 
     def test_hub_error_returns_none(self, monkeypatch):
-        import domains.infrastructure.hf_hub as hub
+        import domain.infrastructure.hf_hub as hub
 
         def boom(model_id):
             raise RuntimeError("network down")
@@ -199,7 +199,7 @@ class TestImportFallback:
         import importlib
         import sys
 
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.hf_hub", None)
+        monkeypatch.setitem(sys.modules, "domain.infrastructure.hf_hub", None)
         importlib.reload(ms)
         assert ms.is_download_complete("org/model") is False
         assert ms.get_cache_dir("org/model") == "~/.cache/huggingface/hub/models--org--model/"

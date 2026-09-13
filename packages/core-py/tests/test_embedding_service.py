@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from domains.infrastructure.embedding_service import EmbeddingService, get_embedding_service
+from domain.infrastructure._internal.embedding_service import EmbeddingService, get_embedding_service
 
 DIM = 64
 

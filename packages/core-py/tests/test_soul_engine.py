@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from domain.core._internal.soul import GenerationContext, SloEngine
-from domains.inference import SloProfile
+from domain.inference import SloProfile
 
 
 CHARSET = "abcdefghijklmnopqrstuvwxyz "
@@ -997,7 +997,7 @@ class TestSaveSoul:
         e = SloEngine(model=FakeModel())
         e._sentiment_analyzer = None
         e._hd_memory = None
-        with patch("domains.core.soul.save_soul") as mock_save:
+        with patch("domain.core.soul.save_soul") as mock_save:
             with patch("builtins.open") as mock_open:
                 path = e.save_soul("/tmp/out.sou")
         assert path == "/tmp/out.sou"

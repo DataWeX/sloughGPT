@@ -1,4 +1,4 @@
-"""Comprehensive tests for domains.infrastructure.pugqeep.library — PointLibrary.
+"""Comprehensive tests for domain.infrastructure._internal.pugqeep.library — PointLibrary.
 
 Covers: CRUD, batch ops, search, validation, compression, persistence,
 PointView, stats, thread safety, and edge cases.
@@ -10,10 +10,10 @@ import threading
 from pathlib import Path
 
 import pytest
-from domains.infrastructure.pugqeep.library import PointLibrary
-from domains.infrastructure.pugqeep.point import Point
-from domains.infrastructure.pugqeep.point_interface import FunctionType, PointView
-from domains.infrastructure.pugqeep.config import LibraryConfig
+from domain.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.infrastructure._internal.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.point_interface import FunctionType, PointView
+from domain.infrastructure._internal.pugqeep.config import LibraryConfig
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

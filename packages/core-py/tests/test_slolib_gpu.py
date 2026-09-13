@@ -19,7 +19,7 @@ import time
 import numpy as np
 import pytest
 
-from domains.slolib import gpu as slib
+from domain.slolib import gpu as slib
 
 
 _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
@@ -951,7 +951,7 @@ class TestCPUBackend:
         cpu._openblas_threads_cache = None
         monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
         monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.resource_manager", None)
+        monkeypatch.setitem(sys.modules, "domain.infrastructure.resource_manager", None)
         n = cpu.openblas_threads()
         assert n == max(1, (os.cpu_count() or 1) - 1)
 
@@ -998,13 +998,13 @@ class TestCPUBackend:
 class TestGpuBackends:
     def test_metal_not_available_without_mps(self, monkeypatch):
         monkeypatch.setattr(
-            "domains.infrastructure.ml_types._mps_available", lambda: False
+            "domain.infrastructure.ml_types._mps_available", lambda: False
         )
         assert slib._MetalBackend().is_available() is False
 
     def test_metal_is_available_when_mps_detected(self, monkeypatch):
         monkeypatch.setattr(
-            "domains.infrastructure.ml_types._mps_available", lambda: True
+            "domain.infrastructure.ml_types._mps_available", lambda: True
         )
         backend = slib._MetalBackend()
         assert backend.is_available() is True
@@ -1343,14 +1343,14 @@ class TestMetalBackendNumpy:
 
     def test_metal_available_when_mps_detected(self, monkeypatch):
         monkeypatch.setattr(
-            "domains.infrastructure.ml_types._mps_available", lambda: True
+            "domain.infrastructure.ml_types._mps_available", lambda: True
         )
         backend = slib._MetalBackend()
         assert backend.is_available() is True
 
     def test_metal_unavailable_when_mps_absent(self, monkeypatch):
         monkeypatch.setattr(
-            "domains.infrastructure.ml_types._mps_available", lambda: False
+            "domain.infrastructure.ml_types._mps_available", lambda: False
         )
         backend = slib._MetalBackend()
         assert backend.is_available() is False

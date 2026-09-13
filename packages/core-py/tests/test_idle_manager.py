@@ -1,9 +1,9 @@
-"""Tests for domains.infrastructure.model_server — IdleManager."""
+"""Tests for domain.infrastructure.model_server — IdleManager."""
 
 import time
 import threading
 from unittest.mock import MagicMock
-from domains.infrastructure.model_server import IdleManager
+from domain.infrastructure._internal.model_server import IdleManager
 
 
 class TestIdleManager:

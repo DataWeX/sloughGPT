@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from domains.infrastructure.pugqeep.generic import (
+from domain.infrastructure._internal.pugqeep.generic import (
     PGQGeneric,
     CompressionStrategy,
     StorageBackend,
@@ -20,7 +20,7 @@ from domains.infrastructure.pugqeep.generic import (
     JSONStorage,
     DirectoryStorage,
 )
-from domains.infrastructure.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.point import Point
 
 
 class _CustomFunctionType(FunctionType):

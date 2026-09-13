@@ -13,9 +13,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import numpy as np
 import pytest
 
-from domains.infrastructure.pugqeep.point import Point
-from domains.infrastructure.pugqeep.point_weight import PointWeight, compress_slonet_to_points
-from domains.infrastructure.pugqeep.compressor import PointCompressor
+from domain.infrastructure._internal.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.point_weight import PointWeight, compress_slonet_to_points
+from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
 
 
 class TestPointWeight:

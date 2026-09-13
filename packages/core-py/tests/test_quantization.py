@@ -23,7 +23,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from domains.infrastructure.quantization import (
+from domain.infrastructure._internal.quantization import (
     Quantine,
     QuantMeta,
     QuantizedLinear,
@@ -1018,7 +1018,7 @@ class TestWalkLinears:
 
         mock_mod = MagicMock()
         mock_mod.SloLinear = FakeSloLinear
-        with patch.dict("sys.modules", {"domains.training.slonet": mock_mod}):
+        with patch.dict("sys.modules", {"domain.training._internal.slonet": mock_mod}):
             result = walk_slo_linears(model)
         assert "lm_head" in result
         assert "blocks.0.attn.W_q" in result
@@ -1030,7 +1030,7 @@ class TestWalkLinears:
 
         mock_mod = MagicMock()
         mock_mod.SloLinear = type("SloLinear", (), {})
-        with patch.dict("sys.modules", {"domains.training.slonet": mock_mod}):
+        with patch.dict("sys.modules", {"domain.training._internal.slonet": mock_mod}):
             model = SimpleNamespace(layers=[], blocks=[])
             result = walk_slo_linears(model)
         assert result == {}
@@ -1092,7 +1092,7 @@ class TestAdaptiveQuantization:
         FakeSloLinear = MagicMock()
         mock_mod = MagicMock()
         mock_mod.SloLinear = FakeSloLinear
-        with patch.dict("sys.modules", {"domains.training.slonet": mock_mod}):
+        with patch.dict("sys.modules", {"domain.training._internal.slonet": mock_mod}):
             yield FakeSloLinear
 
     def test_should_quantize_small_false(self):
@@ -1112,7 +1112,7 @@ class TestAdaptiveQuantization:
 
     def test_no_kernel_means_never_quantize(self, _patch_slonet):
         # When the AVX2 kernel is not available, never vote to quantize.
-        from domains.infrastructure import quantization as q
+        from domain.infrastructure._internal import quantization as q
         from unittest.mock import patch
 
         w = self._slo_linear(4, 2048)
@@ -1131,7 +1131,7 @@ class TestAdaptiveQuantization:
             linears[name] = self._slo_linear(n, k)
 
         from unittest.mock import patch
-        from domains.infrastructure import quantization as q
+        from domain.infrastructure._internal import quantization as q
 
         class FakeModel:
             pass
@@ -1159,7 +1159,7 @@ class TestAdaptiveQuantization:
             linears[name] = self._slo_linear(n, k, qz)
 
         from unittest.mock import patch
-        from domains.infrastructure import quantization as q
+        from domain.infrastructure._internal import quantization as q
 
         fm = SimpleNamespace()
         with patch.object(q, "walk_slo_linears", return_value=linears):
@@ -1178,7 +1178,7 @@ class TestAdaptiveQuantization:
             "blocks.0.attn.W_q": self._slo_linear(2048, 2048, quantized=False),
         }
         from unittest.mock import patch
-        from domains.infrastructure import quantization as q
+        from domain.infrastructure._internal import quantization as q
 
         fm = SimpleNamespace()
         with patch.object(q, "walk_slo_linears", return_value=linears):

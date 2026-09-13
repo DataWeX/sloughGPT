@@ -44,13 +44,13 @@ def _block_psutil(monkeypatch):
 
 def _broken_resource_manager(monkeypatch):
     """Make resource_manager importable but raise at call time."""
-    mod = types.ModuleType("domains.infrastructure.resource_manager")
+    mod = types.ModuleType("domain.infrastructure.resource_manager")
 
     def _raise():
         raise RuntimeError("no resource manager in test")
 
     mod.get_resource_manager = _raise
-    monkeypatch.setitem(sys.modules, "domains.infrastructure.resource_manager", mod)
+    monkeypatch.setitem(sys.modules, "domain.infrastructure.resource_manager", mod)
 
 
 # ---------------------------------------------------------------------------

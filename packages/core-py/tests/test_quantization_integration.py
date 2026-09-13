@@ -13,13 +13,13 @@ import numpy as np
 import pytest
 import time
 
-from domains.infrastructure.quantization import Quantine
+from domain.infrastructure._internal.quantization import Quantine
 from domain.training._internal.slonet import SloTransformer, SloTransformerBlock
 
 
 def _walk_linear_layers(model):
     """Find all SloLinear layers — delegates to shared utility."""
-    from domains.infrastructure.quantization import walk_slo_linears
+    from domain.infrastructure._internal.quantization import walk_slo_linears
     return walk_slo_linears(model)
 
 
@@ -327,7 +327,7 @@ class TestQuantizeEndpoint:
 
     def test_quantize_endpoint_smoke(self, tiny_model, sample_input):
         """Simulate the quantize endpoint logic directly."""
-        from domains.infrastructure.quantization import Quantine, walk_slo_linears
+        from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
 
         # Walk layers
         layers = walk_slo_linears(tiny_model)
@@ -368,7 +368,7 @@ class TestQuantizeEndpoint:
         This test verifies every parameter finds its module. Prevents
         regression of the naming mismatch bug (q_proj vs W_q).
         """
-        from domains.infrastructure.quantization import Quantine, walk_slo_linears
+        from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
 
         linear_map = walk_slo_linears(tiny_model)
         param_names = dict(tiny_model.named_parameters())
@@ -472,7 +472,7 @@ class TestGenerateNumpyPackedInt4:
 
     def test_int4_generate_matches_perlinear_without_unpack(self, tiny_model, sample_input, monkeypatch):
         """generate_numpy uses the packed fused path and never unpacks int4."""
-        from domains.training import slonet as S
+        from domain.training import slonet as S
 
         self._quantize(tiny_model, 4, "symmetric")
         out_packed = tiny_model.generate_numpy(sample_input, max_new_tokens=8, temperature=0.0)
@@ -551,7 +551,7 @@ class TestInt8QuantizedKvCache:
 
     def test_kv_quantize_roundtrip_bound(self):
         """quantize_kv_tensor returns int8 + scale, dequant is loss-bounded."""
-        from domains.infrastructure.quantization import (
+        from domain.infrastructure._internal.quantization import (
             dequantize_kv_tensor,
             quantize_kv_tensor,
         )
@@ -571,7 +571,7 @@ class TestInt8QuantizedKvCache:
 
     def test_kv_quantize_zero_vector_guard(self):
         """Zero rows don't divide by zero; they quantize and dequantize to zero."""
-        from domains.infrastructure.quantization import (
+        from domain.infrastructure._internal.quantization import (
             dequantize_kv_tensor,
             quantize_kv_tensor,
         )

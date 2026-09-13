@@ -56,7 +56,7 @@ class TestRunBenchmark:
         mock_state = MagicMock()
         mock_state.model.get.return_value = MagicMock()
         with patch("controllers.models.get_models_controller", return_value=mock_ctrl), \
-             patch("domains.infrastructure.server_state.get_server_state", return_value=mock_state):
+             patch("domain.infrastructure.server_state.get_server_state", return_value=mock_state):
             client = TestClient(_app(br))
             resp = client.post("/benchmark/run?model=gpt2")
         assert resp.status_code == 200
@@ -70,7 +70,7 @@ class TestGetQualityMetrics:
         br = BenchmarkRouter()
         mock_bench = MagicMock()
         mock_bench.evaluate_latest.return_value = {"coherence_score": 0.8, "repetition_rate": 0.1}
-        with patch("domains.get_benchmark_domain", return_value=mock_bench):
+        with patch("domain.get_benchmark_domain", return_value=mock_bench):
             client = TestClient(_app(br))
             resp = client.get("/benchmark/quality")
         assert resp.status_code == 200
@@ -83,7 +83,7 @@ class TestGetLoggedResponses:
         mock_tracker = MagicMock()
         r1 = SimpleNamespace(timestamp=1.0, user_message="hi", assistant_response="hello", model="gpt2", tokens_generated=5, duration_ms=100)
         mock_tracker.get_responses.return_value = [r1]
-        with patch("domains.feedback.response_tracker.get_response_tracker", return_value=mock_tracker):
+        with patch("domain.feedback.response_tracker.get_response_tracker", return_value=mock_tracker):
             client = TestClient(_app(br))
             resp = client.get("/benchmark/responses")
         assert resp.status_code == 200
@@ -96,7 +96,7 @@ class TestTrackerStats:
         br = BenchmarkRouter()
         mock_bench = MagicMock()
         mock_bench.get_stats.return_value = {"total_responses": 42}
-        with patch("domains.get_benchmark_domain", return_value=mock_bench):
+        with patch("domain.get_benchmark_domain", return_value=mock_bench):
             client = TestClient(_app(br))
             resp = client.get("/benchmark/stats")
         assert resp.status_code == 200
@@ -107,7 +107,7 @@ class TestClearHistory:
     def test_clear(self):
         br = BenchmarkRouter()
         mock_bench = MagicMock()
-        with patch("domains.get_benchmark_domain", return_value=mock_bench):
+        with patch("domain.get_benchmark_domain", return_value=mock_bench):
             client = TestClient(_app(br))
             resp = client.post("/benchmark/history/clear")
         assert resp.status_code == 200

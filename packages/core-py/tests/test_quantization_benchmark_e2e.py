@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 import benchmark_quantization as bq  # noqa: E402
 
-from domains.infrastructure.quantization import walk_slo_linears  # noqa: E402
+from domain.infrastructure._internal.quantization import walk_slo_linears  # noqa: E402
 
 EXPECTED_TEST_NAMES = [
     "throughput_vs_length",
@@ -570,7 +570,7 @@ class TestCachedModelDiscovery:
         cached = bq._list_cached_models()
         if cached:
             # Every returned id must resolve to an existing model.slnc
-            from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domain.infrastructure._internal.safetensors_loader import _get_model_dir
             for mid in cached:
                 assert (_get_model_dir(mid) / "model.slnc").exists(), f"{mid} missing"
 

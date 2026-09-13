@@ -210,11 +210,11 @@ class TestSelectMultiFallback:
 
 class TestModuleExport:
     def test_interactive_prompt_importable(self):
-        from domains.shell import InteractivePrompt
+        from domain.shell import InteractivePrompt
         assert InteractivePrompt is not None
 
     def test_interactive_prompt_in_all(self):
-        from domains.shell import __all__
+        from domain.shell import __all__
         assert "InteractivePrompt" in __all__
 
 

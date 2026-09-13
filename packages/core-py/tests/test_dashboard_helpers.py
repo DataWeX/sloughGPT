@@ -1,4 +1,4 @@
-"""Tests for domains.shell.cmds.dashboard — helper functions."""
+"""Tests for domain.shell.cmds.dashboard — helper functions."""
 
 from __future__ import annotations
 

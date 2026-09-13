@@ -1,7 +1,7 @@
 """Tests for EventBuffer — thread-safe ring buffer for dashboard events."""
 from __future__ import annotations
 
-from domains.infrastructure.event_buffer import DashboardEvent, EventBuffer, get_event_buffer
+from domain.infrastructure._internal.event_buffer import DashboardEvent, EventBuffer, get_event_buffer
 
 
 class TestDashboardEvent:

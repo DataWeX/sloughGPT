@@ -1,4 +1,4 @@
-"""Coverage tests for domains.shell.kernel_interrupts.py."""
+"""Coverage tests for domain.shell.kernel_interrupts.py."""
 
 import pytest
 

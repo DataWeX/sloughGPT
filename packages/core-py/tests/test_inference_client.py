@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.inference_client — InferenceClient.
+"""Tests for domain.infrastructure.inference_client — InferenceClient.
 
 Covers: connect, disconnect, health, reload, chat, chat_stream, reconnect,
 restart callback, send/recv, message framing.
@@ -19,8 +19,8 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.infrastructure.inference_protocol import HEADER_SIZE, encode_message
-from domains.infrastructure.inference_client import InferenceClient
+from domain.infrastructure._internal.inference_protocol import HEADER_SIZE, encode_message
+from domain.infrastructure._internal.inference_client import InferenceClient
 
 
 def _make_health_ok(model_id="m1", loaded=True):

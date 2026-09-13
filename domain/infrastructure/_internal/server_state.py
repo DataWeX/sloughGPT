@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.server_state import *  # noqa: F401,F403
+import domains.infrastructure.server_state as _mod
+globals().update(vars(_mod))

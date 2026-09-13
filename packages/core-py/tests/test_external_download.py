@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
-from domains.infrastructure.external_download import ExternalDownloadBackend, _get_cache_root
+from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
+from domain.infrastructure._internal.external_download import ExternalDownloadBackend, _get_cache_root
 
 
 class TestExternalDownloadBackend:
@@ -124,7 +124,7 @@ class TestExternalDownloadBackend:
         manifest2 = {"files": [{"path": "missing.bin", "size": 100}]}
         (incomplete / ".manifest.json").write_text(json.dumps(manifest2))
 
-        with patch("domains.infrastructure.external_download._get_cache_root", return_value=root):
+        with patch("domain.infrastructure.external_download._get_cache_root", return_value=root):
             result = backend.list_incomplete()
             assert "incomplete-model" in result
             assert "complete-model" not in result
@@ -166,7 +166,7 @@ class TestExternalDownloadDownload:
 
         with patch.object(backend, "_fetch_manifest", return_value=manifest), \
              patch.object(backend, "_cache_dir", return_value=tmp_path / "out"), \
-             patch("domains.infrastructure.compressed_transfer.CompressedDownloader") as MockDL:
+             patch("domain.infrastructure.compressed_transfer.CompressedDownloader") as MockDL:
             mock_inst = MockDL.return_value
             mock_inst.download_from_url.return_value = MagicMock(success=True)
 

@@ -3,7 +3,7 @@
 import asyncio
 import time
 import pytest
-from domains.infrastructure.model_server import (
+from domain.infrastructure._internal.model_server import (
     PriorityRequestQueue, Priority, QueueMetrics, _QueueItem,
     SessionKVCache,
 )

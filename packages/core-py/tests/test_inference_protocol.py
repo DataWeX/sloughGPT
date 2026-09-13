@@ -4,7 +4,7 @@ import json
 import struct
 import pytest
 
-from domains.infrastructure.inference_protocol import (
+from domain.infrastructure._internal.inference_protocol import (
     HEADER_FMT,
     HEADER_SIZE,
     encode_message,

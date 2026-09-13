@@ -2,7 +2,7 @@
 
 import threading
 import time
-from domains.infrastructure.event_buffer import EventBuffer, DashboardEvent, get_event_buffer
+from domain.infrastructure._internal.event_buffer import EventBuffer, DashboardEvent, get_event_buffer
 
 
 class TestDashboardEvent:

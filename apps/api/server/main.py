@@ -23,6 +23,7 @@ import faulthandler
 import logging
 import os
 import sys
+import time
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path

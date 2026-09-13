@@ -9,8 +9,8 @@ import os
 import numpy as np
 import pytest
 
-from domains.infrastructure.gpu.wgpu_be import WgpuBE, _load_spirv, _load_metallib
-from domains.infrastructure.arch_config import ArchConfig, LLAMA_WEIGHT_MAP
+from domain.infrastructure._internal.gpu.wgpu_be import WgpuBE, _load_spirv, _load_metallib
+from domain.infrastructure._internal.arch_config import ArchConfig, LLAMA_WEIGHT_MAP
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -693,7 +693,7 @@ class TestForwardPass:
     def _make_backend(self, n_embed=16, n_head=2, n_kv_head=2, n_layers=1,
                       vocab_size=8, head_dim=8, norm="rms_norm",
                       positional="rope", activation="swiglu"):
-        from domains.infrastructure.arch_config import LLAMA_WEIGHT_MAP
+        from domain.infrastructure._internal.arch_config import LLAMA_WEIGHT_MAP
         arch = _make_arch(
             n_head=n_head, n_kv_head=n_kv_head, n_embed=n_embed,
             n_layers=n_layers, head_dim=head_dim, norm=norm,
@@ -736,7 +736,7 @@ class TestForwardPass:
 
     def test_forward_gpt2_style(self):
         """Test GPT-2 style (absolute pos, layer_norm, gelu) with minimal weights."""
-        from domains.infrastructure.arch_config import GPT2_WEIGHT_MAP
+        from domain.infrastructure._internal.arch_config import GPT2_WEIGHT_MAP
         # Use a minimal weight map that maps canonical → same key (identity)
         # so the forward pass's .T convention works with our test weights.
         wm = {}

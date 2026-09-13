@@ -1,4 +1,4 @@
-"""Coverage-completing tests for the neural addon (domains.shell.addons.neural).
+"""Coverage-completing tests for the neural addon (domain.shell.addons.neural).
 
 Run: PYTHONPATH=packages/core-py python -m pytest tests/test_neural_addon_more.py -q
 """

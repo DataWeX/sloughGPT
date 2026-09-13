@@ -15,8 +15,8 @@ import types
 import numpy as np
 import pytest
 
-from domains.infrastructure.numpy_engine import KVCache, NumpyEngine, _load_weights
-from domains.infrastructure.morph_tokenizer import MorphTokenizer
+from domain.infrastructure._internal.numpy_engine import KVCache, NumpyEngine, _load_weights
+from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
 VOCAB = 64
 N_EMBD = 16
@@ -316,7 +316,7 @@ class TestNumpyEngineConstructor:
         assert engine._cache.get(name) is not None
 
     def test_get_weight_via_model_tree(self, tmp_path):
-        from domains.infrastructure.point_compressor import ModelTree, PointLibrary
+        from domain.infrastructure._internal.point_compressor import ModelTree, PointLibrary
         library = PointLibrary(name="tiny-lib", storage_dir=tmp_path / "lib")
         tree = ModelTree(MODEL_ID, library, n_clusters=16)
         engine = NumpyEngine(config=_config(), weights=_weights(),
@@ -339,7 +339,7 @@ class TestFromPretrained:
 
     def test_use_points(self, hf_cache, monkeypatch, tmp_path):
         _install_fake_safetensors(monkeypatch, fail=False)
-        from domains.infrastructure.point_compressor import PointLibrary
+        from domain.infrastructure._internal.point_compressor import PointLibrary
         library = PointLibrary(name="tiny-lib", storage_dir=tmp_path / "lib")
         engine = NumpyEngine.from_pretrained(MODEL_ID, tokenizer=_tokenizer(),
                                              use_points=True, library=library)
@@ -356,7 +356,7 @@ class TestFromPretrained:
 
 class TestFromSlnc:
     def test_from_slnc_with_tokenizer(self, tmp_path):
-        from domains.infrastructure.slnc.compiler import SLNCCompiler
+        from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
         slnc = tmp_path / "tiny.slnc"
         SLNCCompiler().compile_from_dict(_config(), _weights(), str(slnc))
         engine = NumpyEngine.from_slnc(str(slnc), tokenizer=_tokenizer())
@@ -365,7 +365,7 @@ class TestFromSlnc:
         assert engine._forward([1, 2, 3]).shape == (VOCAB,)
 
     def test_from_slnc_default_tokenizer(self, hf_cache, tmp_path):
-        from domains.infrastructure.slnc.compiler import SLNCCompiler
+        from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
         slnc = tmp_path / "tiny.slnc"
         SLNCCompiler().compile_from_dict(_config(), _weights(), str(slnc))
         engine = NumpyEngine.from_slnc(str(slnc))

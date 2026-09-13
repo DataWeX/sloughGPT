@@ -872,7 +872,7 @@ class TestSloManagerPreference:
 # ---------------------------------------------------------------------------
 class TestSloManagerModuleFunctions:
     def test_get_slo_manager_singleton(self, tmp_path):
-        from domains.inference import slo_manager as mod
+        from domain.inference import slo_manager as mod
         old = mod._slo_manager
         try:
             mod._slo_manager = None
@@ -883,7 +883,7 @@ class TestSloManagerModuleFunctions:
             mod._slo_manager = old
 
     def test_list_souls_function(self, tmp_path):
-        from domains.inference import slo_manager as mod
+        from domain.inference import slo_manager as mod
         old = mod._slo_manager
         try:
             mod._slo_manager = SloManager(souls_dir=str(tmp_path))
@@ -893,7 +893,7 @@ class TestSloManagerModuleFunctions:
             mod._slo_manager = old
 
     def test_switch_soul_function(self, tmp_path):
-        from domains.inference import slo_manager as mod
+        from domain.inference import slo_manager as mod
         old = mod._slo_manager
         try:
             _write_soul_binary(tmp_path / "x.soul", {"name": "x"})

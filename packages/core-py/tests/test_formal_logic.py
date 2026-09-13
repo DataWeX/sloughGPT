@@ -1,6 +1,6 @@
 """Meaningful tests for FormalLogicEngine (unification, forward chaining, resolution) and WorkingMemory."""
 
-from domains.cognitive.reasoning.deep import (
+from domain.cognitive._internal.reasoning.deep import (
     FormalLogicEngine, LogicalOperator, Term, Predicate,
     WellFormedFormula, Substitution, WorkingMemory,
 )

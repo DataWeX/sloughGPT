@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from domain.cognitive._internal.core import CognitiveCore, ThinkingMode, ReasoningType
 from domain.cognitive._internal.knowledge_graph_v2 import KnowledgeGraph, RelationType
-from domains.cognitive.reasoning.deep import (
+from domain.cognitive._internal.reasoning.deep import (
     WorkingMemory,
     FormalLogicEngine,
     Predicate,

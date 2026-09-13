@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 
-from domains.infrastructure.pugqeep.executor import ParallelExecutor
+from domain.infrastructure._internal.pugqeep.executor import ParallelExecutor
 
 
 class TestParallelExecutor:

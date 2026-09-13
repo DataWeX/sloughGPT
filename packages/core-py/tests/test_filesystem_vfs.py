@@ -1,4 +1,4 @@
-"""Tests for domains.shell.addons.filesystem — VFSEntry, VFSGeneratedFile, VFSDirectory, VFS."""
+"""Tests for domain.shell.addons.filesystem — VFSEntry, VFSGeneratedFile, VFSDirectory, VFS."""
 
 import os
 import stat as stat_mod

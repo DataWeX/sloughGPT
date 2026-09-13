@@ -1,6 +1,6 @@
-"""Tests for domains.cognitive.reasoning.deep — WorkingMemory."""
+"""Tests for domain.cognitive.reasoning.deep — WorkingMemory."""
 
-from domains.cognitive.reasoning.deep import WorkingMemory
+from domain.cognitive._internal.reasoning.deep import WorkingMemory
 
 
 class TestWorkingMemory:

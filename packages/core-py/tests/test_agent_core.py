@@ -5,8 +5,8 @@ import sys
 
 import pytest
 
-import domains.agents as agents_pkg
-from domains.agents import (
+import domain.agents as agents_pkg
+from domain.agents import (
     Agent,
     AgentConfig,
     SecurityConfig,
@@ -456,13 +456,15 @@ class TestAgentExecute:
 
 class TestSingletons:
     async def test_get_agent_singleton(self, monkeypatch):
-        monkeypatch.setattr(agents_pkg, "_agent", None)
+        import domain.agents._internal.agents as _mod
+        monkeypatch.setattr(_mod, "_agent", None)
         a = get_agent()
         b = get_agent()
         assert a is b
 
     async def test_get_runner_singleton(self, monkeypatch):
-        monkeypatch.setattr(agents_pkg, "_runner", None)
+        import domain.agents._internal.agents as _mod
+        monkeypatch.setattr(_mod, "_runner", None)
         a = get_runner()
         b = get_runner()
         assert a is b
@@ -470,7 +472,7 @@ class TestSingletons:
 
 class TestLazyImports:
     def test_lazy_multi_import(self):
-        from domains.agents import MultiAgentOrchestrator
+        from domain.agents._internal.multi import MultiAgentOrchestrator
 
         assert MultiAgentOrchestrator is not None
 

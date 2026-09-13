@@ -338,20 +338,20 @@ class TestProviderConfig:
         assert p.get_server() is mock_server
 
     def test_to_server_returns_server_instance(self):
-        from domains.infrastructure.slonet_server import SloNetServer
+        from domain.infrastructure._internal.slonet_server import SloNetServer
         p = _make_provider()
         server = p.to_server()
         assert isinstance(server, SloNetServer)
 
     def test_to_server_with_guard(self):
-        from domains.infrastructure.slonet_server import SloNetServer
+        from domain.infrastructure._internal.slonet_server import SloNetServer
         p = _make_provider()
         guard = MagicMock()
         server = p.to_server(process_guard=guard)
         assert server._process_guard is guard
 
     def test_to_server_with_lazy_lock_sets_factory(self):
-        from domains.infrastructure.slonet_server import SloNetServer
+        from domain.infrastructure._internal.slonet_server import SloNetServer
         p = _make_provider()
         p._lazy_lock = threading.Lock()
         server = p.to_server()

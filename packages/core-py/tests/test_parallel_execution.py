@@ -353,9 +353,9 @@ class TestCompressCheckpointBranches:
         import sys
         import tempfile
         from pathlib import Path
-        from domains.training import executor as exmod
+        from domain.training import executor as exmod
 
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.pugqeep", None)
+        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.pugqeep", None)
         with tempfile.TemporaryDirectory() as tmpdir:
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
@@ -364,9 +364,9 @@ class TestCompressCheckpointBranches:
     def test_model_none_returns_none(self):
         import tempfile
         from pathlib import Path
-        from domains.training import executor as exmod
+        from domain.training import executor as exmod
 
-        with patch("domains.training.slonet.import_from_sou", return_value=None), \
+        with patch("domain.training._internal.slonet.import_from_sou", return_value=None), \
                 tempfile.TemporaryDirectory() as tmpdir:
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
@@ -375,9 +375,9 @@ class TestCompressCheckpointBranches:
     def test_load_failure_returns_none(self):
         import tempfile
         from pathlib import Path
-        from domains.training import executor as exmod
+        from domain.training import executor as exmod
 
-        with patch("domains.training.slonet.import_from_sou", side_effect=RuntimeError("corrupt")), \
+        with patch("domain.training._internal.slonet.import_from_sou", side_effect=RuntimeError("corrupt")), \
                 tempfile.TemporaryDirectory() as tmpdir:
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
@@ -386,13 +386,13 @@ class TestCompressCheckpointBranches:
     def test_weights_converted_to_ndarray(self):
         import tempfile
         from pathlib import Path
-        from domains.training import executor as exmod
+        from domain.training import executor as exmod
 
         class FakeModel:
             def state_dict(self):
                 return {"w": [1.0, 2.0, 3.0]}
 
-        with patch("domains.training.slonet.import_from_sou", return_value=FakeModel()), \
+        with patch("domain.training._internal.slonet.import_from_sou", return_value=FakeModel()), \
                 tempfile.TemporaryDirectory() as tmpdir:
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
@@ -408,7 +408,7 @@ class TestPGQTrainingIntegration:
     """Test submit_training on the PGQ facade."""
 
     def test_submit_training_routes_to_tree(self):
-        from domains.infrastructure.pugqeep import PGQ
+        from domain.infrastructure._internal.pugqeep import PGQ
 
         pgq = PGQ(name="test_train")
         results = []
@@ -425,7 +425,7 @@ class TestPGQTrainingIntegration:
         assert results[0]["tree_id"] == "test_train"
 
     def test_submit_training_stores_points(self):
-        from domains.infrastructure.pugqeep import PGQ
+        from domain.infrastructure._internal.pugqeep import PGQ
 
         pgq = PGQ(name="test_points")
 
@@ -445,7 +445,7 @@ class TestPGQTrainingIntegration:
         assert pgq.library.has("layer2.weight")
 
     def test_cancel_training(self):
-        from domains.infrastructure.pugqeep import PGQ
+        from domain.infrastructure._internal.pugqeep import PGQ
 
         pgq = PGQ(name="test_cancel")
         evt = threading.Event()
@@ -472,7 +472,7 @@ class TestInferencePoolDynamic:
     @pytest.mark.asyncio
     async def test_default_size_from_cpu_count(self):
         from apps.api.server.infrastructure.inference_pool import InferencePool
-        from domains.infrastructure.resource_manager import get_resource_manager
+        from domain.infrastructure._internal.resource_manager import get_resource_manager
 
         InferencePool._instance = None
         pool = await InferencePool.get_instance()
@@ -510,7 +510,7 @@ class TestModelServerReadSemaphore:
     """Test read semaphore for concurrent tokenization."""
 
     def test_read_semaphore_created(self):
-        from domains.infrastructure.model_server import ModelServer
+        from domain.infrastructure._internal.model_server import ModelServer
 
         server = ModelServer(max_concurrent=1, enable_warmup=False)
         loop = asyncio.new_event_loop()
@@ -520,7 +520,7 @@ class TestModelServerReadSemaphore:
         loop.close()
 
     def test_tokenize_uses_read_semaphore(self):
-        from domains.infrastructure.model_server import ModelServer
+        from domain.infrastructure._internal.model_server import ModelServer
 
         class FakeTokenizer:
             eos_token_id = 0

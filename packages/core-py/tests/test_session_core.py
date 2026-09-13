@@ -2,14 +2,14 @@
 
 import pytest
 from unittest.mock import patch, MagicMock
-from domains.infrastructure.session_core import SessionCore
+from domain.infrastructure._internal.session_core import SessionCore
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
 def mock_feedback():
-    with patch('domains.infrastructure.session_core.get_message_feedback') as mock:
+    with patch('domain.infrastructure.session_core.get_message_feedback') as mock:
         mock_fb = MagicMock()
         mock.return_value = mock_fb
         yield mock_fb

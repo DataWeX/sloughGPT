@@ -138,7 +138,7 @@ class TestFlattenForWandbConfig:
 
 
 class FakeTrackingModule:
-    """In-memory stand-in for domains.training.tracking to avoid wandb/network."""
+    """In-memory stand-in for domain.training.tracking to avoid wandb/network."""
 
     def __init__(self):
         self.runs = []
@@ -155,7 +155,7 @@ class FakeTrackingModule:
 @pytest.fixture
 def fake_tracking(monkeypatch):
     fake = FakeTrackingModule()
-    monkeypatch.setitem(sys.modules, "domains.training.tracking", fake)
+    monkeypatch.setitem(sys.modules, "domain.training.tracking", fake)
     return fake
 
 
@@ -168,7 +168,7 @@ class TestCreateTrainingTrackerForApiJob:
 
     def test_missing_tracking_module_returns_none(self, tracking_config, monkeypatch):
         tracking_config.tracking.wandb_training_enabled = True
-        monkeypatch.setitem(sys.modules, "domains.training.tracking", None)
+        monkeypatch.setitem(sys.modules, "domain.training.tracking", None)
         assert create_training_tracker_for_api_job(
             job_id="j1", job_name="n", data_path="p", hyperparams={}
         ) is None

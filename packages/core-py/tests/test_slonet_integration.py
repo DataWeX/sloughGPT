@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import numpy as np
 
-from domains.infrastructure.slonet_server import SloNetServer
+from domain.infrastructure._internal.slonet_server import SloNetServer
 from domain.inference._internal.slonet_provider import SloNetChatProvider
 from domain.models._internal.provider import (
     setup_providers,
@@ -248,14 +248,14 @@ class TestSetupProvidersWiring:
 
         fake_mod = MagicMock()
         fake_mod.get_config = MagicMock(return_value=mock_cfg)
-        sys.modules["domains.infrastructure.config"] = fake_mod
+        sys.modules["domain.infrastructure.config"] = fake_mod
 
         mock_provider = MagicMock()
         mock_provider.model_id = model_id
         mock_provider.set_server = MagicMock()
 
         try:
-            with patch("domains.infrastructure.model_resolver.get_model_dir", return_value=tmp_path):
+            with patch("domain.infrastructure.model_resolver.get_model_dir", return_value=tmp_path):
                 with patch("domain.inference._internal.slonet_provider.SloNetChatProvider") as mock_cls:
                     mock_cls.from_slnc.return_value = mock_provider
                     setup_providers()
@@ -266,8 +266,8 @@ class TestSetupProvidersWiring:
             assert isinstance(router, ProviderRouter)
             assert router._text_name == "slonet-native"
         finally:
-            if "domains.infrastructure.config" in sys.modules:
-                del sys.modules["domains.infrastructure.config"]
+            if "domain.infrastructure.config" in sys.modules:
+                del sys.modules["domain.infrastructure.config"]
 
 
 # ---------------------------------------------------------------------------

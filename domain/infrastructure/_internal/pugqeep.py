@@ -1,6 +1,3 @@
-from domains.infrastructure.pugqeep import (  # noqa: F401
-    Point,
-    PointCompressor,
-    PointLibrary,
-    PGQ,
-)
+"""Backward-compatibility shim."""
+import domains.infrastructure.pugqeep as _mod
+globals().update(vars(_mod))

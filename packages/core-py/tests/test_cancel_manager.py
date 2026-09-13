@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from domains.infrastructure.cancel_manager import (
+from domain.infrastructure._internal.cancel_manager import (
     CancelManager,
     OpStatus,
     OpType,

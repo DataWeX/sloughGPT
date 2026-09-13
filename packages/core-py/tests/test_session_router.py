@@ -35,7 +35,7 @@ class TestSetSessionContext:
         sr = SessionRouter()
         mock_sc = MagicMock()
         mock_sc.store_context.return_value = {"session_id": "s1", "message_count": 2}
-        with patch("domains.infrastructure.session_core.SessionCore", mock_sc):
+        with patch("domain.infrastructure.session_core.SessionCore", mock_sc):
             client = TestClient(_app(sr))
             resp = client.post("/session/s1/context", json={
                 "messages": [{"role": "user", "content": "hi"}]
@@ -56,7 +56,7 @@ class TestGetSessionMessages:
         sr = SessionRouter()
         mock_sc = MagicMock()
         mock_sc.get_messages.return_value = [{"role": "user", "content": "hi"}]
-        with patch("domains.infrastructure.session_core.SessionCore", mock_sc):
+        with patch("domain.infrastructure.session_core.SessionCore", mock_sc):
             client = TestClient(_app(sr))
             resp = client.get("/session/s1/messages")
         assert resp.status_code == 200
@@ -67,7 +67,7 @@ class TestGetSessionMessages:
         sr = SessionRouter()
         mock_sc = MagicMock()
         mock_sc.get_messages.return_value = []
-        with patch("domains.infrastructure.session_core.SessionCore", mock_sc):
+        with patch("domain.infrastructure.session_core.SessionCore", mock_sc):
             client = TestClient(_app(sr))
             resp = client.get("/session/s1/messages")
         assert resp.status_code == 200
@@ -88,15 +88,15 @@ class TestGetSessionInspector:
         mock_tc.all.return_value = {"warmth": 0.8}
         mock_cc = MagicMock()
         mock_cc.get_context_inspector.return_value = {"working_memory": [], "semantic_keys": [], "episodic_count": 0}
-        with patch("domains.infrastructure.session_core.SessionCore", mock_sc), \
-             patch("domains.feedback.message_feedback.get_message_feedback", return_value=mock_fb), \
-             patch("domains.learner.knowledge.get_knowledge_memory", return_value=mock_km), \
-             patch("domains.context.managers.get_trait_config", return_value=mock_tc), \
-             patch("domains.context.managers.PersonalityManager"), \
-             patch("domains.context.managers.MemoryManager"), \
-             patch("domains.context.managers.StyleManager"), \
-             patch("domains.context.managers.TaskManager"), \
-             patch("domains.infrastructure.context_core.get_context_core", return_value=mock_cc):
+        with patch("domain.infrastructure.session_core.SessionCore", mock_sc), \
+             patch("domain.feedback.message_feedback.get_message_feedback", return_value=mock_fb), \
+             patch("domain.learner.knowledge.get_knowledge_memory", return_value=mock_km), \
+             patch("domain.context.managers.get_trait_config", return_value=mock_tc), \
+             patch("domain.context.managers.PersonalityManager"), \
+             patch("domain.context.managers.MemoryManager"), \
+             patch("domain.context.managers.StyleManager"), \
+             patch("domain.context.managers.TaskManager"), \
+             patch("domain.infrastructure.context_core.get_context_core", return_value=mock_cc):
             client = TestClient(_app(sr))
             resp = client.get("/session/s1/inspector")
         assert resp.status_code == 200

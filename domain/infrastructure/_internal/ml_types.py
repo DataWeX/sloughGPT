@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.ml_types import *  # noqa: F401,F403
+import domains.infrastructure.ml_types as _mod
+globals().update(vars(_mod))

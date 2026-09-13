@@ -23,7 +23,7 @@ from domain.inference._internal.slonet_provider import (
     _split_fused_qkv,
     convert_hf_to_slonet,
 )
-from domains.infrastructure.slnc.spec import (
+from domain.infrastructure._internal.slnc.spec import (
     compute_header_size,
     compute_tensor_entry_size,
 )
@@ -343,7 +343,7 @@ class TestFromSlnc:
     def test_from_slnc_resource_manager_applies(self, slnc_path):
         rm = MagicMock()
         with patch(
-            "domains.infrastructure.resource_manager.get_resource_manager",
+            "domain.infrastructure.resource_manager.get_resource_manager",
             return_value=rm,
         ), patch.object(
             SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
@@ -355,7 +355,7 @@ class TestFromSlnc:
 
     def test_from_slnc_resource_manager_error_tolerated(self, slnc_path):
         with patch(
-            "domains.infrastructure.resource_manager.get_resource_manager",
+            "domain.infrastructure.resource_manager.get_resource_manager",
             side_effect=RuntimeError("boom"),
         ), patch.object(
             SloNetChatProvider, "_load_tokenizer", return_value=FakeTokenizer()
@@ -421,7 +421,7 @@ class TestBuildPromptAndTokenizer:
 
     def test_load_tokenizer_success(self, real_provider):
         with patch(
-            "domains.infrastructure.morph_tokenizer.MorphTokenizer.from_pretrained",
+            "domain.infrastructure.morph_tokenizer.MorphTokenizer.from_pretrained",
             return_value=FakeTokenizer(),
         ) as mock_load:
             tok = real_provider._load_tokenizer(Path("."), _slnc_config())
@@ -430,7 +430,7 @@ class TestBuildPromptAndTokenizer:
 
     def test_load_tokenizer_failure_raises(self, real_provider):
         with patch(
-            "domains.infrastructure.morph_tokenizer.MorphTokenizer.from_pretrained",
+            "domain.infrastructure.morph_tokenizer.MorphTokenizer.from_pretrained",
             side_effect=RuntimeError("boom"),
         ):
             with pytest.raises(RuntimeError):

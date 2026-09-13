@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 
-from domains.infrastructure.singleton import SingletonMeta, make_singleton
+from domain.infrastructure._internal.singleton import SingletonMeta, make_singleton
 
 
 class TestMakeSingleton:

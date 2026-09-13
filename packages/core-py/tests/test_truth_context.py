@@ -1,12 +1,12 @@
-"""Tests for domains.infrastructure.truth_labeler — LabelResult, TruthLabeler; domains.infrastructure.context_core — ContextLayer, ContextFrame."""
+"""Tests for domain.infrastructure.truth_labeler — LabelResult, TruthLabeler; domain.infrastructure.context_core — ContextLayer, ContextFrame."""
 
-from domains.infrastructure.truth_labeler import (
+from domain.infrastructure._internal.truth_labeler import (
     LabelResult, TruthLabeler,
     get_truth_labeler, reset_truth_labeler,
     _rule_interrogative, _rule_directive, _rule_descriptive,
     _rule_analytical, _rule_procedural, _rule_conceptual, _rule_factual,
 )
-from domains.infrastructure.context_core import ContextLayer, ContextFrame
+from domain.infrastructure._internal.context_core import ContextLayer, ContextFrame
 
 
 # ── LabelResult ──────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ import os
 import numpy as np
 import pytest
 
-from domains.infrastructure.anchor_store import (
+from domain.infrastructure._internal.anchor_store import (
     DEFAULT_MEANING_TAGS,
     MeaningTags,
     get_default_meaning_tags,

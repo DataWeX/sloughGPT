@@ -1,9 +1,9 @@
-"""Tests for domains.infrastructure.cache — CacheEntry and CacheManager."""
+"""Tests for domain.infrastructure.cache — CacheEntry and CacheManager."""
 
 import asyncio
 import time
 import pytest
-from domains.infrastructure.cache import CacheEntry, CacheManager
+from domain.infrastructure._internal.cache import CacheEntry, CacheManager
 
 
 class TestCacheEntry:

@@ -4,8 +4,8 @@ from __future__ import annotations
 import asyncio
 import io
 
-from domains.infrastructure.correlation import get_correlation_id, set_correlation_id
-from domains.infrastructure.session_core import SessionCore
+from domain.infrastructure._internal.correlation import get_correlation_id, set_correlation_id
+from domain.infrastructure._internal.session_core import SessionCore
 from domain.logging._internal.base import LogLevel
 from domain.logging._internal.console_logger import ConsoleLogger, _default_color_enabled
 

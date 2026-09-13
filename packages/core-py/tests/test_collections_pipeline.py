@@ -1,4 +1,4 @@
-"""Tests for domains.collections — Record, sources, stores, filters, collector.
+"""Tests for domain.collections — Record, sources, stores, filters, collector.
 
 Covers: Record dataclass, FileSource, FileStore, MemoryStore, LengthFilter,
 DedupFilter, KeywordFilter, RegexFilter, FilterChain, Collector.

@@ -1,9 +1,9 @@
-"""Tests for domains.infrastructure.model_server — SessionKVCache."""
+"""Tests for domain.infrastructure.model_server — SessionKVCache."""
 
 import time
 import threading
 import pytest
-from domains.infrastructure.model_server import SessionKVCache
+from domain.infrastructure._internal.model_server import SessionKVCache
 
 
 class TestSessionKVCache:

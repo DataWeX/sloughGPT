@@ -1,7 +1,7 @@
-"""Tests for domains.infrastructure.quantization — QuantMode, QuantDtype, QuantMeta, TensorInfo."""
+"""Tests for domain.infrastructure.quantization — QuantMode, QuantDtype, QuantMeta, TensorInfo."""
 
 import numpy as np
-from domains.infrastructure.quantization import QuantMode, QuantDtype, QuantMeta, TensorInfo
+from domain.infrastructure._internal.quantization import QuantMode, QuantDtype, QuantMeta, TensorInfo
 
 
 class TestQuantMode:

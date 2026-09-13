@@ -1,4 +1,4 @@
-"""Tests for domains.shell.commands.py — ShellCommands API wrappers."""
+"""Tests for domain.shell.commands.py — ShellCommands API wrappers."""
 
 from __future__ import annotations
 

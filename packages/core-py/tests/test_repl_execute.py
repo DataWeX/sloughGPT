@@ -47,7 +47,7 @@ def _make_repl():
     from domain.shell._internal.console import Console
     repl.console = Console(repl.io, has_readline=False)
 
-    from domains.logging import ShellLogger, LogLevel
+    from domain.logging import ShellLogger, LogLevel
     repl.log = ShellLogger("slo.shell.test", level=LogLevel.DEBUG)
 
     from domain.shell._internal.log_buffer import get_log_buffer

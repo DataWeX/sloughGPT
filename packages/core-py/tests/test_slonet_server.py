@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 import numpy as np
 
-from domains.infrastructure.model_server import CircuitBreakerState
-from domains.infrastructure.slonet_server import SloNetServer
+from domain.infrastructure._internal.model_server import CircuitBreakerState
+from domain.infrastructure._internal.slonet_server import SloNetServer
 
 
 # ---------------------------------------------------------------------------

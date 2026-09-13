@@ -1,4 +1,4 @@
-"""Tests for domains.training.huggingface.model_map — model registry and lookup."""
+"""Tests for domain.training._internal.huggingface.model_map — model registry and lookup."""
 
 import pytest
 from domain.training._internal.huggingface.model_map import (

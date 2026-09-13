@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from domains.infrastructure.numpy_backend import NumpyBE
-from domains.infrastructure.arch_config import ArchConfig, LLAMA_WEIGHT_MAP
+from domain.infrastructure._internal.numpy_backend import NumpyBE
+from domain.infrastructure._internal.arch_config import ArchConfig, LLAMA_WEIGHT_MAP
 
 
 def _make_tiny_arch():

@@ -1,4 +1,4 @@
-"""Tests for domains.core.database — in-memory document store."""
+"""Tests for domain.core.database — in-memory document store."""
 
 import threading
 import pytest

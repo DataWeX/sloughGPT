@@ -25,7 +25,7 @@ def sys(tmp_path, monkeypatch):
     mod._default_system = None
 
     # Patch the repo
-    from domains.infrastructure.repository import FileRepository, JsonSerializer
+    from domain.infrastructure._internal.repository import FileRepository, JsonSerializer
     repo = FileRepository(
         directory=str(tmp_path),
         serializer=JsonSerializer(dict),

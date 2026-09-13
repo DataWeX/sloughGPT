@@ -1,5 +1,5 @@
 """
-Tests for the VMRunner high-level bytecode op handlers in domains.shell.vm.py.
+Tests for the VMRunner high-level bytecode op handlers in domain.shell.vm.py.
 
 Covers the integer ALU, I/O, tensor ALU, comparison, control-flow, data
 movement, and device-bus ops by executing real assembled programs through

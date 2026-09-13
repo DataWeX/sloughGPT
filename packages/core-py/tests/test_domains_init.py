@@ -1,4 +1,4 @@
-"""Tests for domains.__init__ — BaseComponent, Memory, Thought, and exceptions."""
+"""Tests for domain.__init__ — BaseComponent, Memory, Thought, and exceptions."""
 
 import asyncio
 import time

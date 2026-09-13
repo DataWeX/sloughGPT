@@ -7,13 +7,13 @@ import threading
 import numpy as np
 import pytest
 
-from domains.infrastructure.slnc.spec import (
+from domain.infrastructure._internal.slnc.spec import (
     ALIGNMENT, DTYPE_FLOAT32, MAGIC, VERSION,
     compute_header_size, compute_tensor_entry_size,
     dtype_to_code, _align,
 )
-from domains.infrastructure.slnc.parser import SLNCParser
-from domains.infrastructure.weight_loader import (
+from domain.infrastructure._internal.slnc.parser import SLNCParser
+from domain.infrastructure._internal.weight_loader import (
     DirectWeightLoader, build_load_plan, LoadPlan, TensorMapping,
     load_into_model, WeightLoadResult,
     infer_arch_from_state_dict, build_model_from_config,
@@ -285,19 +285,19 @@ class TestSLNCSpec:
         assert dtype_to_code(np.float32) == DTYPE_FLOAT32
 
     def test_dtype_to_code_float16(self):
-        from domains.infrastructure.slnc.spec import DTYPE_FLOAT16
+        from domain.infrastructure._internal.slnc.spec import DTYPE_FLOAT16
         assert dtype_to_code(np.float16) == DTYPE_FLOAT16
 
     def test_dtype_to_code_int32(self):
-        from domains.infrastructure.slnc.spec import DTYPE_INT32
+        from domain.infrastructure._internal.slnc.spec import DTYPE_INT32
         assert dtype_to_code(np.int32) == DTYPE_INT32
 
     def test_dtype_to_code_int64(self):
-        from domains.infrastructure.slnc.spec import DTYPE_INT64
+        from domain.infrastructure._internal.slnc.spec import DTYPE_INT64
         assert dtype_to_code(np.int64) == DTYPE_INT64
 
     def test_dtype_to_code_uint8(self):
-        from domains.infrastructure.slnc.spec import DTYPE_UINT8
+        from domain.infrastructure._internal.slnc.spec import DTYPE_UINT8
         assert dtype_to_code(np.uint8) == DTYPE_UINT8
 
     def test_dtype_to_code_unsupported(self):
@@ -305,7 +305,7 @@ class TestSLNCSpec:
             dtype_to_code(np.float64)
 
     def test_code_to_dtype_roundtrip(self):
-        from domains.infrastructure.slnc.spec import code_to_dtype
+        from domain.infrastructure._internal.slnc.spec import code_to_dtype
         assert code_to_dtype(DTYPE_FLOAT32) == np.float32
         assert code_to_dtype(0) == np.float32
 
@@ -751,7 +751,7 @@ class TestWeightLoaderRegistry:
 
 class TestSoulWeightLoader:
     def test_soul_loader_loads_weights(self, tmp_path):
-        from domains.infrastructure.weight_loader import SoulWeightLoader
+        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
         from domain.inference._internal.slo_format import save_soul
 
         n_embed, n_layer = 32, 2
@@ -774,17 +774,17 @@ class TestSoulWeightLoader:
         assert result.timing["total"] > 0
 
     def test_registry_auto_registers_soul(self):
-        from domains.infrastructure.weight_loader import get_weight_loader_registry, SoulWeightLoader
+        from domain.infrastructure._internal.weight_loader import get_weight_loader_registry, SoulWeightLoader
         reg = get_weight_loader_registry()
         assert reg.get_loader("model.soul") is SoulWeightLoader
 
     def test_registry_auto_registers_slnc(self):
-        from domains.infrastructure.weight_loader import get_weight_loader_registry, DirectWeightLoader
+        from domain.infrastructure._internal.weight_loader import get_weight_loader_registry, DirectWeightLoader
         reg = get_weight_loader_registry()
         assert reg.get_loader("model.slnc") is DirectWeightLoader
 
     def test_soul_load_metadata(self, tmp_path):
-        from domains.infrastructure.weight_loader import SoulWeightLoader
+        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
         from domain.inference._internal.slo_format import save_soul
 
         n_embed, n_layer = 32, 2
@@ -802,7 +802,7 @@ class TestSoulWeightLoader:
         assert meta["vocab_size"] == 100
 
     def test_soul_load_timing_keys(self, tmp_path):
-        from domains.infrastructure.weight_loader import SoulWeightLoader
+        from domain.infrastructure._internal.weight_loader import SoulWeightLoader
         from domain.inference._internal.slo_format import save_soul
 
         n_embed, n_layer = 32, 1
@@ -981,7 +981,7 @@ class TestBuildModelFromConfig:
 
 class TestRegistryThreadSafety:
     def test_concurrent_get_loader(self):
-        from domains.infrastructure.weight_loader import WeightLoaderRegistry
+        from domain.infrastructure._internal.weight_loader import WeightLoaderRegistry
         reg = WeightLoaderRegistry()
         results = []
 

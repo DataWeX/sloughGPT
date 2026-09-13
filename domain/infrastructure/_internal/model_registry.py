@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.model_registry import *  # noqa: F401,F403
+import domains.infrastructure.model_registry as _mod
+globals().update(vars(_mod))

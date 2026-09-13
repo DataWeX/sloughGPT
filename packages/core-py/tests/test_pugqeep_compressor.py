@@ -1,10 +1,10 @@
-"""Tests for domains.infrastructure.pugqeep.compressor — PointCompressor."""
+"""Tests for domain.infrastructure._internal.pugqeep.compressor — PointCompressor."""
 
 import numpy as np
 import pytest
-from domains.infrastructure.pugqeep.compressor import PointCompressor
-from domains.infrastructure.pugqeep.point import Point
-from domains.infrastructure.pugqeep.config import CompressorConfig
+from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.infrastructure._internal.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.config import CompressorConfig
 
 
 class TestPointCompressorCluster:
@@ -512,7 +512,7 @@ class TestPointNbytes:
         assert raw == 50 * 4
 
     def test_estimate_raw_bytes_cluster_no_assignments(self):
-        from domains.infrastructure.pugqeep.point import Point
+        from domain.infrastructure._internal.pugqeep.point import Point
         p = Point(identity="x", function_type="cluster", params={"centroids": np.zeros(4)})
         assert p._estimate_raw_bytes() == 0
 
@@ -584,11 +584,11 @@ class TestPointProtocol:
 
 class TestFunctionType:
     def test_all_members(self):
-        from domains.infrastructure.pugqeep.point_interface import FunctionType
+        from domain.infrastructure._internal.pugqeep.point_interface import FunctionType
         assert len(FunctionType) == 5
 
     def test_values(self):
-        from domains.infrastructure.pugqeep.point_interface import FunctionType
+        from domain.infrastructure._internal.pugqeep.point_interface import FunctionType
         assert FunctionType.PERIODIC.value == "periodic"
         assert FunctionType.LINEAR.value == "linear"
         assert FunctionType.POLYNOMIAL.value == "polynomial"
@@ -596,16 +596,16 @@ class TestFunctionType:
         assert FunctionType.RAW.value == "raw"
 
     def test_from_str_valid(self):
-        from domains.infrastructure.pugqeep.point_interface import FunctionType
+        from domain.infrastructure._internal.pugqeep.point_interface import FunctionType
         assert FunctionType.from_str("linear") == FunctionType.LINEAR
 
     def test_from_str_invalid(self):
-        from domains.infrastructure.pugqeep.point_interface import FunctionType
+        from domain.infrastructure._internal.pugqeep.point_interface import FunctionType
         with pytest.raises(ValueError, match="Unknown function type"):
             FunctionType.from_str("invalid")
 
     def test_is_str_subclass(self):
-        from domains.infrastructure.pugqeep.point_interface import FunctionType
+        from domain.infrastructure._internal.pugqeep.point_interface import FunctionType
         assert issubclass(FunctionType, str)
 
 
@@ -615,14 +615,14 @@ class TestFunctionType:
 
 class TestPointView:
     def test_view_lazy(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="lazy")
         view = PointView(p, shape=(64,), dtype="float32")
         assert view._cache is None
 
     def test_view_generate_caches(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(64,), dtype="float32")
@@ -631,7 +631,7 @@ class TestPointView:
         assert arr1 is arr2
 
     def test_view_clear_cache(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(64,), dtype="float32")
@@ -640,35 +640,35 @@ class TestPointView:
         assert view._cache is None
 
     def test_view_shape(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(8, 8), dtype="float32")
         assert view.shape == (8, 8)
 
     def test_view_dtype(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(64,), dtype="float64")
         assert view.dtype == np.dtype("float64")
 
     def test_view_accuracy(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(64,), dtype="float32")
         assert view.accuracy == p.accuracy
 
     def test_view_nbytes(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(64,), dtype="float32")
         assert view.nbytes == p.nbytes()
 
     def test_view_repr(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(64,), dtype="float32")
@@ -676,14 +676,14 @@ class TestPointView:
         assert "lazy" in r
 
     def test_view_len(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(64,), dtype="float32")
         assert len(view) == 64
 
     def test_view_getitem_slice(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(64,), dtype="float32")
@@ -725,7 +725,7 @@ class TestCompressorConfig:
 
 class TestPointConfig:
     def test_defaults(self):
-        from domains.infrastructure.pugqeep.config import PointConfig
+        from domain.infrastructure._internal.pugqeep.config import PointConfig
         cfg = PointConfig()
         assert cfg.function_type == "cluster"
         assert cfg.n_clusters == 16
@@ -734,7 +734,7 @@ class TestPointConfig:
 
 class TestLibraryConfig:
     def test_defaults(self):
-        from domains.infrastructure.pugqeep.config import LibraryConfig
+        from domain.infrastructure._internal.pugqeep.config import LibraryConfig
         cfg = LibraryConfig()
         assert cfg.name == "default"
         assert cfg.storage_dir is None
@@ -743,7 +743,7 @@ class TestLibraryConfig:
 
 class TestTreeConfig:
     def test_defaults(self):
-        from domains.infrastructure.pugqeep.config import TreeConfig
+        from domain.infrastructure._internal.pugqeep.config import TreeConfig
         cfg = TreeConfig()
         assert cfg.name == "model"
         assert cfg.n_clusters == 16
@@ -753,7 +753,7 @@ class TestTreeConfig:
 
 class TestQueueConfig:
     def test_defaults(self):
-        from domains.infrastructure.pugqeep.config import QueueConfig
+        from domain.infrastructure._internal.pugqeep.config import QueueConfig
         cfg = QueueConfig()
         assert cfg.max_trees == 10
         assert cfg.dedup is True
@@ -761,7 +761,7 @@ class TestQueueConfig:
 
 class TestSubprocessConfig:
     def test_defaults(self):
-        from domains.infrastructure.pugqeep.config import SubprocessConfig
+        from domain.infrastructure._internal.pugqeep.config import SubprocessConfig
         cfg = SubprocessConfig()
         assert cfg.enabled is True
         assert cfg.python_exe == "python3"
@@ -771,7 +771,7 @@ class TestSubprocessConfig:
 
 class TestRestartPolicy:
     def test_defaults(self):
-        from domains.infrastructure.pugqeep.config import RestartPolicy
+        from domain.infrastructure._internal.pugqeep.config import RestartPolicy
         cfg = RestartPolicy()
         assert cfg.max_restarts == 0
         assert cfg.restart_delay == 1.0
@@ -781,7 +781,7 @@ class TestRestartPolicy:
 
 class TestMonitorConfig:
     def test_defaults(self):
-        from domains.infrastructure.pugqeep.config import MonitorConfig
+        from domain.infrastructure._internal.pugqeep.config import MonitorConfig
         cfg = MonitorConfig()
         assert cfg.enabled is True
         assert cfg.poll_interval == 1.0
@@ -791,7 +791,7 @@ class TestMonitorConfig:
 
 class TestEngineConfig:
     def test_defaults(self):
-        from domains.infrastructure.pugqeep.config import EngineConfig
+        from domain.infrastructure._internal.pugqeep.config import EngineConfig
         cfg = EngineConfig()
         assert cfg.name == "main"
         assert cfg.max_trees == 16
@@ -1078,7 +1078,7 @@ class TestPointSerializationExtended:
 
 class TestPointViewExtended:
     def test_view_generate_returns_ndarray(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         import numpy as np
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
@@ -1087,7 +1087,7 @@ class TestPointViewExtended:
         assert isinstance(arr, np.ndarray)
 
     def test_view_shape_matches_generate(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(8, 8), dtype="float32")
@@ -1095,7 +1095,7 @@ class TestPointViewExtended:
         assert arr.shape == (8, 8)
 
     def test_view_dtype_matches(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         import numpy as np
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
@@ -1104,14 +1104,14 @@ class TestPointViewExtended:
         assert arr.dtype == np.dtype("float64")
 
     def test_view_len_matches_shape(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(100), identity="c")
         view = PointView(p, shape=(100,), dtype="float32")
         assert len(view) == 100
 
     def test_view_repr_contains_identity(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="myid")
         view = PointView(p, shape=(64,), dtype="float32")
@@ -1119,7 +1119,7 @@ class TestPointViewExtended:
         assert "myid" in r
 
     def test_view_accuracy_matches_point(self):
-        from domains.infrastructure.pugqeep.point_interface import PointView
+        from domain.infrastructure._internal.pugqeep.point_interface import PointView
         c = PointCompressor(n_clusters=8)
         p = c.compress_cluster(np.random.randn(64), identity="c")
         view = PointView(p, shape=(64,), dtype="float32")
@@ -1160,7 +1160,7 @@ class TestCompressorConfigExtended:
 
 class TestPointConfigExtended:
     def test_custom_values(self):
-        from domains.infrastructure.pugqeep.config import PointConfig
+        from domain.infrastructure._internal.pugqeep.config import PointConfig
         cfg = PointConfig(function_type="linear", n_clusters=8, residual_threshold=0.5)
         assert cfg.function_type == "linear"
         assert cfg.n_clusters == 8
@@ -1169,7 +1169,7 @@ class TestPointConfigExtended:
 
 class TestLibraryConfigExtended:
     def test_custom_values(self):
-        from domains.infrastructure.pugqeep.config import LibraryConfig
+        from domain.infrastructure._internal.pugqeep.config import LibraryConfig
         cfg = LibraryConfig(name="test", storage_dir="/tmp", auto_save=True)
         assert cfg.name == "test"
         assert cfg.storage_dir == "/tmp"
@@ -1178,7 +1178,7 @@ class TestLibraryConfigExtended:
 
 class TestTreeConfigExtended:
     def test_custom_values(self):
-        from domains.infrastructure.pugqeep.config import TreeConfig
+        from domain.infrastructure._internal.pugqeep.config import TreeConfig
         cfg = TreeConfig(name="encoder", n_clusters=32, skip_embeddings=False, skip_biases=False)
         assert cfg.name == "encoder"
         assert cfg.n_clusters == 32
@@ -1188,7 +1188,7 @@ class TestTreeConfigExtended:
 
 class TestQueueConfigExtended:
     def test_custom_values(self):
-        from domains.infrastructure.pugqeep.config import QueueConfig
+        from domain.infrastructure._internal.pugqeep.config import QueueConfig
         cfg = QueueConfig(max_trees=20, dedup=False)
         assert cfg.max_trees == 20
         assert cfg.dedup is False
@@ -1196,7 +1196,7 @@ class TestQueueConfigExtended:
 
 class TestSubprocessConfigExtended:
     def test_custom_values(self):
-        from domains.infrastructure.pugqeep.config import SubprocessConfig
+        from domain.infrastructure._internal.pugqeep.config import SubprocessConfig
         cfg = SubprocessConfig(enabled=False, python_exe="python", max_workers=8, terminate_grace=5.0)
         assert cfg.enabled is False
         assert cfg.python_exe == "python"
@@ -1206,7 +1206,7 @@ class TestSubprocessConfigExtended:
 
 class TestRestartPolicyExtended:
     def test_custom_values(self):
-        from domains.infrastructure.pugqeep.config import RestartPolicy
+        from domain.infrastructure._internal.pugqeep.config import RestartPolicy
         cfg = RestartPolicy(max_restarts=5, restart_delay=2.0, backoff="linear", max_backoff=60.0)
         assert cfg.max_restarts == 5
         assert cfg.restart_delay == 2.0
@@ -1216,7 +1216,7 @@ class TestRestartPolicyExtended:
 
 class TestMonitorConfigExtended:
     def test_custom_values(self):
-        from domains.infrastructure.pugqeep.config import MonitorConfig
+        from domain.infrastructure._internal.pugqeep.config import MonitorConfig
         cfg = MonitorConfig(enabled=False, poll_interval=5.0, stall_timeout=120.0, on_stall="kill")
         assert cfg.enabled is False
         assert cfg.poll_interval == 5.0
@@ -1226,7 +1226,7 @@ class TestMonitorConfigExtended:
 
 class TestEngineConfigExtended:
     def test_custom_values(self):
-        from domains.infrastructure.pugqeep.config import EngineConfig
+        from domain.infrastructure._internal.pugqeep.config import EngineConfig
         cfg = EngineConfig(name="test", max_trees=32, tree_workers=8, max_stems=16, queue_size=256, poll_interval=0.5)
         assert cfg.name == "test"
         assert cfg.max_trees == 32

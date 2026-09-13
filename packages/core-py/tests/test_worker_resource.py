@@ -1,10 +1,10 @@
-"""Tests for domains.infrastructure.resource_manager — ResourceAllocation; domains.infrastructure.model_worker — WorkerHealth, WorkerStreamStalledError."""
+"""Tests for domain.infrastructure.resource_manager — ResourceAllocation; domain.infrastructure.model_worker — WorkerHealth, WorkerStreamStalledError."""
 
-from domains.infrastructure.resource_manager import (
+from domain.infrastructure._internal.resource_manager import (
     ResourceAllocation, ResourceManager, compute_allocation,
     get_resource_manager, reset_resource_manager, _clamp, _env_int,
 )
-from domains.infrastructure.model_worker import WorkerHealth, WorkerStreamStalledError
+from domain.infrastructure._internal.model_worker import WorkerHealth, WorkerStreamStalledError
 
 
 # ---------------------------------------------------------------------------

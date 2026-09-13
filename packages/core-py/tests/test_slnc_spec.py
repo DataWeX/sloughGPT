@@ -1,11 +1,11 @@
-"""Tests for domains.infrastructure.slnc.spec — SLNC config, layout helpers, dtype conversion."""
+"""Tests for domain.infrastructure._internal.slnc.spec — SLNC config, layout helpers, dtype conversion."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from domains.infrastructure.slnc.spec import (
+from domain.infrastructure._internal.slnc.spec import (
     MAGIC,
     VERSION,
     FLAGS_DEFAULT,

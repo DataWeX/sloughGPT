@@ -1,8 +1,8 @@
-"""Tests for domains.infrastructure.rate_limiter — RateLimiter."""
+"""Tests for domain.infrastructure.rate_limiter — RateLimiter."""
 
 import threading
 import time
-from domains.infrastructure.rate_limiter import RateLimiter, get_rate_limiter, reset_rate_limiter, RATE_LIMIT_HEADER_REMAINING, RATE_LIMIT_HEADER_LIMIT, RATE_LIMIT_HEADER_RESET
+from domain.infrastructure._internal.rate_limiter import RateLimiter, get_rate_limiter, reset_rate_limiter, RATE_LIMIT_HEADER_REMAINING, RATE_LIMIT_HEADER_LIMIT, RATE_LIMIT_HEADER_RESET
 
 
 class TestRateLimiter:
@@ -161,7 +161,7 @@ class TestRateLimiter:
 
 class TestSingleton:
     def test_get_rate_limiter_returns_singleton(self):
-        import domains.infrastructure.rate_limiter as mod
+        import domain.infrastructure.rate_limiter as mod
         original = mod._limiter
         mod._limiter = None
         try:
@@ -172,7 +172,7 @@ class TestSingleton:
             mod._limiter = original
 
     def test_get_rate_limiter_preserves_existing(self):
-        import domains.infrastructure.rate_limiter as mod
+        import domain.infrastructure.rate_limiter as mod
         original = mod._limiter
         custom = RateLimiter(max_requests=99)
         mod._limiter = custom
@@ -190,7 +190,7 @@ class TestSingleton:
         assert isinstance(new, RateLimiter)
 
     def test_singleton_default_params(self):
-        import domains.infrastructure.rate_limiter as mod
+        import domain.infrastructure.rate_limiter as mod
         original = mod._limiter
         mod._limiter = None
         try:
@@ -201,7 +201,7 @@ class TestSingleton:
             mod._limiter = original
 
     def test_singleton_custom_params(self):
-        import domains.infrastructure.rate_limiter as mod
+        import domain.infrastructure.rate_limiter as mod
         original = mod._limiter
         mod._limiter = None
         try:
@@ -212,7 +212,7 @@ class TestSingleton:
             mod._limiter = original
 
     def test_reset_then_singleton_new(self):
-        import domains.infrastructure.rate_limiter as mod
+        import domain.infrastructure.rate_limiter as mod
         original = mod._limiter
         mod._limiter = None
         try:
@@ -225,7 +225,7 @@ class TestSingleton:
             mod._limiter = original
 
     def test_reset_clears_existing(self):
-        import domains.infrastructure.rate_limiter as mod
+        import domain.infrastructure.rate_limiter as mod
         original = mod._limiter
         custom = RateLimiter(max_requests=1)
         mod._limiter = custom

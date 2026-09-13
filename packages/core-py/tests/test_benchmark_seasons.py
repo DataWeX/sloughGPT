@@ -1,5 +1,5 @@
 """
-Tests for the Stage 14 seasonal boundary (``domains.shell.evolution.py``).
+Tests for the Stage 14 seasonal boundary (``domain.shell.evolution.py``).
 
 Covers the year envelope physics (world.light modulation, season labels,
 season index mapping, year counting), conservation under the seasonal

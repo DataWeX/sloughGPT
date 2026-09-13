@@ -1,15 +1,15 @@
-"""Tests for domains.infrastructure.slnc.compiler — helper functions and SLNCCompiler."""
+"""Tests for domain.infrastructure._internal.slnc.compiler — helper functions and SLNCCompiler."""
 
 import json
 import struct
 import numpy as np
 from pathlib import Path
 import tempfile
-from domains.infrastructure.slnc.compiler import (
+from domain.infrastructure._internal.slnc.compiler import (
     _crc32, _xxhash64, SLNCCompiler, GPT2_BLOCK_LAYOUT, GPT2_NON_BLOCK_LAYOUT,
     LLAMA_BLOCK_LAYOUT, LLAMA_NON_BLOCK_LAYOUT, _ARCH_LAYOUTS,
 )
-from domains.infrastructure.slnc.spec import (
+from domain.infrastructure._internal.slnc.spec import (
     MAGIC, VERSION, FLAGS_DEFAULT, ALIGNMENT, DTYPE_FLOAT32,
     compute_header_size, compute_tensor_entry_size, compute_tensor_table_size,
     dtype_to_code, _align, DTYPE_MAP,
@@ -391,7 +391,7 @@ class TestSpecHelpers:
             dtype_to_code(np.float64)
 
     def test_code_to_dtype(self):
-        from domains.infrastructure.slnc.spec import code_to_dtype
+        from domain.infrastructure._internal.slnc.spec import code_to_dtype
         assert code_to_dtype(0) == np.float32
         assert code_to_dtype(1) == np.float16
         assert code_to_dtype(3) == np.int32
@@ -400,7 +400,7 @@ class TestSpecHelpers:
 
     def test_code_to_dtype_invalid(self):
         import pytest
-        from domains.infrastructure.slnc.spec import code_to_dtype
+        from domain.infrastructure._internal.slnc.spec import code_to_dtype
         with pytest.raises(ValueError):
             code_to_dtype(999)
 

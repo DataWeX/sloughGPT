@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from domains.infrastructure.numpy_ops import (
+from domain.infrastructure._internal.numpy_ops import (
     gelu,
     layer_norm,
     rmsnorm,

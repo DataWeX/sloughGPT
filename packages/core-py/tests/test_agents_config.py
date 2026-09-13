@@ -1,8 +1,8 @@
-"""Tests for domains.agents — SecurityConfig, SecurityBoundary, ToolDefinition, ToolExecutionContext, AgentConfig."""
+"""Tests for domain.agents — SecurityConfig, SecurityBoundary, ToolDefinition, ToolExecutionContext, AgentConfig."""
 
 import time
 import pytest
-from domains.agents import (
+from domain.agents import (
     SecurityConfig, SecurityBoundary, ToolCapability, ToolDefinition,
     ToolExecutionContext, AgentConfig,
 )

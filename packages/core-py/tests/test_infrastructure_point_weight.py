@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from domains.infrastructure.pugqeep.point import Point
-from domains.infrastructure.pugqeep.point_weight import PointWeight
+from domain.infrastructure._internal.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.point_weight import PointWeight
 
 
 class TestPointWeight:

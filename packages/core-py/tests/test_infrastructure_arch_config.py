@@ -1,7 +1,7 @@
 """Tests for ArchConfig — architecture configuration for transformer inference."""
 from __future__ import annotations
 
-from domains.infrastructure.arch_config import (
+from domain.infrastructure._internal.arch_config import (
     GPT2_WEIGHT_MAP,
     LLAMA_WEIGHT_MAP,
     ArchConfig,

@@ -17,9 +17,9 @@ import threading
 from unittest.mock import patch
 import pytest
 pytestmark = pytest.mark.slow
-from domains.infrastructure.server_state import get_server_state
-from domains.infrastructure.model_registry import get_model_registry, ModelRegistry
-from domains.infrastructure.model_server import (
+from domain.infrastructure._internal.server_state import get_server_state
+from domain.infrastructure._internal.model_registry import get_model_registry, ModelRegistry
+from domain.infrastructure._internal.model_server import (
     ModelServer, ModelStatus, CircuitBreakerState, PriorityRequestQueue, Priority,
 )
 from domain.infrastructure._internal.event_bus import get_event_bus, set_event_bus

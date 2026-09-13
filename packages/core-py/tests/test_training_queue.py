@@ -18,13 +18,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
-from domains.infrastructure.training_queue import (
+from domain.infrastructure._internal.training_queue import (
     _json_safe_payload,
     _resolve_checkpoint,
     training_handler,
     training_sessions_handler,
 )
-from domains.infrastructure.task_queue import Task
+from domain.infrastructure._internal.task_queue import Task
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -607,10 +607,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -636,10 +636,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 5, "perplexity": 1.2}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -666,10 +666,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 3}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -699,10 +699,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, expected_meta
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -730,10 +730,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -768,10 +768,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -807,10 +807,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -834,10 +834,10 @@ class TestTrainingSessionsHandler:
             raise RuntimeError("Session training crashed")
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             raising_train,
         )
 
@@ -861,10 +861,10 @@ class TestTrainingSessionsHandler:
             raise ValueError("Bad sessions")
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             raising_train,
         )
 
@@ -896,10 +896,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -928,10 +928,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -961,10 +961,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -996,10 +996,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -1026,10 +1026,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -1057,10 +1057,10 @@ class TestTrainingSessionsHandler:
                 return {"success": True}, {"num_pairs": 1}
 
         monkeypatch.setattr(
-            "domains.training.chat_trainer.ChatTrainConfig", FakeConfig
+            "domain.training.chat_trainer.ChatTrainConfig", FakeConfig
         )
         monkeypatch.setattr(
-            "domains.training.chat_trainer.train_from_sessions",
+            "domain.training.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 

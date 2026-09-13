@@ -3,7 +3,7 @@
 import os
 import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
-from domains.infrastructure.process_guard import (
+from domain.infrastructure._internal.process_guard import (
     ProcessGuard,
     resolve_memory_limit_mb,
     create_model_guard,
@@ -293,7 +293,7 @@ class TestProcessGuardGenerate:
         assert tokens == ["token1", "token2"]
 
     def test_generate_recover_from_stall(self):
-        from domains.infrastructure.model_worker import WorkerStreamStalledError
+        from domain.infrastructure._internal.model_worker import WorkerStreamStalledError
         guard = ProcessGuard(max_restarts=3, restart_delay=0.0)
         mock_worker = MagicMock()
         mock_worker.alive = True

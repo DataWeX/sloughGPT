@@ -1,4 +1,4 @@
-"""Tests for domains.shell.addons.neural_bindings — Property descriptor."""
+"""Tests for domain.shell.addons.neural_bindings — Property descriptor."""
 
 import pytest
 from domain.shell._internal.addons.neural_bindings import Property

@@ -501,7 +501,7 @@ class TestRAGServiceKGIntegration:
 
 class TestRAGServiceAutoIngestDirectory:
     def test_returns_zero_when_repo_scanner_unavailable(self, svc):
-        with patch.dict("sys.modules", {"domains.infrastructure.auto_ingest": None}):
+        with patch.dict("sys.modules", {"domain.infrastructure.auto_ingest": None}):
             result = svc.auto_ingest_directory("/tmp/nonexistent")
             assert result == 0
 

@@ -1,9 +1,9 @@
-"""Tests for domains.training — RLHFMetric, RLHFConfig, TrackerBackend, TrackingConfig, LoRAType, LoRAConfig, DataFormat."""
+"""Tests for domain.training — RLHFMetric, RLHFConfig, TrackerBackend, TrackingConfig, LoRAType, LoRAConfig, DataFormat."""
 
 from domain.training._internal.rlhf import RLHFMetric, RLHFConfig
 from domain.training._internal.tracking import TrackerBackend, TrackingConfig
 from domain.training._internal.lora import LoRAType, LoRAConfig
-from domains.training import DataFormat
+from domain.training import DataFormat
 
 
 class TestRLHFMetric:

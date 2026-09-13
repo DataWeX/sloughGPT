@@ -1,8 +1,8 @@
-"""Tests for domains.cognitive.reasoning.__init__ — ReasoningEngine."""
+"""Tests for domain.cognitive.reasoning.__init__ — ReasoningEngine."""
 
 import asyncio
 import pytest
-from domains.cognitive.reasoning import (
+from domain.cognitive._internal.reasoning import (
     ReasoningEngine, ReasoningMode, WorkingMemory,
     ChainOfThought, TreeOfThoughts, SelfConsistency,
     ConstitutionalAI, CausalReasoning, SyllogismReasoning,

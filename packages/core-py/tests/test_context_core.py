@@ -1,7 +1,7 @@
-"""Tests for domains.infrastructure.context_core — ContextCore."""
+"""Tests for domain.infrastructure.context_core — ContextCore."""
 
 import pytest
-from domains.infrastructure.context_core import (
+from domain.infrastructure._internal.context_core import (
     ContextCore,
     ContextLayer,
     ContextFrame,

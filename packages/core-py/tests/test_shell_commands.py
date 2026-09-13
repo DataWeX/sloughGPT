@@ -11,7 +11,7 @@ import pytest
 
 from domain.shell._internal.commands import ShellCommands
 
-from domains.shell import commands as mod
+from domain.shell import commands as mod
 
 
 class _FakeResponse:

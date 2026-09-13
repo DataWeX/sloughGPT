@@ -1,4 +1,4 @@
-"""Tests for packages/core-py/domains.shell.evolution.py — pure logic only."""
+"""Tests for packages/core-py/domain.shell.evolution.py — pure logic only."""
 
 from __future__ import annotations
 

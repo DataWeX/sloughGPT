@@ -1,4 +1,4 @@
-"""Tests for domains.api.sse_envelope — StreamPhase, StreamStatus, SSEEnvelope, sse_event, sse_error, sse_complete, sse_token, _json_safe."""
+"""Tests for domain.api.sse_envelope — StreamPhase, StreamStatus, SSEEnvelope, sse_event, sse_error, sse_complete, sse_token, _json_safe."""
 
 import json
 import numpy as np

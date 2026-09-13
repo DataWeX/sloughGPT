@@ -13,8 +13,8 @@ import time
 
 import pytest
 
-import domains.infrastructure.metrics as _metrics
-from domains.infrastructure.metrics import MetricsCollector, get_metrics_collector, reset_metrics_collector
+import domain.infrastructure.metrics as _metrics
+from domain.infrastructure._internal.metrics import MetricsCollector, get_metrics_collector, reset_metrics_collector
 
 
 @pytest.fixture(autouse=True, scope="module")

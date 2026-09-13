@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from domains.infrastructure.anchor_store import MeaningTags
+from domain.infrastructure._internal.anchor_store import MeaningTags
 
 
 @pytest.fixture()

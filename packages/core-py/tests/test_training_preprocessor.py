@@ -1,8 +1,8 @@
-"""Tests for domains.training — DataPreprocessor and more DatasetManager."""
+"""Tests for domain.training — DataPreprocessor and more DatasetManager."""
 
 import json
 import pytest
-from domains.training import (
+from domain.training import (
     DataPreprocessor, PreprocessingStepType,
     DatasetManager, DatasetConfig, DatasetType, DataFormat,
 )

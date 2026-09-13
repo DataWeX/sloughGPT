@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.request_coalescer import *  # noqa: F401,F403
+import domains.infrastructure.request_coalescer as _mod
+globals().update(vars(_mod))

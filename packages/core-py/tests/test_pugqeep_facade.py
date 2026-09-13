@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from domains.infrastructure.pugqeep.facade import PGQ
-from domains.infrastructure.pugqeep.task_queue import Task, TaskStatus, TaskPriority
+from domain.infrastructure._internal.pugqeep.facade import PGQ
+from domain.infrastructure._internal.pugqeep.task_queue import Task, TaskStatus, TaskPriority
 
 
 # ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ def _make_array(shape=(4, 4), seed=0):
 def _make_point(name="test_point", n=100):
     centroids = np.arange(n, dtype=np.float32)
     assignments = np.arange(n) % len(centroids)
-    from domains.infrastructure.pugqeep.point import Point
+    from domain.infrastructure._internal.pugqeep.point import Point
     return Point(
         identity=name,
         function_type="cluster",
@@ -419,7 +419,7 @@ class TestSaveLoad:
 
 class TestFromModel:
     @pytest.mark.slow
-    @patch("domains.infrastructure.pugqeep.facade.load_model_to_points")
+    @patch("domain.infrastructure._internal.pugqeep.facade.load_model_to_points")
     def test_from_model(self, mock_load):
         fake_tree = MagicMock()
         fake_tree.library = MagicMock()
@@ -438,8 +438,8 @@ class TestFromModel:
 
 class TestQueueFactory:
     @pytest.mark.slow
-    @patch("domains.infrastructure.pugqeep.facade.ModelQueue")
-    @patch("domains.infrastructure.pugqeep.facade.QueueConfig")
+    @patch("domain.infrastructure._internal.pugqeep.facade.ModelQueue")
+    @patch("domain.infrastructure._internal.pugqeep.facade.QueueConfig")
     def test_queue_factory(self, mock_config, mock_queue):
         mock_queue_instance = MagicMock()
         mock_queue.return_value = mock_queue_instance

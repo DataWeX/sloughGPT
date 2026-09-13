@@ -76,7 +76,7 @@ class TestSloughGPTConfig:
         assert "health" in SLOUGHPGPT_API_ENDPOINTS
 
     def test_page_check_creation(self):
-        from domains.testing import Page
+        from domain.testing import Page
 
         check = Page(
             name="Test",
@@ -97,7 +97,7 @@ class TestJourneyIntegration:
     """Integration tests for the journey testing library."""
 
     def test_import_all_modules(self):
-        from domains.testing import Journey, SiteConfig, Page
+        from domain.testing import Journey, SiteConfig, Page
         from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
         from domain.testing._internal.sloughgpt import SloughGPTJourney, SLOUGHPGPT_SITE
         from domain.testing._internal.journeys import PageJourney, FullSuiteJourney
@@ -109,7 +109,7 @@ class TestJourneyIntegration:
         assert FullSuiteJourney is not None
 
     def test_uisuite_with_chrome_devtools(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
         from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")

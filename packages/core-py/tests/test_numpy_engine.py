@@ -2,9 +2,9 @@
 
 import numpy as np
 import pytest
-from domains.infrastructure.numpy_engine import NumpyEngine, KVCache, _CompressedWeight, _LRUCache
+from domain.infrastructure._internal.numpy_engine import NumpyEngine, KVCache, _CompressedWeight, _LRUCache
 
-from domains.infrastructure.safetensors_loader import _find_safetensors, _get_model_dir
+from domain.infrastructure._internal.safetensors_loader import _find_safetensors, _get_model_dir
 
 QWEN_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -246,7 +246,7 @@ class TestHierarchicalCompression:
 
     def test_linear_centroids_compressed(self):
         """Centroids that follow a linear pattern should be stored as function."""
-        from domains.infrastructure.numpy_engine import _CompressedWeight
+        from domain.infrastructure._internal.numpy_engine import _CompressedWeight
 
         # Create centroids that are linearly spaced (like quantiles of uniform)
         centroids = np.linspace(-1, 1, 16).astype(np.float32)
@@ -275,7 +275,7 @@ class TestHierarchicalCompression:
 
     def test_decompress_with_linear_centroids(self):
         """Decompression should reconstruct correctly with linear centroids."""
-        from domains.infrastructure.numpy_engine import _CompressedWeight
+        from domain.infrastructure._internal.numpy_engine import _CompressedWeight
 
         centroids = np.linspace(-0.5, 0.5, 16).astype(np.float32)
         assignments = np.array([0, 5, 10, 15, 3, 7], dtype=np.uint8)
@@ -298,7 +298,7 @@ class TestHierarchicalCompression:
 
     def test_raw_centroids_fallback(self):
         """Non-linear centroids should be stored as raw array."""
-        from domains.infrastructure.numpy_engine import _CompressedWeight
+        from domain.infrastructure._internal.numpy_engine import _CompressedWeight
 
         # Random centroids — not linear
         centroids = np.array([0.1, -0.5, 0.9, -0.1, 0.3, 0.7, -0.8, 0.2,

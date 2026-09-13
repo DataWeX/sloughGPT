@@ -1,9 +1,9 @@
-"""Tests for domains.infrastructure.model_server — Priority, QueueMetrics, ModelStatus, ModelMetrics, CircuitBreakerState, CircuitBreaker, IdleManager, SessionKVCache."""
+"""Tests for domain.infrastructure.model_server — Priority, QueueMetrics, ModelStatus, ModelMetrics, CircuitBreakerState, CircuitBreaker, IdleManager, SessionKVCache."""
 
 import time
 from unittest.mock import MagicMock
 
-from domains.infrastructure.model_server import (
+from domain.infrastructure._internal.model_server import (
     Priority, QueueMetrics, ModelStatus, ModelMetrics, CircuitBreakerState, CircuitBreaker,
     IdleManager, SessionKVCache,
 )

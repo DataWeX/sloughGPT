@@ -67,11 +67,11 @@ def _app():
 
 
 # ---------------------------------------------------------------------------
-# Tests — patch at domains.companion.* (lazy imports inside handler body)
+# Tests — patch at domain.companion.* (lazy imports inside handler body)
 # ---------------------------------------------------------------------------
 
-PATCH_GET = "domains.companion.get_companion"
-PATCH_CREATE = "domains.companion.create_companion"
+PATCH_GET = "domain.companion.get_companion"
+PATCH_CREATE = "domain.companion.create_companion"
 
 
 class TestGetCompanionInfo:

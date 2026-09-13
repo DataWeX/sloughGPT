@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import pytest
 
-from domains.cognitive.reasoning import (
+from domain.cognitive._internal.reasoning import (
     ReasoningEngine,
     ReasoningMode,
     ThoughtStep,

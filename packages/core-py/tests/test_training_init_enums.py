@@ -1,6 +1,6 @@
-"""Tests for domains.training — DatasetType, DataFormat, DatasetConfig, PreprocessingStepType, PipelineStageType, ModelType, ModelArchitecture, ModelConfig, PipelineConfig (training.__init__)."""
+"""Tests for domain.training — DatasetType, DataFormat, DatasetConfig, PreprocessingStepType, PipelineStageType, ModelType, ModelArchitecture, ModelConfig, PipelineConfig (training.__init__)."""
 
-from domains.training import (
+from domain.training import (
     DatasetType, DataFormat, DatasetConfig, PreprocessingStepType,
     PipelineStageType, ModelType, ModelArchitecture, ModelConfig, PipelineConfig,
 )

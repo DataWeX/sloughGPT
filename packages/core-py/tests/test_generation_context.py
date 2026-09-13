@@ -1,4 +1,4 @@
-"""Tests for domains.core.soul — GenerationContext."""
+"""Tests for domain.core.soul — GenerationContext."""
 
 import numpy as np
 import pytest

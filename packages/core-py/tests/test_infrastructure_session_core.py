@@ -1,7 +1,7 @@
 """Tests for SessionCore — session context storage and retrieval."""
 from __future__ import annotations
 
-from domains.infrastructure.session_core import SessionCore
+from domain.infrastructure._internal.session_core import SessionCore
 
 
 class TestSessionCore:

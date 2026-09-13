@@ -778,7 +778,7 @@ class TestClientConvenience:
             def __call__(self, prompt, **kw):
                 return f"out:{prompt}"
 
-        monkeypatch.setattr("domains.training.huggingface.client.HFClient", FakeClient)
+        monkeypatch.setattr("domain.training._internal.huggingface.client.HFClient", FakeClient)
         assert generate("hello") == "out:hello"
         assert calls == [("meta-llama/Llama-2-7b-chat-hf", "api")]
 
@@ -790,5 +790,5 @@ class TestClientConvenience:
             def chat(self, messages, **kw):
                 return "chat-out"
 
-        monkeypatch.setattr("domains.training.huggingface.client.HFClient", FakeClient)
+        monkeypatch.setattr("domain.training._internal.huggingface.client.HFClient", FakeClient)
         assert chat([{"role": "user", "content": "hi"}]) == "chat-out"

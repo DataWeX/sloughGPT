@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from domains.infrastructure.cache import CacheEntry, CacheManager, ComponentException
+from domain.infrastructure._internal.cache import CacheEntry, CacheManager, ComponentException
 
 
 class _BadDict(dict):

@@ -1,4 +1,4 @@
-"""Tests for domains.mobile.notifications — DeviceToken, NotificationPayload,
+"""Tests for domain.mobile.notifications — DeviceToken, NotificationPayload,
 PushNotificationService with MogDB persistence."""
 
 import time
@@ -713,7 +713,7 @@ class TestPushNotificationServiceMessageBuilding:
 # ---------------------------------------------------------------------------
 class TestNotificationServiceSingleton:
     def test_get_notification_service(self):
-        from domains.mobile import notifications as mod
+        from domain.mobile import notifications as mod
         old = mod._service
         try:
             mod._service = None

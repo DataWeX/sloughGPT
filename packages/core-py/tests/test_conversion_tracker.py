@@ -2,7 +2,7 @@
 
 import pytest
 
-from domains.infrastructure.conversion_tracker import (
+from domain.infrastructure._internal.conversion_tracker import (
     ConversionStage,
     ConversionStatus,
     ConversionTracker,

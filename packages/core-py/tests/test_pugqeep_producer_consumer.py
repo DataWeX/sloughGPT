@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-from domains.infrastructure.pugqeep.task_queue import TaskQueue, Task, TaskStatus, TaskPriority
-from domains.infrastructure.pugqeep.engine import Engine, Process, ProcessStatus
+from domain.infrastructure._internal.pugqeep.task_queue import TaskQueue, Task, TaskStatus, TaskPriority
+from domain.infrastructure._internal.pugqeep.engine import Engine, Process, ProcessStatus
 
 
 # ── TaskQueue worker pool tests ─────────────────────────────────────

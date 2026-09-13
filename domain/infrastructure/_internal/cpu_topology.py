@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.cpu_topology import *  # noqa: F401,F403
+import domains.infrastructure.cpu_topology as _mod
+globals().update(vars(_mod))

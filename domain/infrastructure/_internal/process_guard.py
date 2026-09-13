@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.process_guard import *  # noqa: F401,F403
+import domains.infrastructure.process_guard as _mod
+globals().update(vars(_mod))

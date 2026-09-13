@@ -11,7 +11,7 @@ class TestGenericCore:
     """Tests for the generic core library."""
 
     def test_site_config_creation(self):
-        from domains.testing import SiteConfig
+        from domain.testing import SiteConfig
 
         config = SiteConfig(
             name="Test App",
@@ -21,7 +21,7 @@ class TestGenericCore:
         assert config.base_url == "http://localhost:3000"
 
     def test_page_creation(self):
-        from domains.testing import Page
+        from domain.testing import Page
 
         page = Page(
             name="Home",
@@ -33,7 +33,7 @@ class TestGenericCore:
         assert len(page.checks) == 2
 
     def test_create_site_config(self):
-        from domains.testing import create_site_config
+        from domain.testing import create_site_config
 
         config = create_site_config(
             name="My App",
@@ -48,14 +48,14 @@ class TestGenericCore:
         assert "home" in config.pages
 
     def test_journey_creation(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
         assert journey.config.name == "Test"
 
     def test_journey_run(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -67,7 +67,7 @@ class TestGenericCore:
         assert result.passed_count == 2
 
     def test_journey_report(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -77,14 +77,14 @@ class TestGenericCore:
         assert "Journey Test Report" in report
 
     def test_step_result(self):
-        from domains.testing import StepResult
+        from domain.testing import StepResult
 
         result = StepResult(name="test", passed=True, detail="ok")
         assert result.passed
         assert result.name == "test"
 
     def test_journey_result_to_dict(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -99,61 +99,61 @@ class TestAssertions:
     """Tests for assertion helpers."""
 
     def test_assert_page_loads(self):
-        from domains.testing import assert_page_loads
+        from domain.testing import assert_page_loads
 
         result = assert_page_loads("x" * 100)
         assert result.passed
 
     def test_assert_page_loads_short(self):
-        from domains.testing import assert_page_loads
+        from domain.testing import assert_page_loads
 
         result = assert_page_loads("short")
         assert not result.passed
 
     def test_assert_body_contains(self):
-        from domains.testing import assert_body_contains
+        from domain.testing import assert_body_contains
 
         result = assert_body_contains("Hello World", "World")
         assert result.passed
 
     def test_assert_body_contains_case_insensitive(self):
-        from domains.testing import assert_body_contains
+        from domain.testing import assert_body_contains
 
         result = assert_body_contains("Hello World", "hello")
         assert result.passed
 
     def test_assert_no_errors(self):
-        from domains.testing import assert_no_errors
+        from domain.testing import assert_no_errors
 
         result = assert_no_errors([], [])
         assert result.passed
 
     def test_assert_no_errors_with_errors(self):
-        from domains.testing import assert_no_errors
+        from domain.testing import assert_no_errors
 
         result = assert_no_errors(["error1"], [])
         assert not result.passed
 
     def test_assert_element_exists(self):
-        from domains.testing import assert_element_exists
+        from domain.testing import assert_element_exists
 
         result = assert_element_exists("button", True)
         assert result.passed
 
     def test_assert_element_not_exists(self):
-        from domains.testing import assert_element_exists
+        from domain.testing import assert_element_exists
 
         result = assert_element_exists("button", False)
         assert not result.passed
 
     def test_assert_api_healthy(self):
-        from domains.testing import assert_api_healthy
+        from domain.testing import assert_api_healthy
 
         result = assert_api_healthy(200)
         assert result.passed
 
     def test_assert_api_unhealthy(self):
-        from domains.testing import assert_api_healthy
+        from domain.testing import assert_api_healthy
 
         result = assert_api_healthy(500)
         assert not result.passed
@@ -163,7 +163,7 @@ class TestStepBuilder:
     """Tests for step builder."""
 
     def test_goto_step(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -173,7 +173,7 @@ class TestStepBuilder:
         assert "training" in result.detail
 
     def test_wait_for_step(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -182,7 +182,7 @@ class TestStepBuilder:
         assert result.passed
 
     def test_check_body_step(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -191,7 +191,7 @@ class TestStepBuilder:
         assert result.passed
 
     def test_click_button_step(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -200,7 +200,7 @@ class TestStepBuilder:
         assert result.passed
 
     def test_check_api_step(self):
-        from domains.testing import Journey, SiteConfig
+        from domain.testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -209,7 +209,7 @@ class TestStepBuilder:
         assert result.passed
 
     def test_custom_step(self):
-        from domains.testing import Journey, SiteConfig, StepResult
+        from domain.testing import Journey, SiteConfig, StepResult
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)

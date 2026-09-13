@@ -5,7 +5,7 @@ import asyncio
 
 import pytest
 
-from domains.infrastructure.request_coalescer import (
+from domain.infrastructure._internal.request_coalescer import (
     RequestCoalescer,
     _hash_key,
     get_coalescer,

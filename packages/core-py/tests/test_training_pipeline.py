@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.training_pipeline — TrainingDataPipeline.
+"""Tests for domain.infrastructure.training_pipeline — TrainingDataPipeline.
 
 Covers: dataclasses, validation, quality scoring, conversation CRUD, training
 pairs, training runs, export (jsonl/json), stats, backup, singleton, migration.
@@ -18,7 +18,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.infrastructure.training_pipeline import (
+from domain.infrastructure._internal.training_pipeline import (
     Conversation,
     TrainingPair,
     TrainingRun,
@@ -386,7 +386,7 @@ class TestCreateBackup:
 
 class TestSingleton:
     def test_get_pipeline_singleton(self, tmp_path):
-        import domains.infrastructure.training_pipeline as mod
+        import domain.infrastructure.training_pipeline as mod
         old = mod._pipeline
         try:
             mod._pipeline = None
@@ -397,7 +397,7 @@ class TestSingleton:
             mod._pipeline = old
 
     def test_get_pipeline_wrong_dir(self, tmp_path):
-        import domains.infrastructure.training_pipeline as mod
+        import domain.infrastructure.training_pipeline as mod
         old = mod._pipeline
         try:
             mod._pipeline = None

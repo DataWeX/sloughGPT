@@ -2,7 +2,7 @@
 
 import pytest
 
-from domains.infrastructure.arch_config import (
+from domain.infrastructure._internal.arch_config import (
     GPT2_WEIGHT_MAP,
     LLAMA_WEIGHT_MAP,
     ArchConfig,

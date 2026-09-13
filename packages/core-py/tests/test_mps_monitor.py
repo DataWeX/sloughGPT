@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from domains.infrastructure.mps_monitor import MPSMemoryMonitor, get_mps_monitor
+from domain.infrastructure._internal.mps_monitor import MPSMemoryMonitor, get_mps_monitor
 
 
 @pytest.fixture
@@ -162,7 +162,7 @@ class TestState:
         monitor._clear_mps_cache()
 
     def test_clear_cache_clears_when_available(self, monkeypatch, monitor, caplog):
-        import domains.infrastructure.ml_types as ml_types
+        import domain.infrastructure.ml_types as ml_types
 
         caplog.set_level(logging.INFO, logger="slo.infrastructure.mps_monitor")
         monkeypatch.setattr(ml_types.mps, "is_available", lambda: True)
@@ -182,13 +182,13 @@ class TestState:
         assert 0.0 <= usage <= 1.0
 
     def test_get_mps_usage_available_backend(self, monkeypatch, monitor):
-        import domains.infrastructure.ml_types as ml_types
+        import domain.infrastructure.ml_types as ml_types
 
         monkeypatch.setattr(ml_types.mps, "is_available", lambda: True)
         assert monitor._get_mps_usage() == 0.0
 
     def test_get_mps_usage_handles_error(self, monkeypatch, monitor):
-        import domains.infrastructure.ml_types as ml_types
+        import domain.infrastructure.ml_types as ml_types
 
         monkeypatch.setattr(
             ml_types.mps,

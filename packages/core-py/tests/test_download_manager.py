@@ -9,8 +9,8 @@ from typing import List
 
 import pytest
 
-import domains.infrastructure.download_manager as dm
-from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+import domain.infrastructure.download_manager as dm
+from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
 
 # ---------------------------------------------------------------------------
@@ -354,8 +354,8 @@ class TestBackendManagement:
         import threading
         monkeypatch.setattr(dm, "_backend", None)
         monkeypatch.setattr(dm, "_backend_lock", threading.Lock())
-        old_val = sys.modules.get("domains.infrastructure.hf_hub")
-        sys.modules["domains.infrastructure.hf_hub"] = None
+        old_val = sys.modules.get("domain.infrastructure.hf_hub")
+        sys.modules["domain.infrastructure.hf_hub"] = None
         try:
             backend = dm.get_backend()
             assert backend.is_cached("x") is False
@@ -363,9 +363,9 @@ class TestBackendManagement:
             assert backend.list_incomplete() == []
         finally:
             if old_val is not None:
-                sys.modules["domains.infrastructure.hf_hub"] = old_val
+                sys.modules["domain.infrastructure.hf_hub"] = old_val
             else:
-                sys.modules.pop("domains.infrastructure.hf_hub", None)
+                sys.modules.pop("domain.infrastructure.hf_hub", None)
             dm._backend = None
 
 
@@ -670,7 +670,7 @@ class TestVerify:
     def test_verify_valid_model(self, tmp_path):
         """Verify returns valid when all files match."""
         import hashlib
-        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
         class VerifyBackend(DownloadBackend):
             def __init__(self, cache_dir, files):
@@ -720,7 +720,7 @@ class TestVerify:
 
     def test_verify_missing_file(self, tmp_path):
         """Verify returns invalid when file is missing."""
-        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
         class VerifyBackend(DownloadBackend):
             def __init__(self, cache_dir, files):
@@ -766,7 +766,7 @@ class TestVerify:
 
     def test_verify_size_mismatch(self, tmp_path):
         """Verify returns invalid when file size doesn't match."""
-        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
         class VerifyBackend(DownloadBackend):
             def __init__(self, cache_dir, files):
@@ -811,7 +811,7 @@ class TestVerify:
     def test_verify_checksum_mismatch(self, tmp_path):
         """Verify returns invalid when checksum doesn't match."""
         import hashlib
-        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
         class VerifyBackend(DownloadBackend):
             def __init__(self, cache_dir, files):
@@ -855,7 +855,7 @@ class TestVerify:
 
     def test_verify_empty_files_list(self):
         """Verify returns invalid when no files found."""
-        from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+        from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
 
         class EmptyBackend(DownloadBackend):
             def is_cached(self, resource_id, deep_check=False):

@@ -1,4 +1,4 @@
-"""Tests for domains.feedback — MessageData, MessageFeedback, ResponseLog, MetaWeights, HealthSnapshot."""
+"""Tests for domain.feedback — MessageData, MessageFeedback, ResponseLog, MetaWeights, HealthSnapshot."""
 
 import dataclasses
 import threading

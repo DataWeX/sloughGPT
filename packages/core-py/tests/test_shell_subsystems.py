@@ -292,7 +292,7 @@ class TestShellAuditLogger:
 
 class TestDaitRuntime:
     def test_get_dait_runtime_singleton(self, monkeypatch):
-        import domains.shell as shell_mod
+        import domain.shell as shell_mod
         monkeypatch.setattr(shell_mod, "_dait_instance", None)
         a = shell_mod.get_dait_runtime()
         b = shell_mod.get_dait_runtime()
@@ -300,7 +300,7 @@ class TestDaitRuntime:
         monkeypatch.setattr(shell_mod, "_dait_instance", None)
 
     def test_get_dait_runtime_resets(self, monkeypatch):
-        import domains.shell as shell_mod
+        import domain.shell as shell_mod
         monkeypatch.setattr(shell_mod, "_dait_instance", None)
         first = shell_mod.get_dait_runtime()
         monkeypatch.setattr(shell_mod, "_dait_instance", None)

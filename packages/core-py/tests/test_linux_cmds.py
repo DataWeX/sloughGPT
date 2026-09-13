@@ -1,4 +1,4 @@
-"""Tests for domains.shell.cmds.linux — LinuxCommandsMixin static helpers and key commands."""
+"""Tests for domain.shell.cmds.linux — LinuxCommandsMixin static helpers and key commands."""
 
 from __future__ import annotations
 

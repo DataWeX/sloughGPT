@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from domains.infrastructure.vector_backend import VectorBE
-from domains.infrastructure.arch_config import ArchConfig
+from domain.infrastructure._internal.vector_backend import VectorBE
+from domain.infrastructure._internal.arch_config import ArchConfig
 
 
 def _make_arch():

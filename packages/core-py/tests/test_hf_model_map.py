@@ -1,4 +1,4 @@
-"""Tests for domains.training.huggingface.model_map — ModelSize, HFModelInfo, lookup functions."""
+"""Tests for domain.training._internal.huggingface.model_map — ModelSize, HFModelInfo, lookup functions."""
 
 from domain.training._internal.huggingface.model_map import (
     ModelSize, HFModelInfo, HF_MODELS, get_model_info, search_models,

@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.numpy_ops — pure NumPy transformer operations.
+"""Tests for domain.infrastructure.numpy_ops — pure NumPy transformer operations.
 
 Covers: softmax, rmsnorm, layer_norm, gelu, silu, rope, to_float32.
 Edge cases, boundary values, different dtypes, axis handling.
@@ -15,7 +15,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.infrastructure.numpy_ops import (
+from domain.infrastructure._internal.numpy_ops import (
     to_float32,
     softmax,
     rmsnorm,

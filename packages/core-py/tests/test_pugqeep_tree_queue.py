@@ -6,21 +6,21 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import domains.infrastructure.numpy_engine as numpy_engine
-import domains.infrastructure.pugqeep.model_tree as model_tree_module
-import domains.infrastructure.pugqeep.tree as tree_module
-from domains.infrastructure.pugqeep.model_tree import ModelTree
-from domains.infrastructure.pugqeep.tree import (
+import domain.infrastructure.numpy_engine as numpy_engine
+import domain.infrastructure._internal.pugqeep.model_tree as model_tree_module
+import domain.infrastructure._internal.pugqeep.tree as tree_module
+from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+from domain.infrastructure._internal.pugqeep.tree import (
     save_library,
     load_library,
     load_from_points,
     load_model_to_points,
     decompress_tree,
 )
-from domains.infrastructure.pugqeep.queue import ModelQueue
-from domains.infrastructure.pugqeep.config import QueueConfig, TreeConfig
-from domains.infrastructure.pugqeep.library import PointLibrary
-from domains.infrastructure.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.queue import ModelQueue
+from domain.infrastructure._internal.pugqeep.config import QueueConfig, TreeConfig
+from domain.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.infrastructure._internal.pugqeep.point import Point
 
 
 def _weights(n=256):

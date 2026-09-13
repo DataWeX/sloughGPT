@@ -14,8 +14,8 @@ import sys
 import numpy as np
 import pytest
 
-from domains.infrastructure import quantization as q
-from domains.infrastructure.quantization import (
+from domain.infrastructure._internal import quantization as q
+from domain.infrastructure._internal.quantization import (
     Quantine,
     QuantMeta,
     QuantMode,
@@ -104,13 +104,13 @@ def test_quant_core_import_failure_falls_back_to_numpy(monkeypatch):
         def __getattr__(self, name):
             raise ImportError(f"cannot import name {name!r} from fake wrapper")
 
-    monkeypatch.setitem(sys.modules, "domains.infrastructure.quant_core.wrapper", _Broken())
+    monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.quant_core.wrapper", _Broken())
     importlib.reload(q)
     try:
         assert q._c_matmul is q._numpy_fallback
         assert q._c_matmul_int4 is q._int4_numpy_fallback
     finally:
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.quant_core.wrapper", wrapper)
+        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.quant_core.wrapper", wrapper)
         importlib.reload(q)
 
 
@@ -425,7 +425,7 @@ def test_suggest_format_without_avx2(monkeypatch):
         def __getattr__(self, name):
             raise ImportError(f"cannot import name {name!r}")
 
-    monkeypatch.setitem(sys.modules, "domains.infrastructure.quant_core.wrapper", _Broken())
+    monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.quant_core.wrapper", _Broken())
     res = Quantine.suggest_format(
         sample_weight=np.ones((64, 64), dtype=np.float32),
         quality_threshold=0.0,

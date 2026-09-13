@@ -12,8 +12,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import domains.infrastructure.pugqeep as pugqeep
-from domains.infrastructure import point_compressor as pc
+import domain.infrastructure._internal.pugqeep as pugqeep
+from domain.infrastructure._internal import point_compressor as pc
 from domains.infrastructure.pugqeep.point import Point
 from domains.infrastructure.pugqeep.compressor import PointCompressor
 from domains.infrastructure.pugqeep.library import PointLibrary

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 
-from domains.infrastructure.conversation_log import (
+from domain.infrastructure._internal.conversation_log import (
     ConversationLogger,
     capture,
     get_conversation_logger,
@@ -63,8 +63,8 @@ class TestCapture:
         reset_conversation_logger()
         # Redirect to tmp_path by creating logger manually
         logger = ConversationLogger(data_dir=tmp_path)
-        from domains.infrastructure.conversation_log import _logger_lock, _logger
-        import domains.infrastructure.conversation_log as mod
+        from domain.infrastructure._internal.conversation_log import _logger_lock, _logger
+        import domain.infrastructure.conversation_log as mod
         mod._logger = logger
         try:
             result = capture("hello", "world", model="test")

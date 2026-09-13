@@ -1,4 +1,4 @@
-"""Tests for domains.cognitive.reasoning.advanced — comprehensive coverage.
+"""Tests for domain.cognitive.reasoning.advanced — comprehensive coverage.
 
 Covers: dataclasses, all 7 reasoning engines, factory function, enum values,
 internal logic (confidence, pruning, unification heuristics, subproblem extraction).
@@ -15,7 +15,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.cognitive.reasoning.advanced import (
+from domain.cognitive._internal.reasoning.advanced import (
     ReasoningMode,
     ThoughtStep,
     ReasoningResult,
@@ -711,7 +711,7 @@ class TestAdvancedReasoningFactory:
 
 class TestExports:
     def test_all_contains_expected(self):
-        from domains.cognitive.reasoning.advanced import __all__ as exported
+        from domain.cognitive._internal.reasoning.advanced import __all__ as exported
         expected = {
             "ReasoningMode", "ThoughtStep", "ReasoningResult",
             "ChainOfThought", "TreeOfThoughts", "SelfConsistency",

@@ -1,10 +1,10 @@
-"""Tests for domain.training._internal.status — TrainingStage, CompletionStatus, StageStatus, TrainingCompletionReport; domain.training._internal.auto_config — DatasetAnalysis, TrainingConfig; domains.infrastructure.download_manager — DownloadStatus, DownloadProgress."""
+"""Tests for domain.training._internal.status — TrainingStage, CompletionStatus, StageStatus, TrainingCompletionReport; domain.training._internal.auto_config — DatasetAnalysis, TrainingConfig; domain.infrastructure.download_manager — DownloadStatus, DownloadProgress."""
 
 from domain.training._internal.status import (
     TrainingStage, CompletionStatus, StageStatus, TrainingCompletionReport,
 )
 from domain.training._internal.auto_config import DatasetAnalysis, TrainingConfig
-from domains.infrastructure.download_manager import DownloadStatus, DownloadProgress
+from domain.infrastructure._internal.download_manager import DownloadStatus, DownloadProgress
 
 
 class TestTrainingStage:

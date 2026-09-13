@@ -1,10 +1,10 @@
-"""Tests for domains.ops — fused ops, activations, softmax, attention, embeddings."""
+"""Tests for domain.ops — fused ops, activations, softmax, attention, embeddings."""
 
 import math
 import numpy as np
 import pytest
 
-from domains.ops import (
+from domain.ops import (
     FusedLayerNorm,
     FusedRMSNorm,
     FusedCrossEntropyLoss,

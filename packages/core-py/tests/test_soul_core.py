@@ -58,7 +58,7 @@ class TestSloEngine:
         assert engine.is_loaded is False
 
     def test_init_custom_soul(self):
-        from domains.inference import SloProfile
+        from domain.inference import SloProfile
         soul = SloProfile(name="custom")
         engine = SloEngine(soul=soul)
         assert engine.soul.name == "custom"
@@ -96,7 +96,7 @@ class TestSloEngine:
 
     def test_set_soul(self):
         engine = SloEngine()
-        from domains.inference import SloProfile
+        from domain.inference import SloProfile
         soul = SloProfile(name="new")
         result = engine.set_soul(soul)
         assert engine.soul.name == "new"

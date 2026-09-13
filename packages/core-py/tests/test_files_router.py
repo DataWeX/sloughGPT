@@ -145,7 +145,7 @@ class TestIngest:
         long_text = b"This is a knowledge text chunk that is definitely longer than twenty characters."
         r = client.post("/files/upload", files={"file": ("ingest.txt", io.BytesIO(long_text), "text/plain")})
         fid = r.json()["id"]
-        with patch("domains.learner.knowledge.get_knowledge_memory") as mock_km:
+        with patch("domain.learner.knowledge.get_knowledge_memory") as mock_km:
             mock_km.return_value.add_fact.return_value = True
             resp = client.post(f"/files/{fid}/ingest")
         assert resp.status_code == 200

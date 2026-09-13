@@ -1,4 +1,4 @@
-"""Tests for domains.training.huggingface.api_loader — HFAPIConfig."""
+"""Tests for domain.training._internal.huggingface.api_loader — HFAPIConfig."""
 
 from domain.training._internal.huggingface.api_loader import (
     HFAPIConfig,

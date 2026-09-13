@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from domains.infrastructure.model_registry import ModelRegistry, get_model_registry
+from domain.infrastructure._internal.model_registry import ModelRegistry, get_model_registry
 
 
 class _FakeProvider:
@@ -63,7 +63,7 @@ class TestRegistryEdges:
     def test_emit_event_exception_swallowed(self):
         reg = ModelRegistry()
         with patch(
-            "domains.infrastructure.event_bus.get_event_bus",
+            "domain.infrastructure.event_bus.get_event_bus",
             side_effect=RuntimeError("bus down"),
         ):
             reg._emit_event("model.registered", "m")
@@ -77,7 +77,7 @@ class TestRegistryEdges:
                 raise RuntimeError("emit failed")
 
         with patch(
-            "domains.infrastructure.event_bus.get_event_bus",
+            "domain.infrastructure.event_bus.get_event_bus",
             return_value=BadBus(),
         ):
             reg._emit_event("model.registered", "m")
@@ -234,7 +234,7 @@ class TestEventEmission:
             def emit_sync(self, event, data, **kw):
                 emitted.append((event, data))
 
-        with patch("domains.infrastructure.event_bus.get_event_bus", return_value=FakeBus()):
+        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=FakeBus()):
             reg.register_engine("eng1", _FakeProvider())
         assert any(e[0] == "model.registered" for e in emitted)
 
@@ -247,7 +247,7 @@ class TestEventEmission:
             def emit_sync(self, event, data, **kw):
                 emitted.append((event, data))
 
-        with patch("domains.infrastructure.event_bus.get_event_bus", return_value=FakeBus()):
+        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=FakeBus()):
             reg.unregister("eng1")
         assert any(e[0] == "model.unregistered" for e in emitted)
 
@@ -408,7 +408,7 @@ class TestResetMetrics:
         reg.reset_metrics()  # should not raise
 
     def test_reset_metrics_restores_status(self):
-        from domains.infrastructure.model_server import ModelStatus
+        from domain.infrastructure._internal.model_server import ModelStatus
         reg = ModelRegistry()
         p = _FakeProviderWithMetrics()
         p.status = "degraded"

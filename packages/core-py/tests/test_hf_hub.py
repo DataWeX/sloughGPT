@@ -1,10 +1,10 @@
-"""Tests for domains.infrastructure.hf_hub — HFFile, ResumeInfo, _matches_ignore, _strip_incomplete_suffix, _derive_model_id, _match_repo_file, IGNORED_PATTERNS."""
+"""Tests for domain.infrastructure.hf_hub — HFFile, ResumeInfo, _matches_ignore, _strip_incomplete_suffix, _derive_model_id, _match_repo_file, IGNORED_PATTERNS."""
 
 from pathlib import Path
 
 import pytest
 
-from domains.infrastructure.hf_hub import (
+from domain.infrastructure._internal.hf_hub import (
     HFFile,
     ResumeInfo,
     _matches_ignore,

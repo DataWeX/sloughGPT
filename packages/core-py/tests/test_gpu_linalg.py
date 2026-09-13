@@ -1,4 +1,4 @@
-"""Tests for domains.training.gpu.accelerator — pure-numpy linear algebra functions."""
+"""Tests for domain.training.gpu.accelerator — pure-numpy linear algebra functions."""
 
 import numpy as np
 from domain.training._internal.gpu.accelerator import (

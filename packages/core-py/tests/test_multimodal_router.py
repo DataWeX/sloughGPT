@@ -80,7 +80,7 @@ class TestStatus:
 
 
 class TestListCheckpoints:
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training.video_trainer.list_video_checkpoints")
     def test_list_empty(self, mock_list):
         mock_list.return_value = []
         mr = MultimodalRouter()
@@ -89,7 +89,7 @@ class TestListCheckpoints:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training.video_trainer.list_video_checkpoints")
     def test_list_with_checkpoints(self, mock_list):
         mock_list.return_value = [{"name": "ckpt-1", "path": "/tmp/ckpt-1.npz"}]
         mr = MultimodalRouter()

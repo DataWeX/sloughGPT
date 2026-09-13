@@ -285,13 +285,13 @@ class TestUnload:
 
 class TestLoadWithoutTransformers:
     def test_load_raises_import_error(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
             loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
             with pytest.raises(ImportError, match="transformers"):
                 loader.load()
 
     def test_load_raises_when_model_none(self):
-        with patch("domains.training.huggingface.local_loader.AutoModelForCausalLM", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoModelForCausalLM", None):
             loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
             with pytest.raises(ImportError, match="transformers"):
                 loader.load()
@@ -332,19 +332,19 @@ class TestExports:
 
 class TestDownloadModel:
     def test_download_raises_without_transformers(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
             with pytest.raises(AttributeError):
                 download_model("gpt2")
 
     def test_download_custom_cache(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
             with pytest.raises(AttributeError):
                 download_model("gpt2", cache_dir="/tmp/cache")
 
 
 class TestLoadModel:
     def test_load_model_raises_without_transformers(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
             cfg = HFLocalConfig(model="gpt2")
             with pytest.raises(ImportError):
                 load_model(cfg)
@@ -352,7 +352,7 @@ class TestLoadModel:
 
 class TestGenerateLocal:
     def test_generate_local_raises_without_transformers(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
             with pytest.raises(ImportError):
                 generate_local("hello", model="gpt2")
 
@@ -625,17 +625,17 @@ class TestGenerateExtended:
 
 class TestModuleFunctions:
     def test_download_model_no_transformers(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
             with pytest.raises(AttributeError):
                 download_model("gpt2", cache_dir="/tmp")
 
     def test_load_model_no_transformers(self):
-        with patch("domains.training.huggingface.local_loader.AutoModelForCausalLM", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoModelForCausalLM", None):
             with pytest.raises(ImportError):
                 load_model(HFLocalConfig(model="gpt2"))
 
     def test_generate_local_no_transformers(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
             with pytest.raises(ImportError):
                 generate_local("hi", model="gpt2")
 
@@ -667,21 +667,21 @@ class TestModuleFunctions:
 
 class TestLoadPath:
     def test_load_raises_when_both_none(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", None):
-            with patch("domains.training.huggingface.local_loader.AutoModelForCausalLM", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
+            with patch("domain.training._internal.huggingface.local_loader.AutoModelForCausalLM", None):
                 loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
                 with pytest.raises(ImportError):
                     loader.load()
 
     def test_load_raises_when_tokenizer_none(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", None):
             loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
             with pytest.raises(ImportError, match="transformers"):
                 loader.load()
 
     def test_load_raises_when_model_none(self):
-        with patch("domains.training.huggingface.local_loader.AutoTokenizer", MagicMock()):
-            with patch("domains.training.huggingface.local_loader.AutoModelForCausalLM", None):
+        with patch("domain.training._internal.huggingface.local_loader.AutoTokenizer", MagicMock()):
+            with patch("domain.training._internal.huggingface.local_loader.AutoModelForCausalLM", None):
                 loader = HuggingFaceLocalLoader(HFLocalConfig(model="gpt2"))
                 with pytest.raises(ImportError):
                     loader.load()

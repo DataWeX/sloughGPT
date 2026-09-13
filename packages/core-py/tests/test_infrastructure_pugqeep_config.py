@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from domains.infrastructure.pugqeep.config import (
+from domain.infrastructure._internal.pugqeep.config import (
     CompressorConfig,
     EngineConfig,
     LibraryConfig,

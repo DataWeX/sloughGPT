@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.entity_repositories import *  # noqa: F401,F403
+import domains.infrastructure.entity_repositories as _mod
+globals().update(vars(_mod))

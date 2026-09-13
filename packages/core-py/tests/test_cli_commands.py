@@ -22,7 +22,7 @@ class TestBuildCommand:
     def test_build_command_imports(self):
         build_cmd = REPO_ROOT / "apps" / "cli" / "src" / "commands" / "build.py"
         content = build_cmd.read_text()
-        assert "from domains.logging import get_global" in content
+        assert "from domain.logging import get_global" in content
 
     def test_build_command_has_main_function(self):
         build_cmd = REPO_ROOT / "apps" / "cli" / "src" / "commands" / "build.py"
@@ -62,7 +62,7 @@ class TestVMCommand:
     def test_vm_command_imports(self):
         vm_cmd = REPO_ROOT / "apps" / "cli" / "src" / "commands" / "vm.py"
         content = vm_cmd.read_text()
-        assert "from domains.logging import get_global" in content
+        assert "from domain.logging import get_global" in content
 
     def test_vm_command_has_main_function(self):
         vm_cmd = REPO_ROOT / "apps" / "cli" / "src" / "commands" / "vm.py"

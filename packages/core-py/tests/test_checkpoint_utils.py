@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import domain.training._internal.checkpoint_utils as cu
-from domains.models import SloughGPTModel
+from domain.models import SloughGPTModel
 
 
 def _make_model(**overrides):
@@ -194,20 +194,20 @@ class TestLoadSloughgptFromCheckpoint:
 
 
 def test_import_fallback_when_domains_models_missing():
-    """Reload the module with domains.models blocked so the module-level
+    """Reload the module with domain.models blocked so the module-level
     ImportError fallback runs (SloughGPTModel is None, load raises RuntimeError)."""
     import importlib
     import types as _types
-    real_models = sys.modules.get("domains.models")
+    real_models = sys.modules.get("domain.models")
     try:
-        sys.modules["domains.models"] = _types.ModuleType("domains.models")
+        sys.modules["domain.models"] = _types.ModuleType("domain.models")
         importlib.reload(cu)
         assert cu.SloughGPTModel is None
         with pytest.raises(RuntimeError):
             cu.load_sloughgpt_from_checkpoint({"model_state_dict": {}}, device="cpu")
     finally:
         if real_models is not None:
-            sys.modules["domains.models"] = real_models
+            sys.modules["domain.models"] = real_models
         else:
-            sys.modules.pop("domains.models", None)
+            sys.modules.pop("domain.models", None)
         importlib.reload(cu)

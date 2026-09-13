@@ -1,4 +1,4 @@
-"""Tests for packages/core-py/domains.shell.realm_live.py — pure logic only."""
+"""Tests for packages/core-py/domain.shell.realm_live.py — pure logic only."""
 
 from __future__ import annotations
 

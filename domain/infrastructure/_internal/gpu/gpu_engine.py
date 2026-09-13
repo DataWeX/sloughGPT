@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.gpu.gpu_engine import *  # noqa: F401,F403
+import domains.infrastructure.gpu.gpu_engine as _mod
+globals().update(vars(_mod))

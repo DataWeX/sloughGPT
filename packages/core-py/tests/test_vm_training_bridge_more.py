@@ -2,7 +2,7 @@
 
 import requests
 
-from domains.shell import vm_training_bridge
+from domain.shell import vm_training_bridge
 from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
 

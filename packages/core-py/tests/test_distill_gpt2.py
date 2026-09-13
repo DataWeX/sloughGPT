@@ -422,7 +422,7 @@ class _StubAdam:
 
 class TestLoadGpt2Numpy:
     def test_success(self, monkeypatch, tmp_path):
-        import domains.infrastructure.slnc.parser as _parser_mod
+        import domain.infrastructure._internal.slnc.parser as _parser_mod
 
         class _FakeSLNCParser:
             def __init__(self, path):
@@ -464,7 +464,7 @@ class TestLoadGpt2Numpy:
             _load_gpt2_numpy()
 
     def test_missing_tokenizer_raises(self, monkeypatch, tmp_path):
-        import domains.infrastructure.slnc.parser as _parser_mod
+        import domain.infrastructure._internal.slnc.parser as _parser_mod
 
         class _FakeSLNCParser:
             def __init__(self, path):

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from domains.infrastructure.conversion_tracker import ConversionStage, ConversionTracker
+from domain.infrastructure._internal.conversion_tracker import ConversionStage, ConversionTracker
 
 
 @pytest.fixture()

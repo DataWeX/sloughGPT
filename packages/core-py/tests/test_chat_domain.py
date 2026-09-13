@@ -166,7 +166,7 @@ class TestChatDomain:
 class TestSingleton:
 
     def test_get_returns_same(self):
-        with patch("domains.chat.domain.ChatDomain"):
+        with patch("domain.chat.domain.ChatDomain"):
             import domain.chat._internal.domain as mod
             mod._chat_domain = None
             d1 = get_chat_domain()

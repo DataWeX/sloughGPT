@@ -3,15 +3,15 @@
 import numpy as np
 import pytest
 
-from domains.infrastructure.arch_config import ArchConfig, build_arch
-from domains.infrastructure.numpy_forward import (
+from domain.infrastructure._internal.arch_config import ArchConfig, build_arch
+from domain.infrastructure._internal.numpy_forward import (
     forward,
     forward_cached,
     forward_fast,
     norm_fn,
     pre_extract_weights,
 )
-from domains.infrastructure.numpy_ops import (
+from domain.infrastructure._internal.numpy_ops import (
     gelu,
     layer_norm,
     rope,
@@ -20,7 +20,7 @@ from domains.infrastructure.numpy_ops import (
     softmax,
     to_float32,
 )
-from domains.infrastructure.numpy_engine import KVCache
+from domain.infrastructure._internal.numpy_engine import KVCache
 
 
 class TestToFloat32:

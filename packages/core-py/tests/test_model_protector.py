@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.infrastructure import model_protector as mp
+from domain.infrastructure._internal import model_protector as mp
 
 
 @pytest.fixture

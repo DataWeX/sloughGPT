@@ -54,7 +54,7 @@ def _app(sr: SoulsRouter):
 
 
 class TestListSouls:
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference.slo_manager.get_slo_manager")
     def test_list(self, mock_get):
         mock_get.return_value = _mock_manager()
         sr = SoulsRouter()
@@ -67,7 +67,7 @@ class TestListSouls:
 
 
 class TestGetCurrentSoul:
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference.slo_manager.get_slo_manager")
     def test_get_current(self, mock_get):
         mock_get.return_value = _mock_manager()
         sr = SoulsRouter()
@@ -78,7 +78,7 @@ class TestGetCurrentSoul:
 
 
 class TestSwitchSoul:
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference.slo_manager.get_slo_manager")
     def test_switch(self, mock_get):
         mock_get.return_value = _mock_manager()
         sr = SoulsRouter()
@@ -88,7 +88,7 @@ class TestSwitchSoul:
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "creative"
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference.slo_manager.get_slo_manager")
     def test_switch_with_checkpoint(self, mock_get):
         mgr = _mock_manager()
         mgr.load_checkpoint.return_value = {"name": "assistant", "loss": 1.5}
@@ -113,7 +113,7 @@ class TestWeightSnapshots:
         assert "data" in data
         assert isinstance(data["data"], list)
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context.managers.get_trait_config")
     def test_save_snapshot(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.save_snapshot.return_value = "/tmp/snap.json"
@@ -125,7 +125,7 @@ class TestWeightSnapshots:
         assert resp.status_code == 200
         assert resp.json()["data"]["path"] == "/tmp/snap.json"
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context.managers.get_trait_config")
     def test_delete_nonexistent_snapshot(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.delete_snapshot.return_value = False

@@ -1,9 +1,9 @@
-"""Tests for domains.ops — FusedLayerNorm, FusedRMSNorm, FusedCrossEntropyLoss, FusedAttentionBias, ChunkedOperation, MemoryEfficientSoftmax, FusedScaleBias, OptimizedEmbedding, and standalone functions."""
+"""Tests for domain.ops — FusedLayerNorm, FusedRMSNorm, FusedCrossEntropyLoss, FusedAttentionBias, ChunkedOperation, MemoryEfficientSoftmax, FusedScaleBias, OptimizedEmbedding, and standalone functions."""
 
 import math
 import numpy as np
 import pytest
-from domains.ops import (
+from domain.ops import (
     FusedLayerNorm, FusedRMSNorm, FusedCrossEntropyLoss, FusedAttentionBias,
     ChunkedOperation, MemoryEfficientSoftmax, FusedScaleBias, OptimizedEmbedding,
     fused_swiglu, efficient_cross_entropy, chunked_matmul, ragged_to_padded,

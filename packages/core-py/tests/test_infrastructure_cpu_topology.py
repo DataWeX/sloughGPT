@@ -1,7 +1,7 @@
 """Tests for CpuTopology — CPU detection dataclass and properties."""
 from __future__ import annotations
 
-from domains.infrastructure.cpu_topology import CpuTopology
+from domain.infrastructure._internal.cpu_topology import CpuTopology
 
 
 class TestCpuTopologyDefaults:

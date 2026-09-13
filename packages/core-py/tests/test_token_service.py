@@ -1,4 +1,4 @@
-"""Comprehensive tests for domains.billing.token_service — pure logic only."""
+"""Comprehensive tests for domain.billing.token_service — pure logic only."""
 
 import pytest
 import time

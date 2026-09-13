@@ -5,7 +5,7 @@ import sys
 import numpy as np
 import pytest
 
-from domains.infrastructure import ml_types as mt
+from domain.infrastructure._internal import ml_types as mt
 
 
 class TestDtype:

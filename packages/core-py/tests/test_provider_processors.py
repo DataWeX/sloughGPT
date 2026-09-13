@@ -435,7 +435,7 @@ class TestSetupProviders:
         assert get_provider("default") is existing
 
     def test_process_guard_builds_and_attaches_server(self):
-        from domains.infrastructure.slonet_server import SloNetServer
+        from domain.infrastructure._internal.slonet_server import SloNetServer
 
         class Guard:
             @property
@@ -490,7 +490,7 @@ class TestSetupProviders:
 
         import numpy as np
 
-        from domains.infrastructure.slnc.compiler import SLNCCompiler
+        from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
 
         cfg = {
             "n_layer": 1, "n_embd": 4, "n_head": 1, "n_inner": 8,

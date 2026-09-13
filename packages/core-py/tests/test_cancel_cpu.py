@@ -1,8 +1,8 @@
-"""Tests for domains.infrastructure.cancel_manager — OpType, OpStatus, Operation; domains.infrastructure.cpu_topology — CpuTopology."""
+"""Tests for domain.infrastructure.cancel_manager — OpType, OpStatus, Operation; domain.infrastructure.cpu_topology — CpuTopology."""
 
 import enum
-from domains.infrastructure.cancel_manager import OpType, OpStatus, Operation
-from domains.infrastructure.cpu_topology import CpuTopology
+from domain.infrastructure._internal.cancel_manager import OpType, OpStatus, Operation
+from domain.infrastructure._internal.cpu_topology import CpuTopology
 
 
 class TestOpType:

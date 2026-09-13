@@ -1,8 +1,8 @@
-"""Tests for domains.training — detect_dataset_type, DatasetType, DatasetManager, etc."""
+"""Tests for domain.training — detect_dataset_type, DatasetType, DatasetManager, etc."""
 
 import json
 import pytest
-from domains.training import (
+from domain.training import (
     DatasetType, DataFormat, DatasetConfig, DatasetManager,
     detect_dataset_type,
     DataPreprocessor, PreprocessingStepType,

@@ -1,4 +1,4 @@
-"""Tests for domains.shell.cmds — CmdModule, discover(), and pure utility functions."""
+"""Tests for domain.shell.cmds — CmdModule, discover(), and pure utility functions."""
 
 import pytest
 from domain.shell._internal.cmds import CmdModule, discover, _MODULE_NAMES

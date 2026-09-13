@@ -3,14 +3,14 @@
 import numpy as np
 import pytest
 
-from domains.infrastructure.compute_backend import (
+from domain.infrastructure._internal.compute_backend import (
     ComputeBackend,
     create_backend,
     get_backend,
     register_backend,
     _BACKENDS,
 )
-from domains.infrastructure.arch_config import ArchConfig, build_arch, LLAMA_WEIGHT_MAP
+from domain.infrastructure._internal.arch_config import ArchConfig, build_arch, LLAMA_WEIGHT_MAP
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ def qwen_weights(qwen_arch):
 
 @pytest.fixture
 def numpy_backend(qwen_weights, qwen_arch):
-    from domains.infrastructure.numpy_backend import NumpyBE
+    from domain.infrastructure._internal.numpy_backend import NumpyBE
     return NumpyBE.from_weights(qwen_weights, qwen_arch)
 
 
@@ -302,7 +302,7 @@ class TestFactory:
     """Test create_backend_from_slnc."""
 
     def test_create_from_slnc(self):
-        from domains.infrastructure.numpy_backend import create_backend_from_slnc
+        from domain.infrastructure._internal.numpy_backend import create_backend_from_slnc
         slnc_path = "/home/mana/Documents/Default Project/sloughGPT/models/hf-cache/hub/models--Qwen--Qwen2.5-0.5B-Instruct/model.slnc"
         import os
         if not os.path.exists(slnc_path):

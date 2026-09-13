@@ -1,9 +1,9 @@
-"""Tests for domains.infrastructure.compression — CompressedWeight, LRUCache."""
+"""Tests for domain.infrastructure.compression — CompressedWeight, LRUCache."""
 
 import numpy as np
 import threading
 import pytest
-from domains.infrastructure.compression import CompressedWeight, LRUCache
+from domain.infrastructure._internal.compression import CompressedWeight, LRUCache
 
 
 class TestCompressedWeight:

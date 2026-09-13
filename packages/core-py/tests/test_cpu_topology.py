@@ -9,8 +9,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from domains.infrastructure import cpu_topology as ct
-from domains.infrastructure.cpu_topology import CpuTopology, detect_topology
+from domain.infrastructure._internal import cpu_topology as ct
+from domain.infrastructure._internal.cpu_topology import CpuTopology, detect_topology
 
 
 @pytest.fixture(autouse=True)

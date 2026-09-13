@@ -4,7 +4,7 @@ Covers: LearnerRouter CRUD, search, feed, ingest, train, deploy, evaluate, statu
 All domain calls are mocked; only HTTP-level behavior is tested.
 
 Note: the learner router imports get_learner INSIDE each handler function body,
-so we must patch 'domains.learner.get_learner' (the import target), not
+so we must patch 'domain.learner.get_learner' (the import target), not
 'routers.learner.get_learner'.
 """
 from __future__ import annotations
@@ -78,10 +78,10 @@ def _app():
 
 
 # ---------------------------------------------------------------------------
-# Tests — patch at 'domains.learner.get_learner' (lazy import inside handler)
+# Tests — patch at 'domain.learner.get_learner' (lazy import inside handler)
 # ---------------------------------------------------------------------------
 
-MOCK_TARGET = "domains.learner.get_learner"
+MOCK_TARGET = "domain.learner.get_learner"
 
 
 class TestLearnSearch:

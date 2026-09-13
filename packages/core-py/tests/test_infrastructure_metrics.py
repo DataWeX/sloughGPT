@@ -1,7 +1,7 @@
 """Tests for MetricsCollector — Prometheus-style metrics."""
 from __future__ import annotations
 
-from domains.infrastructure.metrics import MetricsCollector, get_metrics_collector, reset_metrics_collector
+from domain.infrastructure._internal.metrics import MetricsCollector, get_metrics_collector, reset_metrics_collector
 
 
 class TestMetricsCollector:

@@ -18,7 +18,7 @@ import zlib
 import numpy as np
 import pytest
 
-from domains.infrastructure.slnc.spec import compute_header_size
+from domain.infrastructure._internal.slnc.spec import compute_header_size
 from domain.inference._internal.native import bindings as B
 from domain.inference._internal.native.engine import (
     NativeEngine,
@@ -542,7 +542,7 @@ class TestTokenizerWiring:
         assert tok == 0
 
     def test_load_from_slnc_hf_model_id_uses_real_tokenizer(self):
-        from domains.infrastructure.morph_tokenizer import MorphTokenizer
+        from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
         try:
             real = MorphTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
         except FileNotFoundError:
@@ -710,7 +710,7 @@ class TestCTransformProvider:
         assert meta["has_tokenizer"] is True
 
     def test_from_slnc_roundtrip_slnc_parser(self, tmp_path):
-        from domains.infrastructure.slnc.parser import SLNCParser
+        from domain.infrastructure._internal.slnc.parser import SLNCParser
         slnc_path = str(tmp_path / "tiny.slnc")
         w = _weights()
         _build_slnc(slnc_path, w, _config())

@@ -1,8 +1,8 @@
 """Tests for MorphTokenizer — own BPE + morphological analysis."""
 
 import pytest
-from domains.infrastructure.morph_tokenizer import MorphTokenizer
-from domains.infrastructure.safetensors_loader import _find_safetensors, _get_model_dir
+from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
+from domain.infrastructure._internal.safetensors_loader import _find_safetensors, _get_model_dir
 
 QWEN2_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 

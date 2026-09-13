@@ -1,4 +1,4 @@
-"""Tests for domains.context.managers — StyleManager, TaskManager, TraitWeightsConfig."""
+"""Tests for domain.context.managers — StyleManager, TaskManager, TraitWeightsConfig."""
 
 import pytest
 from domain.context._internal.managers import (

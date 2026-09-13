@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
-from domains.infrastructure.local_download import LocalFileBackend, _get_cache_root
+from domain.infrastructure._internal.download_backend import DownloadBackend, FileEstimate
+from domain.infrastructure._internal.local_download import LocalFileBackend, _get_cache_root
 
 
 class TestLocalFileBackend:

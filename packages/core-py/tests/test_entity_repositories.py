@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 import pytest
 
-from domains.infrastructure.entity_repositories import (
+from domain.infrastructure._internal.entity_repositories import (
     KnowledgeEntry,
     FeedState,
     KnowledgeRepository,

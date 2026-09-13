@@ -1,9 +1,9 @@
-"""Tests for domains.ops — pure NumPy operations (no external dependencies)."""
+"""Tests for domain.ops — pure NumPy operations (no external dependencies)."""
 
 import math
 import numpy as np
 import pytest
-from domains.ops import (
+from domain.ops import (
     FusedLayerNorm,
     FusedRMSNorm,
     FusedCrossEntropyLoss,

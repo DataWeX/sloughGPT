@@ -1,4 +1,4 @@
-"""Tests for domains.shared — utils, feature_flags, test_framework."""
+"""Tests for domain.shared — utils, feature_flags, test_framework."""
 
 import json
 import time

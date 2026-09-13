@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.weight_loader import *  # noqa: F401,F403
+import domains.infrastructure.weight_loader as _mod
+globals().update(vars(_mod))

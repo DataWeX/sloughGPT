@@ -166,7 +166,7 @@ class TestTrainingQueueSSE:
     """Tests the training queue SSE integration."""
 
     def test_training_queue_event_format(self):
-        from domains.infrastructure.training_queue import _json_safe_payload
+        from domain.infrastructure._internal.training_queue import _json_safe_payload
 
         data = {
             "progress": 0.5,
@@ -180,7 +180,7 @@ class TestTrainingQueueSSE:
         assert safe["nested"]["a"] is None
 
     def test_training_queue_event_buffer(self):
-        from domains.infrastructure.event_buffer import get_event_buffer
+        from domain.infrastructure._internal.event_buffer import get_event_buffer
 
         buffer = get_event_buffer()
         buffer.record("TRAIN", "test_progress_event")

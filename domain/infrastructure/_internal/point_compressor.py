@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.point_compressor import *  # noqa: F401,F403
+import domains.infrastructure.point_compressor as _mod
+globals().update(vars(_mod))

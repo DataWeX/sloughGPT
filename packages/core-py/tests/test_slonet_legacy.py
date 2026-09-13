@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from domains.training import slonet
+from domain.training import slonet
 from domain.training._internal.slonet import (
     SloAdapterLayer,
     SloDataLoader,
@@ -701,7 +701,7 @@ class TestExportExceptionBranch:
 
 class TestInt4QuantUnpack:
     def test_lazy_unpack_int4(self):
-        from domains.infrastructure.quantization import QuantMeta, TensorInfo
+        from domain.infrastructure._internal.quantization import QuantMeta, TensorInfo
 
         lin = SloLinear(4, 2, "quant")
         original = np.array([[-8, 2, 3, -4], [5, -6, 7, 1]], dtype=np.int8)
@@ -733,8 +733,8 @@ class TestImportFromPoints:
 
         import json as _json
 
-        from domains.infrastructure.pugqeep.library import PointLibrary
-        from domains.infrastructure.pugqeep.point import Point
+        from domain.infrastructure._internal.pugqeep.library import PointLibrary
+        from domain.infrastructure._internal.pugqeep.point import Point
 
         base = tmp_path / "soul_test.sou"
         arr = np.arange(256 * 64, dtype=np.float32).reshape(256, 64) / 1000.0
@@ -1775,7 +1775,7 @@ class TestNormAccAndNd:
 
 class TestQuantizedLinearForward:
     def test_int8_quantized_forward(self):
-        from domains.infrastructure.quantization import Quantine
+        from domain.infrastructure._internal.quantization import Quantine
         lin = SloLinear(8, 4, "q8")
         info = Quantine(bits=8, mode="symmetric").quantize("w", lin.weight.data)
         lin.set_quantized_weight(info)
@@ -1786,7 +1786,7 @@ class TestQuantizedLinearForward:
         np.testing.assert_allclose(f, t.data, atol=1e-3)
 
     def test_int4_quantized_forward(self):
-        from domains.infrastructure.quantization import Quantine
+        from domain.infrastructure._internal.quantization import Quantine
         lin = SloLinear(8, 4, "q4")
         info = Quantine(bits=4, mode="symmetric").quantize("w", lin.weight.data)
         lin.set_quantized_weight(info)
@@ -1830,9 +1830,9 @@ class TestSloNetMiscMethods:
         class _HasClear:
             def clear_cache(self):
                 return None
-        monkeypatch.setattr("domains.slolib.gpu.get_accelerator", lambda: _HasClear())
+        monkeypatch.setattr("domain.slolib.gpu.get_accelerator", lambda: _HasClear())
         slonet._invalidate_gpu_cache()
-        monkeypatch.setattr("domains.slolib.gpu.get_accelerator", lambda: (_ for _ in ()).throw(RuntimeError("no gpu")))
+        monkeypatch.setattr("domain.slolib.gpu.get_accelerator", lambda: (_ for _ in ()).throw(RuntimeError("no gpu")))
         slonet._invalidate_gpu_cache()
 
 
@@ -2401,7 +2401,7 @@ class TestKernelsImportFallback:
             "        if name == 'domain.training._internal.slonet_kernels':\n"
             "            raise ImportError('blocked for test')\n"
             "sys.meta_path.insert(0, _Block())\n"
-            "from domains.training import slonet\n"
+            "from domain.training import slonet\n"
             "assert slonet._KERNELS_AVAILABLE is False\n"
             "print('KERNELS_FALLBACK_OK')\n"
         )

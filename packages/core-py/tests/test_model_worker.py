@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.model_worker — WorkerHealth, _new_session_id,
+"""Tests for domain.infrastructure.model_worker — WorkerHealth, _new_session_id,
 WorkerStreamStalledError, constants.
 
 Covers: dataclass creation, session ID generation, error class, timeout constants.
@@ -15,7 +15,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.infrastructure.model_worker import (
+from domain.infrastructure._internal.model_worker import (
     WorkerHealth,
     _new_session_id,
     WorkerStreamStalledError,

@@ -7,7 +7,7 @@ import zlib
 import numpy as np
 import pytest
 
-from domains.infrastructure.slnc.spec import (
+from domain.infrastructure._internal.slnc.spec import (
     ALIGNMENT,
     DTYPE_FLOAT32,
     DTYPE_FLOAT16,
@@ -22,7 +22,7 @@ from domains.infrastructure.slnc.spec import (
     compute_tensor_entry_size,
     dtype_to_code,
 )
-from domains.infrastructure.slnc.parser import SLNCParser
+from domain.infrastructure._internal.slnc.parser import SLNCParser
 
 
 # ---------------------------------------------------------------------------

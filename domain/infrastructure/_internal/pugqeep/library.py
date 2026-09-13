@@ -1,2 +1,3 @@
 """Backward-compatibility shim."""
-from domains.infrastructure.pugqeep.library import *  # noqa: F401,F403
+import domains.infrastructure.pugqeep.library as _mod
+globals().update(vars(_mod))

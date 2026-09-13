@@ -1,5 +1,5 @@
 """
-Coverage-completion tests for domains.shell.vm_devices.py.
+Coverage-completion tests for domain.shell.vm_devices.py.
 
 Exercises every layer-4 device driver (TensorDevice, PythonExecDevice,
 SlonetDevice, MultimodalDevice, EngineDevice, SlonetTrainingDevice,

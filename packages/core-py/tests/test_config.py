@@ -262,7 +262,7 @@ class TestConfigErrorPaths:
         assert isinstance(result, AppConfig)
 
     def test_reload_emit_failure_logged(self, tmp_path, monkeypatch):
-        import domains.infrastructure.event_bus as eb
+        import domain.infrastructure.event_bus as eb
 
         def boom():
             raise RuntimeError("bus down")

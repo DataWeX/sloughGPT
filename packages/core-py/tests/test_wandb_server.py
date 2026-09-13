@@ -1,5 +1,5 @@
 """
-Tests for domains.ops.wandb_server: inference counters + background flush loop.
+Tests for domain.ops.wandb_server: inference counters + background flush loop.
 """
 import asyncio
 import sys

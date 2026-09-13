@@ -1,11 +1,11 @@
-"""Tests for domains.infrastructure.pugqeep — EvictionPolicy, Tier, ProcessStatus, StemStatus, TreeStatus, TaskStatus, TaskPriority, Task, CacheEntry, Process, etc."""
+"""Tests for domain.infrastructure._internal.pugqeep — EvictionPolicy, Tier, ProcessStatus, StemStatus, TreeStatus, TaskStatus, TaskPriority, Task, CacheEntry, Process, etc."""
 
-from domains.infrastructure.pugqeep.cache import EvictionPolicy, Tier, CacheEntry, CacheStats, MemoryStore, HotStore, DiskStore, TieredCache
-from domains.infrastructure.pugqeep.engine import (
+from domain.infrastructure._internal.pugqeep.cache import EvictionPolicy, Tier, CacheEntry, CacheStats, MemoryStore, HotStore, DiskStore, TieredCache
+from domain.infrastructure._internal.pugqeep.engine import (
     ProcessStatus, StemStatus, TreeStatus, Process, Stem, Tree,
     EngineMetrics, ResultCache, SchedulingPolicy,
 )
-from domains.infrastructure.pugqeep.task_queue import TaskStatus, TaskPriority, Task, TaskQueue
+from domain.infrastructure._internal.pugqeep.task_queue import TaskStatus, TaskPriority, Task, TaskQueue
 import time
 import numpy as np
 import pytest

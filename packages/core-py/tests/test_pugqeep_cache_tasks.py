@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domains.infrastructure.pugqeep.cache import (
+from domain.infrastructure._internal.pugqeep.cache import (
     CacheEntry,
     CacheStats,
     DiskStore,
@@ -18,22 +18,22 @@ from domains.infrastructure.pugqeep.cache import (
     Tier,
     TieredCache,
 )
-from domains.infrastructure.pugqeep.compressor import PointCompressor
-from domains.infrastructure.pugqeep.config import (
+from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.infrastructure._internal.pugqeep.config import (
     CompressorConfig,
     LibraryConfig,
     PointConfig,
 )
-from domains.infrastructure.pugqeep.facade import PGQ
-from domains.infrastructure.pugqeep.library import PointLibrary
-from domains.infrastructure.pugqeep.point import Point
-from domains.infrastructure.pugqeep.point_weight import PointWeight
-from domains.infrastructure.pugqeep.store import (
+from domain.infrastructure._internal.pugqeep.facade import PGQ
+from domain.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.infrastructure._internal.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.point_weight import PointWeight
+from domain.infrastructure._internal.pugqeep.store import (
     DirectoryStore,
     JSONStore,
     MemoryStore as FunctionMemoryStore,
 )
-from domains.infrastructure.pugqeep.task_queue import (
+from domain.infrastructure._internal.pugqeep.task_queue import (
     Task,
     TaskPriority,
     TaskQueue,
@@ -158,14 +158,14 @@ class _FakeModel:
 
 class TestCompressSlonetToPoints:
     def test_compresses_all_weights(self):
-        from domains.infrastructure.pugqeep.point_weight import compress_slonet_to_points
+        from domain.infrastructure._internal.pugqeep.point_weight import compress_slonet_to_points
         points = compress_slonet_to_points(_FakeModel(), method="cluster", n_clusters=4)
         assert len(points) == 5
         for pw in points.values():
             assert isinstance(pw, PointWeight)
 
     def test_tiny_arrays_stored_raw(self):
-        from domains.infrastructure.pugqeep.point_weight import compress_slonet_to_points
+        from domain.infrastructure._internal.pugqeep.point_weight import compress_slonet_to_points
         points = compress_slonet_to_points(_FakeModel(), method="cluster", n_clusters=4)
         assert points["tiny"].point.function_type == "raw"
 

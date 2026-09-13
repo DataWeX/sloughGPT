@@ -1,9 +1,9 @@
-"""Tests for domains.shell — get_dait_runtime singleton and Resource dataclass."""
+"""Tests for domain.shell — get_dait_runtime singleton and Resource dataclass."""
 
 from __future__ import annotations
 
-import domains.shell as shell_mod
-from domains.shell import get_dait_runtime, DaitRuntime
+import domain.shell as shell_mod
+from domain.shell import get_dait_runtime, DaitRuntime
 from domain.shell._internal.runtime import Resource
 
 

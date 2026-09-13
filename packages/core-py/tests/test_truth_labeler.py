@@ -2,7 +2,7 @@
 
 import pytest
 
-from domains.infrastructure.truth_labeler import (
+from domain.infrastructure._internal.truth_labeler import (
     LabelResult,
     TruthLabeler,
     get_truth_labeler,

@@ -1,5 +1,5 @@
 """
-Byte-exact emission tests for the X86Assembler in domains.shell.vm.py.
+Byte-exact emission tests for the X86Assembler in domain.shell.vm.py.
 
 Covers every previously-uncovered branch of the opcode/encoding layer:
 string ops, push/pop variants, in/out, condition-code jumps, jmp/call/far,

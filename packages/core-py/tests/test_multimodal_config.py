@@ -1,6 +1,6 @@
-"""Tests for domains.multimodal — MultiModalConfig."""
+"""Tests for domain.multimodal — MultiModalConfig."""
 
-from domains.multimodal import MultiModalConfig
+from domain.multimodal import MultiModalConfig
 
 
 class TestMultiModalConfigDefaults:

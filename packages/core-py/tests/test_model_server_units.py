@@ -23,7 +23,7 @@ _CORE_PY = Path(__file__).resolve().parents[1]
 if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
-from domains.infrastructure.model_server import (
+from domain.infrastructure._internal.model_server import (
     CircuitBreaker,
     CircuitBreakerState,
     ModelMetrics,

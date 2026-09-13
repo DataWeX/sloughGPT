@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from domains.infrastructure.anchor_store import MeaningTags
-from domains.infrastructure.truth_labeler import LabelResult
-from domains.infrastructure.truth_maintainer import (
+from domain.infrastructure._internal.anchor_store import MeaningTags
+from domain.infrastructure._internal.truth_labeler import LabelResult
+from domain.infrastructure._internal.truth_maintainer import (
     TruthMaintainer,
     _encode_tokens,
     get_truth_maintainer,
@@ -211,7 +211,7 @@ class TestApplyCorrection:
         assert isinstance(loss, float)
 
     def test_clips_large_gradients(self, monkeypatch):
-        from domains.training import slonet
+        from domain.training import slonet
         from domain.training._internal.slonet import Tensor
 
         seen = {}

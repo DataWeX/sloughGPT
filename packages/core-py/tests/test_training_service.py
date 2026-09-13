@@ -163,7 +163,7 @@ class TestResolveDatasetPath:
         ds_dir.mkdir(parents=True)
         (ds_dir / "corpus.jsonl").write_text('{"text": "hello"}\n')
 
-        with patch("domains.training.helpers.REPO_ROOT", tmp_path):
+        with patch("domain.training.helpers.REPO_ROOT", tmp_path):
             result = resolve_dataset_path("test-ds")
         assert result.endswith("corpus.jsonl")
 
@@ -172,7 +172,7 @@ class TestResolveDatasetPath:
         ds_dir.mkdir(parents=True)
         (ds_dir / "input.txt").write_text("hello world")
 
-        with patch("domains.training.helpers.REPO_ROOT", tmp_path):
+        with patch("domain.training.helpers.REPO_ROOT", tmp_path):
             result = resolve_dataset_path("test-ds")
         assert result.endswith("input.txt")
 
@@ -181,7 +181,7 @@ class TestResolveDatasetPath:
         ds_dir.mkdir(parents=True)
         (ds_dir / "custom.txt").write_text("data")
 
-        with patch("domains.training.helpers.REPO_ROOT", tmp_path):
+        with patch("domain.training.helpers.REPO_ROOT", tmp_path):
             result = resolve_dataset_path("test-ds")
         assert result.endswith("custom.txt")
 
@@ -371,7 +371,7 @@ class TestFindCheckpoint:
         soul_file = ckpt_dir / "my-model.soul"
         soul_file.write_bytes(b"\x00" * 5000)
 
-        with patch("domains.training.checkpoints.CHECKPOINTS_DIR", ckpt_dir):
+        with patch("domain.training.checkpoints.CHECKPOINTS_DIR", ckpt_dir):
             result = find_checkpoint("my-model")
         assert result is not None
         assert result.name == "my-model.soul"
@@ -382,7 +382,7 @@ class TestFindCheckpoint:
         slo_file = ckpt_dir / "model.slo"
         slo_file.write_text("test")
 
-        with patch("domains.training.checkpoints.CHECKPOINTS_DIR", ckpt_dir):
+        with patch("domain.training.checkpoints.CHECKPOINTS_DIR", ckpt_dir):
             result = find_checkpoint("model")
         assert result is not None
         assert result.name == "model.slo"
@@ -393,7 +393,7 @@ class TestFindCheckpoint:
         soul_file = ckpt_dir / "test.soul"
         soul_file.write_bytes(b"\x00" * 5000)
 
-        with patch("domains.training.checkpoints.CHECKPOINTS_DIR", ckpt_dir):
+        with patch("domain.training.checkpoints.CHECKPOINTS_DIR", ckpt_dir):
             result = find_checkpoint("test.soul")
         assert result is not None
 
@@ -411,8 +411,8 @@ class TestFindCheckpoint:
         soul_file = turbo_dir / "turbo-model.soul"
         soul_file.write_bytes(b"\x00" * 5000)
 
-        with patch("domains.training.checkpoints.CHECKPOINTS_DIR", tmp_path / "empty"):
-            with patch("domains.training.checkpoints.TURBO_DIR", turbo_dir):
+        with patch("domain.training.checkpoints.CHECKPOINTS_DIR", tmp_path / "empty"):
+            with patch("domain.training.checkpoints.TURBO_DIR", turbo_dir):
                 result = find_checkpoint("turbo-model")
         assert result is not None
 
@@ -422,7 +422,7 @@ class TestFindCheckpoint:
 
 class TestLogExperimentMetric:
     def test_creates_metric_file(self, tmp_path):
-        with patch("domains.training.helpers.REPO_ROOT", tmp_path):
+        with patch("domain.training.helpers.REPO_ROOT", tmp_path):
             log_experiment_metric("exp-1", "loss", 0.5, step=10)
 
         metrics_file = tmp_path / "data" / "experiments" / "exp-1_metrics.jsonl"
@@ -433,7 +433,7 @@ class TestLogExperimentMetric:
         assert line["step"] == 10
 
     def test_appends_multiple_entries(self, tmp_path):
-        with patch("domains.training.helpers.REPO_ROOT", tmp_path):
+        with patch("domain.training.helpers.REPO_ROOT", tmp_path):
             log_experiment_metric("exp-1", "loss", 0.5)
             log_experiment_metric("exp-1", "accuracy", 0.9)
 
@@ -447,7 +447,7 @@ class TestLogExperimentMetric:
 
 class TestLogExperimentParam:
     def test_creates_param_file(self, tmp_path):
-        with patch("domains.training.helpers.REPO_ROOT", tmp_path):
+        with patch("domain.training.helpers.REPO_ROOT", tmp_path):
             log_experiment_param("exp-1", "learning_rate", 0.001)
 
         params_file = tmp_path / "data" / "experiments" / "exp-1_params.jsonl"

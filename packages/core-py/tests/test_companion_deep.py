@@ -1,7 +1,7 @@
 """Meaningful tests for CompanionSystem — clean_response, respond, adjust_for_mood, create_companion presets."""
 
 import pytest
-from domains.companion import (
+from domain.companion import (
     CompanionSystem, CompanionTraits, ConversationContext,
     ResponseStyle, create_companion, get_companion,
 )

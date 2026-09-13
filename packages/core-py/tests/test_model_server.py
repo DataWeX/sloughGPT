@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domains.infrastructure.model_server import (
+from domain.infrastructure._internal.model_server import (
     Priority,
     PriorityRequestQueue,
     QueueMetrics,

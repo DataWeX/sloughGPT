@@ -11,7 +11,7 @@ from threading import Thread
 
 import pytest
 
-from domains.infrastructure.structured_log import (
+from domain.infrastructure._internal.structured_log import (
     JSONFormatter,
     LogContext,
     StructuredLogger,

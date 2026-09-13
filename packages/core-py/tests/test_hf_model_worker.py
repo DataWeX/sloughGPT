@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.hf_model_worker — _resolve_device and hf_model_loader.
+"""Tests for domain.infrastructure.hf_model_worker — _resolve_device and hf_model_loader.
 
 Covers: device string resolution, auto fallback, explicit device passthrough.
 """
@@ -13,7 +13,7 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
-from domains.infrastructure.hf_model_worker import _resolve_device, hf_model_loader
+from domain.infrastructure._internal.hf_model_worker import _resolve_device, hf_model_loader
 
 
 class TestResolveDeviceExplicit:

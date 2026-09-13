@@ -49,7 +49,7 @@ _ANSI_CODES = {
 
 @pytest.fixture
 def ansi_on(monkeypatch):
-    from domains.logging import config as log_config
+    from domain.logging import config as log_config
 
     for name, code in _ANSI_CODES.items():
         monkeypatch.setattr(log_config._A, name, code)
