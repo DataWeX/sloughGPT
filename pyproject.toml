@@ -108,6 +108,7 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "packages/core-py/domains/training/*.py" = ["B006", "C408"]
+"packages/core-py/tests/*.py" = ["N801"]
 
 [tool.mypy]
 python_version = "3.12"
