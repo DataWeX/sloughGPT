@@ -322,10 +322,17 @@ class StartupOrchestrator:
         Stage 2 (READY): Model loaded, all routers → full API available
         Stage 3 (BACKGROUND): W&B, metrics, analytics → non-critical services
         """
+        # Start preloading common modules in background (non-blocking)
+        from infrastructure.startup_preloader import preload_common_modules
+        preload_common_modules(delay=0.5)
+
         from infrastructure.staged_loader import Stage, get_staged_loader
 
         loader = get_staged_loader()
         self._staged_loader = loader
+
+        # Start history tracking
+        loader.start_history()
 
         # ── Stage 1: CRITICAL ────────────────────────────────────
         # Server starts accepting requests, model loads in background

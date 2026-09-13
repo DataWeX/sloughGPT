@@ -184,36 +184,38 @@ class HealthRouter:
         - Model load progress (0.0 to 1.0)
         - Per-hook timing and status
         - Per-stage timing
+        - Preloader status
         - Any errors encountered
 
         Returns:
             Envelope with detailed startup diagnostics.
         """
         from infrastructure.staged_loader import get_staged_loader
+        from infrastructure.startup_preloader import get_preload_status
 
         loader = get_staged_loader()
         status = loader.get_status()
-        return success_response(data={
-            "stage": status["stage"],
-            "stage_value": status["stage_value"],
-            "elapsed_seconds": status["elapsed_seconds"],
-            "model_progress": status["model_progress"],
-            "model_progress_message": status["model_progress_message"],
-            "hooks": status["hooks"],
-            "stages": status["stages"],
-            "errors": status["errors"],
-        })
+        preload = get_preload_status()
+        status["preloader"] = {
+            "running": preload.running,
+            "finished": preload.finished,
+            "total_modules": preload.total_modules,
+            "completed": preload.completed,
+            "succeeded": preload.succeeded,
+            "failed": preload.failed,
+            "total_duration_ms": preload.total_duration_ms,
+        }
+        return success_response(data=status)
 
     @endpoint("health.startup_history")
     async def startup_history(self) -> dict:
         """Startup performance history.
 
         Returns recent startup records, performance statistics,
-        per-stage timing breakdowns, and alerts for slow or failed
-        startups.
+        per-stage timing breakdowns, alerts, and optimization suggestions.
 
         Returns:
-            Envelope with startup history, stats, stage breakdown, and alerts.
+            Envelope with startup history, stats, stage breakdown, alerts, and suggestions.
         """
         from infrastructure.startup_history import get_startup_history
 
@@ -224,6 +226,7 @@ class HealthRouter:
             "stage_stats": history.get_stage_stats(),
             "slow_startups": history.get_slow_startups(threshold_seconds=60.0),
             "alerts": history.get_alerts(),
+            "suggestions": history.get_optimization_suggestions(),
         })
 
     @endpoint("health.startup_diagnostics")
