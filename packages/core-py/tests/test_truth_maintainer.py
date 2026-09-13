@@ -211,7 +211,7 @@ class TestApplyCorrection:
         assert isinstance(loss, float)
 
     def test_clips_large_gradients(self, monkeypatch):
-        from domain.training import slonet
+        from domains.training import slonet
         from domain.training._internal.slonet import Tensor
 
         seen = {}

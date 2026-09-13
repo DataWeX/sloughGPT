@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from domain.training import slonet
+from domains.training import slonet
 from domain.training._internal.slonet import (
     SloAdapterLayer,
     SloDataLoader,
@@ -2401,7 +2401,7 @@ class TestKernelsImportFallback:
             "        if name == 'domain.training._internal.slonet_kernels':\n"
             "            raise ImportError('blocked for test')\n"
             "sys.meta_path.insert(0, _Block())\n"
-            "from domain.training import slonet\n"
+            "from domains.training import slonet\n"
             "assert slonet._KERNELS_AVAILABLE is False\n"
             "print('KERNELS_FALLBACK_OK')\n"
         )

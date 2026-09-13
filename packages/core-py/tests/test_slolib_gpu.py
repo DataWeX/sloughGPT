@@ -19,7 +19,7 @@ import time
 import numpy as np
 import pytest
 
-from domain.slolib import gpu as slib
+from domains.slolib import gpu as slib
 
 
 _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None

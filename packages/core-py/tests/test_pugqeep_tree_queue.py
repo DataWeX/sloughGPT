@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import domain.infrastructure.numpy_engine as numpy_engine
+import domain.infrastructure._internal.numpy_engine as numpy_engine
 import domain.infrastructure._internal.pugqeep.model_tree as model_tree_module
 import domain.infrastructure._internal.pugqeep.tree as tree_module
 from domain.infrastructure._internal.pugqeep.model_tree import ModelTree

@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pytest
 
-from domains.infrastructure import model_size as ms
+from domain.infrastructure._internal import model_size as ms
 
 
 @pytest.fixture

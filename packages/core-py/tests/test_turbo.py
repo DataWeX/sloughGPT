@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
 
-from domain.training import state as _state_mod
+from domains.training import state as _state_mod
 from domain.training._internal.state import (
     _state, _turbo_lock, _turbo_cancel_event, _turbo_pause_event, _turbo_state,
     CHECKPOINTS_DIR, TURBO_DIR, REPO_ROOT,

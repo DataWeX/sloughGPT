@@ -472,7 +472,7 @@ class TestGenerateNumpyPackedInt4:
 
     def test_int4_generate_matches_perlinear_without_unpack(self, tiny_model, sample_input, monkeypatch):
         """generate_numpy uses the packed fused path and never unpacks int4."""
-        from domain.training import slonet as S
+        from domains.training import slonet as S
 
         self._quantize(tiny_model, 4, "symmetric")
         out_packed = tiny_model.generate_numpy(sample_input, max_new_tokens=8, temperature=0.0)

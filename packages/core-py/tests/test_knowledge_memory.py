@@ -9,7 +9,7 @@ from domain.learner._internal.knowledge import KnowledgeMemory, KnowledgeFact
 @pytest.fixture(autouse=True)
 def isolated_paths(tmp_path, monkeypatch):
     """Keep persistence off the real data dir (repo-root anchored)."""
-    from domain.learner import knowledge as K
+    from domains.learner import knowledge as K
     monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
     monkeypatch.setattr(K, "FEED_STATE_PATH", tmp_path / "feeds.json")
     monkeypatch.setattr(K, "VISITED_PATH", tmp_path / "visited.json")
@@ -233,7 +233,7 @@ class TestAddFactsBatch:
         assert re_added is True
 
     def test_clear_all_persists_empty_file(self, km):
-        from domain.learner import knowledge as K
+        from domains.learner import knowledge as K
         km.add_fact(KnowledgeFact(content="Persist clear test", topic="test", source="test", timestamp=time.time()))
         assert K.ENTRIES_PATH.exists()
         assert km.clear_all() == 1

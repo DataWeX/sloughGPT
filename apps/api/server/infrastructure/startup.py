@@ -397,29 +397,27 @@ class StartupOrchestrator:
             await self._phase4_multimodal()
 
         async def _init_metrics():
-            # Prometheus metrics collector
-            try:
+            # Prometheus metrics collector — offload sync imports to thread
+            def _metrics_sync():
                 from domain.infrastructure.metrics import get_metrics_collector
                 get_metrics_collector()
-            except Exception as e:
-                logger.debug("Metrics init deferred: %s", e)
+            await asyncio.to_thread(_metrics_sync)
 
         async def _init_autotrainer():
-            try:
+            # Offload sync import + start to thread
+            def _autotrainer_sync():
                 from domain.training._internal.auto_trainer import start_auto_trainer_if_enabled
                 start_auto_trainer_if_enabled()
-            except Exception as e:
-                logger.debug("AutoTrainer init deferred: %s", e)
+            await asyncio.to_thread(_autotrainer_sync)
 
         async def _init_rag():
-            # RAG document ingestion (heavy, runs in background)
-            try:
+            # RAG document ingestion — entire pipeline offloaded to thread
+            def _rag_sync():
                 from domain.cognitive._internal.rag_service import get_rag_service
                 rag = get_rag_service()
                 if hasattr(rag, 'auto_ingest_repo_docs'):
-                    await asyncio.get_event_loop().run_in_executor(None, rag.auto_ingest_repo_docs)
-            except Exception as e:
-                logger.debug("RAG init deferred: %s", e)
+                    rag.auto_ingest_repo_docs()
+            await asyncio.to_thread(_rag_sync)
 
         loader.on(Stage.BACKGROUND, "wandb", _init_wandb, timeout=30.0)
         loader.on(Stage.BACKGROUND, "multimodal", _init_multimodal, timeout=30.0)

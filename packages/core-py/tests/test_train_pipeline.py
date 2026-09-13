@@ -11,7 +11,7 @@ import warnings
 import numpy as np
 import pytest
 
-from domain.training import train_pipeline as tp
+from domains.training import train_pipeline as tp
 from domain.training._internal.lr_schedulers import create_scheduler
 from domain.training._internal.slonet import SloAdam, SloAdamW
 from domain.training._internal.train_pipeline import (
@@ -238,7 +238,7 @@ class TestLoadSoulCheckpoint:
         return p
 
     def test_full_training_state(self, monkeypatch, tmp_path):
-        from domain.inference import slo_format
+        from domains.inference import slo_format
 
         profile = self._make_profile(
             metadata={
@@ -261,7 +261,7 @@ class TestLoadSoulCheckpoint:
         assert result["scheduler_state_dict"] == {"last_lr": 0.0001}
 
     def test_no_metadata(self, monkeypatch, tmp_path):
-        from domain.inference import slo_format
+        from domains.inference import slo_format
 
         profile = self._make_profile()
         monkeypatch.setattr(slo_format, "load_soul", lambda p: (profile, {"w": 1}))
@@ -272,7 +272,7 @@ class TestLoadSoulCheckpoint:
         assert "scheduler_state_dict" not in result
 
     def test_training_state_not_dict(self, monkeypatch, tmp_path):
-        from domain.inference import slo_format
+        from domains.inference import slo_format
 
         profile = self._make_profile(metadata={"training_state": "nope"})
         monkeypatch.setattr(slo_format, "load_soul", lambda p: (profile, {"w": 1}))

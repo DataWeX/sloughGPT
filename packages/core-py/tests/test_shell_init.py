@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from domain.shell import init as init_mod
+from domains.shell import init as init_mod
 from domain.shell._internal.init import (
     InitSystem,
     SERVICE_STATES,

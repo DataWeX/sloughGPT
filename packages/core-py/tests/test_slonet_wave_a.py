@@ -790,7 +790,7 @@ def test_kernel_import_fallback():
         import sys
         sys.path.insert(0, {core_py!r})
         sys.modules["domain.training._internal.slonet_kernels"] = None
-        from domain.training import slonet
+        from domains.training import slonet
         assert slonet._KERNELS_AVAILABLE is False
         print("KERNELS_FALLBACK_OK")
         """

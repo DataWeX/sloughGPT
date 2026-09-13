@@ -12,7 +12,7 @@ Covers:
 import numpy as np
 import pytest
 
-from domain.training import slonet as sn
+from domains.training import slonet as sn
 
 
 @pytest.fixture(autouse=True)

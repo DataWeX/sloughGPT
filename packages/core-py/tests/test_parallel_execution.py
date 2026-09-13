@@ -353,7 +353,7 @@ class TestCompressCheckpointBranches:
         import sys
         import tempfile
         from pathlib import Path
-        from domain.training import executor as exmod
+        from domains.training import executor as exmod
 
         monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.pugqeep", None)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -364,7 +364,7 @@ class TestCompressCheckpointBranches:
     def test_model_none_returns_none(self):
         import tempfile
         from pathlib import Path
-        from domain.training import executor as exmod
+        from domains.training import executor as exmod
 
         with patch("domain.training._internal.slonet.import_from_sou", return_value=None), \
                 tempfile.TemporaryDirectory() as tmpdir:
@@ -375,7 +375,7 @@ class TestCompressCheckpointBranches:
     def test_load_failure_returns_none(self):
         import tempfile
         from pathlib import Path
-        from domain.training import executor as exmod
+        from domains.training import executor as exmod
 
         with patch("domain.training._internal.slonet.import_from_sou", side_effect=RuntimeError("corrupt")), \
                 tempfile.TemporaryDirectory() as tmpdir:
@@ -386,7 +386,7 @@ class TestCompressCheckpointBranches:
     def test_weights_converted_to_ndarray(self):
         import tempfile
         from pathlib import Path
-        from domain.training import executor as exmod
+        from domains.training import executor as exmod
 
         class FakeModel:
             def state_dict(self):

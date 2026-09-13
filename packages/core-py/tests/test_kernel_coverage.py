@@ -11,7 +11,7 @@ import pytest
 
 import types
 
-from domain.shell import kernel as kernel_mod
+from domains.shell import kernel as kernel_mod
 from domain.shell._internal.kernel import Kernel, NeuralKernel
 from domain.shell._internal.kernel_devices import NullDevice
 from domain.shell._internal.kernel_interrupts import Interrupt, InterruptType

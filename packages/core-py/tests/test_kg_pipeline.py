@@ -38,7 +38,7 @@ def kg():
 @pytest.fixture
 def rag_svc(tmp_path, monkeypatch):
     """Create a fresh RAGService with temp persistence."""
-    from domain.cognitive import rag_service
+    from domains.cognitive import rag_service
 
     monkeypatch.setattr(rag_service, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(rag_service, "_DOCUMENTS_FILE", tmp_path / "docs.jsonl")
@@ -422,7 +422,7 @@ class TestRAGServiceConcurrency:
 
 class TestRAGServiceSingleton:
     def test_get_rag_service_returns_same_instance(self, tmp_path, monkeypatch):
-        from domain.cognitive import rag_service
+        from domains.cognitive import rag_service
 
         monkeypatch.setattr(rag_service, "_rag_service", None)
         monkeypatch.setattr(rag_service, "_DATA_DIR", tmp_path)

@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from domain.inference import slonet_provider as slonet_provider_module
+from domains.inference import slonet_provider as slonet_provider_module
 from domain.inference._internal.slonet_provider import SloNetChatProvider
 
 
