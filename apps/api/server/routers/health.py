@@ -60,6 +60,7 @@ class HealthRouter:
         self.router.add_api_route("/startup-history", self.startup_history, methods=["GET"])
         self.router.add_api_route("/startup-diagnostics", self.startup_diagnostics, methods=["GET"])
         self.router.add_api_route("/startup-config", self.startup_config, methods=["GET"])
+        self.router.add_api_route("/startup-health", self.startup_health, methods=["GET"])
         self.router.add_api_route(
             "/startup-stream", self.startup_stream, methods=["GET"], response_model=None
         )
@@ -289,6 +290,43 @@ class HealthRouter:
 
         config = get_startup_config()
         return success_response(data=config.to_dict())
+
+    @endpoint("health.startup_health")
+    async def startup_health(self) -> dict:
+        """Quick startup health check.
+
+        Returns a simple status indicating whether startup is complete.
+        Useful for load balancers and monitoring systems that need a
+        quick check without the full diagnostics payload.
+
+        Returns:
+            Envelope with startup health status.
+        """
+        from infrastructure.staged_loader import Stage, get_staged_loader
+
+        loader = get_staged_loader()
+        stage = loader.stage
+
+        # Determine health based on stage
+        if stage >= Stage.BACKGROUND:
+            status = "healthy"
+            message = "Startup complete"
+        elif stage >= Stage.READY:
+            status = "starting"
+            message = "Model loading"
+        elif stage >= Stage.CRITICAL:
+            status = "starting"
+            message = "Core services initializing"
+        else:
+            status = "initializing"
+            message = "Server starting"
+
+        return success_response(data={
+            "status": status,
+            "message": message,
+            "stage": loader.stage_name,
+            "elapsed_seconds": round(loader.elapsed, 1),
+        })
 
     async def startup_stream(self, request: Request) -> StreamingResponse:
         """SSE stream for real-time startup progress updates.
