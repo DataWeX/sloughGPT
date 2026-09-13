@@ -879,6 +879,48 @@ function StartupTab() {
         </div>
       )}
 
+      {/* Stage Stats */}
+      {stageStats && Object.keys(stageStats).length > 0 && (
+        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
+          <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center">
+            <span className="text-[11px] font-medium text-[#8e8e93]">Stage Performance</span>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              {Object.entries(stageStats).map(([stage, data]) => (
+                <div key={stage} className="rounded-lg border border-white/[0.04] bg-[#111111] p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={cn(
+                      'w-2 h-2 rounded-full',
+                      stage === startupStage ? 'bg-[#0a7aff]' : 'bg-[#28c840]',
+                    )} />
+                    <span className="text-[11px] font-medium text-[#c7c7cc] capitalize">{stage}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div>
+                      <span className="text-[#636366]">Avg</span>
+                      <span className="ml-1 font-mono text-[#c7c7cc]">{data.avg}s</span>
+                    </div>
+                    <div>
+                      <span className="text-[#636366]">P50</span>
+                      <span className="ml-1 font-mono text-[#c7c7cc]">{data.p50}s</span>
+                    </div>
+                    <div>
+                      <span className="text-[#636366]">Min</span>
+                      <span className="ml-1 font-mono text-[#28c840]">{data.min}s</span>
+                    </div>
+                    <div>
+                      <span className="text-[#636366]">Max</span>
+                      <span className="ml-1 font-mono text-[#ff5f57]">{data.max}s</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Timeline */}
       <StartupTimeline />
 
