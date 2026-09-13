@@ -59,6 +59,7 @@ class HealthRouter:
         self.router.add_api_route("/startup-status", self.startup_status, methods=["GET"])
         self.router.add_api_route("/startup-history", self.startup_history, methods=["GET"])
         self.router.add_api_route("/startup-diagnostics", self.startup_diagnostics, methods=["GET"])
+        self.router.add_api_route("/startup-config", self.startup_config, methods=["GET"])
         self.router.add_api_route("/debug", self.debug_info, methods=["GET"])
         self.router.add_api_route("/model", self.model_health, methods=["GET"])
         self.router.add_api_route("/summary", self.health_summary, methods=["GET"])
@@ -270,6 +271,21 @@ class HealthRouter:
             "env_config": env_config,
             "history_stats": history.get_stats(),
         })
+
+    @endpoint("health.startup_config")
+    async def startup_config(self) -> dict:
+        """Startup configuration.
+
+        Returns the current startup configuration including disabled
+        hooks, custom timeouts, and stage overrides.
+
+        Returns:
+            Envelope with startup configuration.
+        """
+        from infrastructure.startup_config import get_startup_config
+
+        config = get_startup_config()
+        return success_response(data=config.to_dict())
 
     @endpoint("health.debug_info")
     async def debug_info(self) -> dict:

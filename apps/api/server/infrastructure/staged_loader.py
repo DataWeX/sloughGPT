@@ -185,6 +185,17 @@ class StagedLoader:
 
     def on(self, stage: Stage, name: str, hook: Callable[[], Coroutine[Any, Any, None]], timeout: float = 30.0) -> None:
         """Register a hook for a given stage."""
+        # Check if hook is disabled via config
+        try:
+            from infrastructure.startup_config import get_startup_config
+            config = get_startup_config()
+            if config.is_hook_disabled(name):
+                logger.info("Hook '%s' disabled via config", name, extra={"tag": "START"})
+                return
+            timeout = config.get_hook_timeout(name, timeout)
+        except Exception:
+            pass
+
         self._hooks[stage].append((name, hook, timeout))
         self._hook_infos[name] = HookInfo(name, stage)
 
