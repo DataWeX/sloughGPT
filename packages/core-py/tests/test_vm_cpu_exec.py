@@ -1,5 +1,5 @@
 """
-Execution tests for the X86CPU in domain.shell._internal.vm.py.
+Execution tests for the X86CPU in domains.shell.vm.py.
 
 Drives the 32-bit CPU with raw machine-code bytes (loaded at 0x1000) to cover
 every instruction-decoder branch that assembled programs do not reach:
@@ -17,14 +17,14 @@ swallow a deliberate InsFault (DIV by zero / overflow).
 import pytest
 
 from domain.shell._internal.vm import (
+    FLAG_CF,
+    FLAG_IF,
+    FLAG_OF,
+    FLAG_PF,
+    FLAG_SF,
+    FLAG_ZF,
     X86CPU,
     InsFault,
-    FLAG_CF,
-    FLAG_PF,
-    FLAG_ZF,
-    FLAG_SF,
-    FLAG_OF,
-    FLAG_IF,
 )
 
 
@@ -58,6 +58,7 @@ def _store16(cpu, addr, val):
 # ══════════════════════════════════════════════════════════════════════════════
 # Register / segment helpers
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_mov_seg_reg_forms():
     cpu = _cpu("8edb8e1b")
@@ -117,6 +118,7 @@ def test_high_byte_register_moves():
 # ModR/M addressing: SIB, disp8, disp32
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_modrm_sib_addressing():
     cpu = _cpu("8b048b")  # MOV EAX, [EBX+ECX*4]
     cpu.ebx = 0x1000
@@ -159,6 +161,7 @@ def test_resolve_rm_helper():
 # ══════════════════════════════════════════════════════════════════════════════
 # MOV forms
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_mov_imm_forms():
     cpu = _cpu("b005b80000000066b83412c6c005c7c0ffffffff")
@@ -229,6 +232,7 @@ def test_66_unknown_opcode2_noop():
 # XCHG, MOVSXD
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_xchg_short_forms():
     cpu = _cpu("9197")
     cpu.ecx = 0x11111111
@@ -252,6 +256,7 @@ def test_movsxd():
 # ══════════════════════════════════════════════════════════════════════════════
 # ALU forms
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_alu_imm_81_83():
     cpu = _cpu("81c00500000083c080810305000000830305")
@@ -414,6 +419,7 @@ def test_f6_not_neg_mem_byte():
 # INC/DEC / PUSH/POP
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_inc_dec_short():
     cpu = _cpu("404f")
     _steps(cpu, 1)  # INC EAX
@@ -458,6 +464,7 @@ def test_pop_rm():
 # ══════════════════════════════════════════════════════════════════════════════
 # Group 3/4/5 encodings (FE/FF)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_fe_inc_dec_rm8():
     cpu = _cpu("fec0fec8fe03fe0b")
@@ -524,6 +531,7 @@ def test_ff_inc_dec_rm32():
 # Control flow
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_call_rel32_forward_backward():
     cpu = _cpu("e805000000e8fbffffff")
     _steps(cpu, 1)  # CALL +5
@@ -573,6 +581,7 @@ def test_0f_near_jcc():
 # ══════════════════════════════════════════════════════════════════════════════
 # 0F prefix family
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_rdtsc():
     cpu = _cpu("0f31")
@@ -680,6 +689,7 @@ def test_bsf_bsr():
 # SAHF/LAHF/CDQ/BCD
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_sahf_lahf():
     cpu = _cpu("9e9f")
     cpu.eax = 0x0000D500  # AH = 0xD5
@@ -709,6 +719,7 @@ def test_bcd_stubs():
 # ══════════════════════════════════════════════════════════════════════════════
 # String ops
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_lodsb_forward_backward():
     cpu = _cpu("ac")
@@ -767,6 +778,7 @@ def test_scasb_scasw():
 # REP prefix
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_rep_movsb():
     cpu = _cpu("f3a4")
     cpu.ecx = 3
@@ -818,6 +830,7 @@ def test_rep_unknown_target():
 # IN / OUT
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_in_out_ports():
     out = []
     cpu = _cpu("e460e560ecede660e760eeef")
@@ -857,6 +870,7 @@ def test_port_in_default_and_unhandled_out():
 # ══════════════════════════════════════════════════════════════════════════════
 # Shift / rotate groups
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_shift_groups_c1():
     cpu = _cpu("c1c003c1c803c1e003c1e803c1f803c1d003c1e000")
@@ -918,6 +932,7 @@ def test_sar_sign_extension():
 # ══════════════════════════════════════════════════════════════════════════════
 # Group 3 (F6 / F7) multiply/divide
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_f6_mul8():
     cpu = _cpu("f6e3")
@@ -1049,12 +1064,14 @@ def test_66_f7_test():
     _steps(cpu, 1)
     assert not cpu.zf  # 3 & 1 = 1, not zero
 
+
 def test_66_f7_not():
     # 66 F7 D0 — NOT AX
     cpu = _cpu("66f7d0", regs={"eip": 0x1000})
     cpu._set16(0, 0x1234)  # AX = 0x1234
     _steps(cpu, 1)
     assert cpu._get16(0) == 0xEDCB
+
 
 def test_66_f7_neg():
     # 66 F7 D8 — NEG AX
@@ -1064,24 +1081,26 @@ def test_66_f7_neg():
     assert cpu._get16(0) == 0xFFFB  # -5 in 16-bit
     assert cpu.cf
 
+
 def test_66_f7_mul():
     # 66 F7 E3 — MUL BX (DX:AX = AX * BX)
     cpu = _cpu("66f7e3", regs={"eip": 0x1000})
-    cpu._set16(0, 5)   # AX = 5
-    cpu._set16(3, 7)   # BX = 7
+    cpu._set16(0, 5)  # AX = 5
+    cpu._set16(3, 7)  # BX = 7
     _steps(cpu, 1)
-    assert cpu._get16(0) == 35   # AX = low 16 bits
-    assert cpu._get16(2) == 0    # DX = high 16 bits
+    assert cpu._get16(0) == 35  # AX = low 16 bits
+    assert cpu._get16(2) == 0  # DX = high 16 bits
     assert not cpu.cf  # result fits in 16 bits
+
 
 def test_66_f7_div():
     # 66 F7 F3 — DIV BX (AX / BX)
     cpu = _cpu("66f7f3", regs={"eip": 0x1000})
     cpu._set16(0, 100)  # AX = 100
-    cpu._set16(3, 7)    # BX = 7
+    cpu._set16(3, 7)  # BX = 7
     _steps(cpu, 1)
-    assert cpu._get16(0) == 14   # AX = quotient
-    assert cpu._get16(2) == 2    # DX = remainder
+    assert cpu._get16(0) == 14  # AX = quotient
+    assert cpu._get16(2) == 2  # DX = remainder
 
 
 def test_66_group1_add_sub_cmp():
@@ -1124,7 +1143,7 @@ def test_66_div_uses_dx_ax():
     cpu._set16(3, 100)  # BX = 100
     _steps(cpu, 1)
     assert cpu._get16(0) == 655  # AX = 65536 / 100
-    assert cpu._get16(2) == 36   # DX = 65536 % 100
+    assert cpu._get16(2) == 36  # DX = 65536 % 100
 
 
 def test_66_alu_reg_reg():
@@ -1195,6 +1214,7 @@ def test_66_xchg():
 # ══════════════════════════════════════════════════════════════════════════════
 # Interrupts / IRQ / flag ops / RET
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_flag_ops():
     cpu = _cpu("fafbfcfd")
@@ -1286,6 +1306,7 @@ def test_fire_irq_and_push_key_helpers():
 # Misc / helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_unknown_opcode_raises():
     cpu = _cpu("62")
     with pytest.raises(InsFault, match="unknown opcode"):
@@ -1339,17 +1360,20 @@ def test_cc_condition_all_codes():
 # Targeted raw-byte tests for remaining missed lines
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_ff_call_r_m32_mem():
     cpu = _cpu("ff10", regs={"eax": 0x5000, "eip": 0x1000})
     cpu._write32(0x5000, 0x7000)
     _steps(cpu, 1)
     assert cpu.eip == 0x7000
 
+
 def test_ff_jmp_r_m32_mem():
     cpu = _cpu("ff20", regs={"eax": 0x5000, "eip": 0x1000})
     cpu._write32(0x5000, 0x7000)
     _steps(cpu, 1)
     assert cpu.eip == 0x7000
+
 
 def test_ff_push_r_m32_mem():
     cpu = _cpu("ff30", regs={"eax": 0x5000, "eip": 0x1000})
@@ -1359,11 +1383,13 @@ def test_ff_push_r_m32_mem():
     assert cpu.esp == old_esp - 4
     assert cpu._read32(cpu.esp) == 0xDEADBEEF
 
+
 def test_ff_inc_r_m32_mem():
     cpu = _cpu("ff00", regs={"eax": 0x5000, "eip": 0x1000})
     cpu._write32(0x5000, 41)
     _steps(cpu, 1)
     assert cpu._read32(0x5000) == 42
+
 
 def test_ff_dec_r_m32_mem():
     cpu = _cpu("ff08", regs={"eax": 0x5000, "eip": 0x1000})
@@ -1371,11 +1397,13 @@ def test_ff_dec_r_m32_mem():
     _steps(cpu, 1)
     assert cpu._read32(0x5000) == 41
 
+
 def test_jcc_backward_offset():
     cpu = _cpu("74fe", regs={"eip": 0x1000})
     cpu._set_flag(FLAG_ZF, True)
     _steps(cpu, 1)
     assert cpu.eip == 0x1000
+
 
 def test_mov_r8_from_r_m8_mem():
     cpu = _cpu("8a00", regs={"eax": 0x5000, "eip": 0x1000})
@@ -1383,16 +1411,19 @@ def test_mov_r8_from_r_m8_mem():
     _steps(cpu, 1)
     assert cpu._get8l(0) == 0xAB
 
+
 def test_mov_r32_from_r_m32_mem():
     cpu = _cpu("8b00", regs={"eax": 0x5000, "eip": 0x1000})
     cpu._write32(0x5000, 0x12345678)
     _steps(cpu, 1)
     assert cpu.eax == 0x12345678
 
+
 def test_mov_r16_imm16_reg_form():
     cpu = _cpu("66c7c33412", regs={"eip": 0x1000})
     _steps(cpu, 1)
     assert cpu._get16(3) == 0x1234
+
 
 def test_mov_r16_from_r_m16_mem():
     # 66 8B 19 — MOV BX, [ECX]
@@ -1401,11 +1432,13 @@ def test_mov_r16_from_r_m16_mem():
     _steps(cpu, 1)
     assert cpu._get16(3) == 0xBEEF
 
+
 def test_mov_r16_to_r_m16_mem():
     # 66 89 19 — MOV [ECX], BX
     cpu = _cpu("668919", regs={"ecx": 0x3000, "ebx": 0xCAFE, "eip": 0x1000})
     _steps(cpu, 1)
     assert cpu._read16(0x3000) == 0xCAFE
+
 
 def test_mov_r16_from_r_m16_mem_disp8():
     # 66 8B 72 04 — MOV SI, [EDX+4]
@@ -1414,6 +1447,7 @@ def test_mov_r16_from_r_m16_mem_disp8():
     _steps(cpu, 1)
     assert cpu._get16(6) == 0x1234
 
+
 def test_mov_r16_from_r_m16_high_reg():
     # 66 8B 19 — MOV BX, [ECX] — verifies BX (reg=3, not 0)
     cpu = _cpu("668b19", regs={"ecx": 0x3000, "eip": 0x1000})
@@ -1421,11 +1455,13 @@ def test_mov_r16_from_r_m16_high_reg():
     _steps(cpu, 1)
     assert cpu._get16(3) == 0x5678  # BX = register 3
 
+
 def test_group1_sign_extend_imm32():
     cpu = _cpu("81e800000080", regs={"eip": 0x1000})
     cpu.eax = 0
     _steps(cpu, 1)
     assert cpu.eax == 0x80000000
+
 
 def test_alu_adc_byte():
     cpu = _cpu("80d005", regs={"eip": 0x1000})  # ADC AL, 5
@@ -1439,6 +1475,7 @@ def test_alu_adc_byte():
     _steps(cpu, 1)
     assert cpu._get8l(0) == 16
 
+
 def test_alu_sbb_via_0x81():
     cpu = _cpu("81d834120000", regs={"eip": 0x1000})  # SBB EAX, 0x1234
     cpu.eax = 0x1234 + 100
@@ -1450,6 +1487,7 @@ def test_alu_sbb_via_0x81():
     cpu._set_flag(FLAG_CF, True)
     _steps(cpu, 1)
     assert cpu.eax == 99
+
 
 def test_alu_acc_imm8():
     # ADD AL, imm8 (04) / OR (0C) / ADC (14) / SBB (1C)
@@ -1618,12 +1656,14 @@ def test_alu_test_acc_imm():
     _steps(cpu, 1)
     assert not cpu._flag(FLAG_ZF)
 
+
 def test_shift_rcl_fallback():
     cpu = _cpu("d0d2", regs={"eip": 0x1000})
     cpu._set8l(2, 0x80)
     cpu._set_flag(FLAG_CF, False)
     _steps(cpu, 1)
     assert cpu._get8l(2) == 0x80
+
 
 def test_shift_rcr_fallback():
     cpu = _cpu("d0da", regs={"eip": 0x1000})
@@ -1632,12 +1672,14 @@ def test_shift_rcr_fallback():
     _steps(cpu, 1)
     assert cpu._get8l(2) == 0x80
 
+
 def test_shift_rcl_mem():
     cpu = _cpu("c01302", regs={"ebx": 0x5000, "eip": 0x1000})
     cpu._mem[0x5000] = 0x42
     cpu._set_flag(FLAG_CF, False)
     _steps(cpu, 1)
     assert cpu._mem[0x5000] == 0x42
+
 
 def test_shift_rcr_mem():
     cpu = _cpu("c11b03", regs={"ebx": 0x5000, "eip": 0x1000})
@@ -1646,17 +1688,20 @@ def test_shift_rcr_mem():
     _steps(cpu, 1)
     assert cpu._read32(0x5000) == 0xAABBCCDD
 
+
 def test_shift_d2_mem():
     cpu = _cpu("d223", regs={"ebx": 0x5000, "ecx": 3, "eip": 0x1000})
     cpu._mem[0x5000] = 0x05
     _steps(cpu, 1)
     assert cpu._mem[0x5000] == 0x28
 
+
 def test_shift_d3_mem():
     cpu = _cpu("d323", regs={"ebx": 0x5000, "ecx": 4, "eip": 0x1000})
     cpu._write32(0x5000, 0x0000000F)
     _steps(cpu, 1)
     assert cpu._read32(0x5000) == 0x000000F0
+
 
 def test_mul_r_m8_mem():
     cpu = _cpu("f621", regs={"ecx": 0x5000, "eip": 0x1000})
@@ -1665,11 +1710,13 @@ def test_mul_r_m8_mem():
     _steps(cpu, 1)
     assert cpu._get16(0) == 0x70
 
+
 def test_div_r_m8_mem_zero():
     cpu = _cpu("f631", regs={"ecx": 0x5000, "eip": 0x1000})
     cpu._mem[0x5000] = 0
     with pytest.raises(InsFault):
         cpu._exec_one()
+
 
 def test_idiv_r_m8_mem():
     cpu = _cpu("f639", regs={"ecx": 0x5000, "eip": 0x1000})
@@ -1679,17 +1726,20 @@ def test_idiv_r_m8_mem():
     assert cpu._get8l(0) == 3  # AL = quotient
     assert cpu._get8h(0) == 1  # AH = remainder
 
+
 def test_idiv_r_m8_mem_zero():
     cpu = _cpu("f639", regs={"ecx": 0x5000, "eip": 0x1000})
     cpu._mem[0x5000] = 0
     with pytest.raises(InsFault):
         cpu._exec_one()
 
+
 def test_f6_unary_test_fallback():
     cpu = _cpu("f6c005", regs={"eip": 0x1000})
     cpu._set8l(0, 0xFF)
     _steps(cpu, 1)
     assert cpu._get8l(0) == 0xFF
+
 
 def test_mul_r_m32_mem():
     cpu = _cpu("f721", regs={"ecx": 0x5000, "eip": 0x1000})
@@ -1699,12 +1749,14 @@ def test_mul_r_m32_mem():
     assert cpu.eax == 42
     assert cpu.edx == 0
 
+
 def test_imul_r_m32_mem():
     cpu = _cpu("f729", regs={"ecx": 0x5000, "eip": 0x1000})
     cpu._write32(0x5000, 5)
     cpu.eax = -3
     _steps(cpu, 1)
     assert cpu.eax == 0xFFFFFFF1
+
 
 def test_div_r_m32_mem():
     cpu = _cpu("f731", regs={"ecx": 0x5000, "eip": 0x1000})
@@ -1715,6 +1767,7 @@ def test_div_r_m32_mem():
     assert cpu.eax == 2
     assert cpu.edx == 6
 
+
 def test_div_r_m32_overflow():
     cpu = _cpu("f731", regs={"ecx": 0x5000, "eip": 0x1000})
     cpu._write32(0x5000, 1)
@@ -1723,11 +1776,13 @@ def test_div_r_m32_overflow():
     with pytest.raises(InsFault):
         cpu._exec_one()
 
+
 def test_div_r_m32_zero():
     cpu = _cpu("f731", regs={"ecx": 0x5000, "eip": 0x1000})
     cpu._write32(0x5000, 0)
     with pytest.raises(InsFault):
         cpu._exec_one()
+
 
 def test_idiv_r_m32_mem():
     cpu = _cpu("f739", regs={"ecx": 0x5000, "eip": 0x1000})
@@ -1738,11 +1793,13 @@ def test_idiv_r_m32_mem():
     assert cpu.eax == 2
     assert cpu.edx == 6
 
+
 def test_idiv_r_m32_zero():
     cpu = _cpu("f739", regs={"ecx": 0x5000, "eip": 0x1000})
     cpu._write32(0x5000, 0)
     with pytest.raises(InsFault):
         cpu._exec_one()
+
 
 def test_f7_unary_neg_mem():
     cpu = _cpu("f719", regs={"ecx": 0x5000, "eip": 0x1000})
@@ -1750,22 +1807,26 @@ def test_f7_unary_neg_mem():
     _steps(cpu, 1)
     assert cpu._read32(0x5000) == 0xFFFFFFFB
 
+
 def test_f7_unary_not_mem():
     cpu = _cpu("f711", regs={"ecx": 0x5000, "eip": 0x1000})
     cpu._write32(0x5000, 0x12345678)
     _steps(cpu, 1)
     assert cpu._read32(0x5000) == 0xEDCBA987
 
+
 def test_unknown_opcode():
     cpu = _cpu("dd", regs={"eip": 0x1000})
     with pytest.raises(InsFault, match="unknown opcode"):
         cpu.step()
+
 
 def test_mov_r_m8_to_r8_high():
     cpu = _cpu("8a20", regs={"eax": 0x5000, "eip": 0x1000})
     cpu._mem[0x5000] = 0xCD
     _steps(cpu, 1)
     assert cpu._get8h(0) == 0xCD
+
 
 def test_mov_r8_high_to_r_m8():
     cpu = _cpu("8821", regs={"ecx": 0x5000, "eip": 0x1000})
