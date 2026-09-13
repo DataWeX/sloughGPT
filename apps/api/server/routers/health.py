@@ -58,6 +58,7 @@ class HealthRouter:
         self.router.add_api_route("/startup-progress", self.startup_progress, methods=["GET"])
         self.router.add_api_route("/startup-status", self.startup_status, methods=["GET"])
         self.router.add_api_route("/startup-history", self.startup_history, methods=["GET"])
+        self.router.add_api_route("/startup-diagnostics", self.startup_diagnostics, methods=["GET"])
         self.router.add_api_route("/debug", self.debug_info, methods=["GET"])
         self.router.add_api_route("/model", self.model_health, methods=["GET"])
         self.router.add_api_route("/summary", self.health_summary, methods=["GET"])
@@ -216,6 +217,58 @@ class HealthRouter:
             "stage_stats": history.get_stage_stats(),
             "slow_startups": history.get_slow_startups(threshold_seconds=60.0),
             "alerts": history.get_alerts(),
+        })
+
+    @endpoint("health.startup_diagnostics")
+    async def startup_diagnostics(self) -> dict:
+        """Startup diagnostics for debugging.
+
+        Returns comprehensive startup debugging information including:
+        - Current stage and timing
+        - Model load progress
+        - Per-hook status and timing
+        - Error details
+        - System resource usage during startup
+        - Environment configuration
+
+        Returns:
+            Envelope with detailed startup diagnostics.
+        """
+        import psutil
+        from infrastructure.staged_loader import get_staged_loader
+        from infrastructure.startup_history import get_startup_history
+
+        loader = get_staged_loader()
+        history = get_startup_history()
+
+        # Get current process info
+        process = psutil.Process()
+        mem_info = process.memory_info()
+
+        # Get environment config
+        import os
+        env_config = {
+            "autoload_model": os.environ.get("SLO_AUTOLOAD_MODEL", ""),
+            "autoload_device": os.environ.get("SLO_AUTOLOAD_DEVICE", ""),
+            "wanDB_enabled": os.environ.get("SLO_WANDB", "0") == "1",
+            "log_level": os.environ.get("SLO_LOG_LEVEL", "INFO"),
+        }
+
+        return success_response(data={
+            "stage": loader.stage_name,
+            "stage_value": int(loader.stage),
+            "elapsed_seconds": round(loader.elapsed, 1),
+            "model_progress": round(loader._model_progress, 2),
+            "model_progress_message": loader._model_progress_message,
+            "hooks": {
+                name: info.to_dict()
+                for name, info in loader._hook_infos.items()
+            },
+            "errors": dict(loader._errors),
+            "memory_mb": round(mem_info.rss / 1024 / 1024, 1),
+            "pid": process.pid,
+            "env_config": env_config,
+            "history_stats": history.get_stats(),
         })
 
     @endpoint("health.debug_info")
