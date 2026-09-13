@@ -9,8 +9,8 @@ SLNC = "/home/mana/Documents/Default Project/sloughGPT/models/hf-cache/hub/model
 
 
 def load_model():
-    from domains.infrastructure.slnc.parser import SLNCParser
-    from domains.infrastructure.arch_config import build_arch
+    from domain.infrastructure._internal.slnc.parser import SLNCParser
+    from domain.infrastructure._internal.arch_config import build_arch
     parser = SLNCParser(SLNC)
     config = parser.config
     keys = set(parser._tensor_map.keys())
@@ -52,8 +52,8 @@ def main():
     print(f"  {arch.n_layers} layers, {arch.hidden_size} hidden, {arch.n_heads} heads\n")
 
     # Import and register backends
-    from domains.infrastructure.numpy_backend import NumpyBE
-    from domains.infrastructure.vector_backend import VectorBE
+    from domain.infrastructure._internal.numpy_backend import NumpyBE
+    from domain.infrastructure._internal.vector_backend import VectorBE
 
     np_be = NumpyBE.from_weights(weights, arch)
     vec_be = VectorBE.from_weights(weights, arch)

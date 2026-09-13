@@ -153,7 +153,7 @@ class VFS:
 
     def _gen_cpuinfo(self) -> str:
         try:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure._internal.resource_manager import get_resource_manager
             rm = get_resource_manager()
             cores = rm.topology.logical_cores
         except Exception:

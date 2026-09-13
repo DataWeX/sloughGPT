@@ -54,8 +54,8 @@ def _bench_mode(mode):
 
     matmul_int8_c = None
     if mode in ("2", "512"):
-        from domains.infrastructure.quant_core import wrapper
-        from domains.infrastructure.quant_core.wrapper import HAS_AVX2, HAS_AVX512
+        from domain.infrastructure._internal.quant_core import wrapper
+        from domain.infrastructure._internal.quant_core.wrapper import HAS_AVX2, HAS_AVX512
 
         matmul_int8_c = wrapper.matmul_int8_c
         if mode == "512" and not HAS_AVX512:

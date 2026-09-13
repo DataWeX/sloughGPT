@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional, Protocol, runtime_checkable
 try:
     from domain.chat._internal.domain import ChatDomain, get_chat_domain
     from domain.benchmark._internal.domain import BenchmarkDomain, get_benchmark_domain
-    from domains.infrastructure.errors import AppError
+    from domain.infrastructure._internal.errors import AppError
     from domain.companion import get_companion, CompanionSystem
 except (ImportError, ModuleNotFoundError):
     AppError = Exception
