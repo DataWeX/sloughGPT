@@ -170,6 +170,63 @@ class StartupHistory:
                 if r.total_duration > threshold_seconds
             ]
 
+    def get_alerts(self) -> list[dict[str, Any]]:
+        """Check for startup performance alerts.
+
+        Returns alerts for:
+        - Slow startups (exceeding p95 by 50%)
+        - Failed startups
+        - Startup time regression (current > 2x average)
+        """
+        alerts = []
+        with self._lock:
+            if len(self._records) < 3:
+                return alerts
+
+            durations = [r.total_duration for r in self._records]
+            sorted_durations = sorted(durations)
+            n = len(sorted_durations)
+            avg = sum(durations) / n
+            p95 = sorted_durations[int(n * 0.95)] if n > 1 else sorted_durations[0]
+
+            # Check for slow startups
+            slow_threshold = p95 * 1.5
+            for r in self._records[-5:]:  # Check last 5
+                if r.total_duration > slow_threshold:
+                    alerts.append({
+                        "type": "slow_startup",
+                        "severity": "warning",
+                        "message": f"Startup took {r.total_duration:.1f}s (threshold: {slow_threshold:.1f}s)",
+                        "timestamp": r.timestamp,
+                        "duration": r.total_duration,
+                    })
+
+            # Check for failed startups
+            for r in self._records[-5:]:
+                if not r.success:
+                    alerts.append({
+                        "type": "failed_startup",
+                        "severity": "error",
+                        "message": f"Startup failed: {r.error or 'unknown error'}",
+                        "timestamp": r.timestamp,
+                        "error": r.error,
+                    })
+
+            # Check for regression (current > 2x average)
+            if self._records:
+                last = self._records[-1]
+                if last.total_duration > avg * 2:
+                    alerts.append({
+                        "type": "startup_regression",
+                        "severity": "warning",
+                        "message": f"Startup {last.total_duration:.1f}s is {last.total_duration/avg:.1f}x slower than average ({avg:.1f}s)",
+                        "timestamp": last.timestamp,
+                        "duration": last.total_duration,
+                        "avg_duration": avg,
+                    })
+
+        return alerts
+
 
 # ── Singleton ───────────────────────────────────────────────────────
 _history: StartupHistory | None = None

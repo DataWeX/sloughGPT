@@ -200,12 +200,12 @@ class HealthRouter:
     async def startup_history(self) -> dict:
         """Startup performance history.
 
-        Returns recent startup records, performance statistics, and
-        per-stage timing breakdowns for monitoring startup performance
-        over time.
+        Returns recent startup records, performance statistics,
+        per-stage timing breakdowns, and alerts for slow or failed
+        startups.
 
         Returns:
-            Envelope with startup history, stats, and stage breakdown.
+            Envelope with startup history, stats, stage breakdown, and alerts.
         """
         from infrastructure.startup_history import get_startup_history
 
@@ -215,6 +215,7 @@ class HealthRouter:
             "stats": history.get_stats(),
             "stage_stats": history.get_stage_stats(),
             "slow_startups": history.get_slow_startups(threshold_seconds=60.0),
+            "alerts": history.get_alerts(),
         })
 
     @endpoint("health.debug_info")

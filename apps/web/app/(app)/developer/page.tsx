@@ -714,9 +714,41 @@ function StartupTab() {
   const stages = startupData?.stages as Record<string, { hooks: string[]; time: number | null }> | undefined
   const stats = historyData?.stats as { count: number; avg_duration: number; min_duration: number; max_duration: number; p50_duration: number; p95_duration: number; success_rate: number } | undefined
   const stageStats = historyData?.stage_stats as Record<string, { avg: number; min: number; max: number; p50: number; count: number }> | undefined
+  const alerts = historyData?.alerts as Array<{ type: string; severity: string; message: string; timestamp: number }> | undefined
 
   return (
     <div className="space-y-4">
+      {/* Alerts */}
+      {alerts && alerts.length > 0 && (
+        <div className="space-y-2">
+          {alerts.map((alert, i) => (
+            <div
+              key={`${alert.type}-${i}`}
+              className={cn(
+                'rounded-xl border px-4 py-3 flex items-center gap-3',
+                alert.severity === 'error'
+                  ? 'border-[#ff5f57]/20 bg-[#ff5f57]/[0.06]'
+                  : 'border-[#febc2e]/20 bg-[#febc2e]/[0.06]',
+              )}
+            >
+              <span className={cn(
+                'w-2 h-2 rounded-full shrink-0',
+                alert.severity === 'error' ? 'bg-[#ff5f57]' : 'bg-[#febc2e]',
+              )} />
+              <div className="flex-1 min-w-0">
+                <span className={cn(
+                  'text-[11px] font-medium',
+                  alert.severity === 'error' ? 'text-[#ff5f57]' : 'text-[#febc2e]',
+                )}>
+                  {alert.type.replace(/_/g, ' ')}
+                </span>
+                <span className="text-[10px] text-[#636366] ml-2">{alert.message}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] p-4">
