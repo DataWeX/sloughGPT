@@ -452,6 +452,25 @@ class HealthRouter:
             },
         )
 
+    @endpoint("health.startup_profile")
+    async def startup_profile(self) -> dict:
+        """Startup profiling with detailed timing breakdowns.
+
+        Returns per-hook timing, per-stage totals, and a summary
+        of the most recent startup. Useful for identifying bottlenecks.
+
+        Returns:
+            Envelope with startup profile data.
+        """
+        from infrastructure.startup_profiler import get_profiler
+
+        profiler = get_profiler()
+        profile = profiler.get_profile()
+        return success_response(data={
+            "profile": profile.to_dict(),
+            "summary": profiler.get_summary(),
+        })
+
     @endpoint("health.debug_info")
     async def debug_info(self) -> dict:
         """Debug information for troubleshooting.

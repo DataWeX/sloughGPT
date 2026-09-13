@@ -201,10 +201,16 @@ class StagedLoader:
 
     async def run_stage(self, stage: Stage) -> None:
         """Run all hooks for the given stage."""
+        from infrastructure.startup_profiler import get_profiler
+
+        profiler = get_profiler()
+        profiler.start_stage(stage.name)
+
         hooks = self._hooks.get(stage, [])
         if not hooks:
             self._stage = stage
             self._stage_time[stage] = time.monotonic()
+            profiler.finish_stage()
             return
 
         logger.info(
@@ -222,6 +228,7 @@ class StagedLoader:
         await asyncio.gather(*tasks)
 
         stage_duration = time.monotonic() - stage_start
+        profiler.finish_stage()
         self._stage = stage
         self._stage_time[stage] = time.monotonic()
 
