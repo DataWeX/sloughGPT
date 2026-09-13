@@ -60,6 +60,9 @@ class HealthRouter:
         self.router.add_api_route("/startup-history", self.startup_history, methods=["GET"])
         self.router.add_api_route("/startup-diagnostics", self.startup_diagnostics, methods=["GET"])
         self.router.add_api_route("/startup-config", self.startup_config, methods=["GET"])
+        self.router.add_api_route(
+            "/startup-stream", self.startup_stream, methods=["GET"], response_model=None
+        )
         self.router.add_api_route("/debug", self.debug_info, methods=["GET"])
         self.router.add_api_route("/model", self.model_health, methods=["GET"])
         self.router.add_api_route("/summary", self.health_summary, methods=["GET"])
@@ -286,6 +289,79 @@ class HealthRouter:
 
         config = get_startup_config()
         return success_response(data=config.to_dict())
+
+    async def startup_stream(self, request: Request) -> StreamingResponse:
+        """SSE stream for real-time startup progress updates.
+
+        Pushes startup status every 1 second during startup.
+        Stops pushing once the server reaches BACKGROUND stage.
+
+        Returns:
+            SSE stream with startup progress events.
+        """
+        from infrastructure.staged_loader import Stage, get_staged_loader
+
+        async def generate():
+            loader = get_staged_loader()
+            event_count = 0
+
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    break
+
+                # Get current status
+                status = loader.get_status()
+                stage = status.get("stage", "unknown")
+
+                # Send event
+                data = json.dumps({
+                    "stream": "startup",
+                    "data": {
+                        "stage": stage,
+                        "stage_value": status.get("stage_value", 0),
+                        "elapsed_seconds": status.get("elapsed_seconds", 0),
+                        "model_progress": status.get("model_progress", 0),
+                        "model_progress_message": status.get("model_progress_message", ""),
+                        "hooks": status.get("hooks", {}),
+                        "errors": status.get("errors", {}),
+                    },
+                    "event": f"startup_{stage}",
+                    "id": event_count,
+                })
+                yield f"data: {data}\n\n"
+                event_count += 1
+
+                # Stop pushing once we reach BACKGROUND stage
+                if stage in ("background", "ready"):
+                    # Send final event
+                    final_data = json.dumps({
+                        "stream": "startup",
+                        "data": {
+                            "stage": "complete",
+                            "stage_value": 3,
+                            "elapsed_seconds": status.get("elapsed_seconds", 0),
+                            "model_progress": 1.0,
+                            "model_progress_message": "Startup complete",
+                        },
+                        "event": "startup_complete",
+                        "id": event_count,
+                    })
+                    yield f"data: {final_data}\n\n"
+                    break
+
+                # Wait before next update
+                await asyncio.sleep(1.0)
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @endpoint("health.debug_info")
     async def debug_info(self) -> dict:
