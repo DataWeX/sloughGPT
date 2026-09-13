@@ -28,9 +28,10 @@ const HOOK_LABELS: Record<string, string> = {
 }
 
 export function StartupOverlay() {
-  const { startupStage, startupModelProgress, startupModelProgressMessage, startupHooks, connected } = useLiveStatus()
+  const { startupStage, startupModelProgress, startupModelProgressMessage, startupHooks, startupElapsed, connected } = useLiveStatus()
   const [visible, setVisible] = useState(true)
   const [fadeOut, setFadeOut] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
 
   const isReady = startupStage === 'background' || startupStage === 'ready'
 
@@ -51,9 +52,15 @@ export function StartupOverlay() {
       ? (stageIndex + 1) / STAGE_ORDER.length
       : 0.1
 
-  // Get active hooks (running or recently completed)
+  // Get completed hooks for timing breakdown
+  const completedHooks = Object.values(startupHooks)
+    .filter((h: HookStatus) => h.status === 'ok' && h.duration_seconds > 0)
+    .sort((a: HookStatus, b: HookStatus) => b.duration_seconds - a.duration_seconds)
+    .slice(0, 5)
+
+  // Get active hooks (running)
   const activeHooks = Object.values(startupHooks)
-    .filter((h: HookStatus) => h.status === 'running' || (h.status === 'ok' && h.duration_seconds < 2))
+    .filter((h: HookStatus) => h.status === 'running')
     .slice(0, 3)
 
   return (
@@ -91,21 +98,40 @@ export function StartupOverlay() {
         {startupModelProgressMessage && (
           <span className="max-w-48 truncate">{startupModelProgressMessage}</span>
         )}
+        {startupElapsed > 0 && (
+          <span className="font-mono">{startupElapsed.toFixed(1)}s</span>
+        )}
       </div>
 
       {/* Active hooks */}
       {activeHooks.length > 0 && (
-        <div className="flex flex-col items-center gap-1.5 mb-6">
+        <div className="flex flex-col items-center gap-1.5 mb-4">
           {activeHooks.map((hook: HookStatus) => (
             <div key={hook.name} className="flex items-center gap-2 text-[10px]">
-              <span className={cn(
-                'w-1 h-1 rounded-full',
-                hook.status === 'running' ? 'bg-[#febc2e] animate-pulse' : 'bg-[#28c840]',
-              )} />
+              <span className="w-1 h-1 rounded-full bg-[#febc2e] animate-pulse" />
               <span className="text-[#8e8e93]">{HOOK_LABELS[hook.name] ?? hook.name}</span>
-              {hook.status === 'ok' && (
-                <span className="text-[#28c840] font-mono">{hook.duration_seconds}s</span>
-              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Timing breakdown (click to toggle) */}
+      {completedHooks.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowDetails(!showDetails)}
+          className="text-[9px] text-[#636366] hover:text-[#8e8e93] transition-colors mb-4"
+        >
+          {showDetails ? 'Hide details' : 'Show timing'}
+        </button>
+      )}
+
+      {showDetails && completedHooks.length > 0 && (
+        <div className="w-48 space-y-1 mb-4">
+          {completedHooks.map((hook: HookStatus) => (
+            <div key={hook.name} className="flex items-center justify-between text-[9px]">
+              <span className="text-[#8e8e93] truncate">{HOOK_LABELS[hook.name] ?? hook.name}</span>
+              <span className="text-[#636366] font-mono ml-2">{hook.duration_seconds}s</span>
             </div>
           ))}
         </div>
