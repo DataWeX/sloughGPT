@@ -153,7 +153,7 @@ class HealthRouter:
 
         Returns the lifecycle phase string (e.g. "running", "starting",
         "draining") from the startup progress tracker, plus the staged
-        loader stage and timing information.
+        loader stage, timing information, hook statuses, and errors.
 
         Returns:
             Envelope with the current phase string and staged loader info.
@@ -164,6 +164,35 @@ class HealthRouter:
         data = dict(STARTUP_PHASE)
         data["staged_loader"] = loader.get_status()
         return success_response(data=data)
+
+    @endpoint("health.startup_status")
+    async def startup_status(self) -> dict:
+        """Detailed startup diagnostics.
+
+        Returns comprehensive startup information including:
+        - Current stage and elapsed time
+        - Model load progress (0.0 to 1.0)
+        - Per-hook timing and status
+        - Per-stage timing
+        - Any errors encountered
+
+        Returns:
+            Envelope with detailed startup diagnostics.
+        """
+        from infrastructure.staged_loader import get_staged_loader
+
+        loader = get_staged_loader()
+        status = loader.get_status()
+        return success_response(data={
+            "stage": status["stage"],
+            "stage_value": status["stage_value"],
+            "elapsed_seconds": status["elapsed_seconds"],
+            "model_progress": status["model_progress"],
+            "model_progress_message": status["model_progress_message"],
+            "hooks": status["hooks"],
+            "stages": status["stages"],
+            "errors": status["errors"],
+        })
 
     @endpoint("health.debug_info")
     async def debug_info(self) -> dict:
