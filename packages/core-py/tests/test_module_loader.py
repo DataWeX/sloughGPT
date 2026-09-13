@@ -7,7 +7,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from domains.shell.addons.module_loader import ModuleLoader, ModuleInfo
+from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ def _write_addon(addon_dir, name, content=None):
     """Write a minimal addon .py file."""
     if content is None:
         content = f'''
-from domains.shell.addons.base import Addon
+from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):
@@ -205,7 +205,7 @@ __version__ = "2.0.0"
 __description__ = "A test addon"
 __author__ = "Tester"
 
-from domains.shell.addons.base import Addon
+from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):
@@ -367,14 +367,14 @@ class TestQuery:
 class TestDependencies:
     def test_load_with_dependencies(self, loader, tmp_addon_dir):
         dep_content = '''
-from domains.shell.addons.base import Addon
+from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):
         self.dep_loaded = True
 '''
         main_content = '''
-from domains.shell.addons.base import Addon
+from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):

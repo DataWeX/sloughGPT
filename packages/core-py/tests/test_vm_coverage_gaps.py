@@ -5443,7 +5443,7 @@ class TestRemainingSmallBlocks:
     def test_dev_table_open_with_adapter(self):
         from domains.shell.vm import CPU, _op_dev_table_open
 
-        import domain.shell._internal.vm as vm_mod
+        import domains.shell.vm as vm_mod
 
         cpu = CPU()
         mock_adapter = type("A", (), {"open": lambda s, n: -1})()

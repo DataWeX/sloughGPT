@@ -5,7 +5,7 @@ Provides: enums, NeuralProcess, KV cache, embedding store, neural devices,
 gradient accumulator, batch processor, attention device, neural interrupts/syscalls.
 
 Install via:
-    from domains.shell.addons import neural
+    domain.shell._internal.addons import neural
     kernel.install_addon(neural)
 """
 from __future__ import annotations

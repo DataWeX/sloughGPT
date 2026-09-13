@@ -8,7 +8,7 @@ Provides mount-point based path resolution:
 
 Usage::
 
-    from domains.shell.addons import filesystem
+    domain.shell._internal.addons import filesystem
     kernel.install_addon(filesystem)
 
     kernel.vfs.read("/proc/uptime")

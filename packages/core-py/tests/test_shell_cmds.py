@@ -1,7 +1,7 @@
 """Tests for domains.shell.cmds — CmdModule, discover(), and pure utility functions."""
 
 import pytest
-from domains.shell.cmds import CmdModule, discover, _MODULE_NAMES
+from domain.shell._internal.cmds import CmdModule, discover, _MODULE_NAMES
 
 
 class TestCmdModule:
@@ -219,140 +219,140 @@ class TestDiscover:
 
 class TestDashboardUtils:
     def test_format_uptime_seconds(self):
-        from domains.shell.cmds.dashboard import _format_uptime
+        from domain.shell._internal.cmds.dashboard import _format_uptime
         assert _format_uptime(30) == "30s"
 
     def test_format_uptime_minutes(self):
-        from domains.shell.cmds.dashboard import _format_uptime
+        from domain.shell._internal.cmds.dashboard import _format_uptime
         assert _format_uptime(120) == "2m 00s"
 
     def test_format_uptime_hours(self):
-        from domains.shell.cmds.dashboard import _format_uptime
+        from domain.shell._internal.cmds.dashboard import _format_uptime
         assert _format_uptime(3660) == "1h 01m"
 
     def test_format_uptime_zero(self):
-        from domains.shell.cmds.dashboard import _format_uptime
+        from domain.shell._internal.cmds.dashboard import _format_uptime
         assert _format_uptime(0) == "0s"
 
     def test_format_ts(self):
-        from domains.shell.cmds.dashboard import _format_ts
+        from domain.shell._internal.cmds.dashboard import _format_ts
         result = _format_ts(0.0)
         assert isinstance(result, str)
         assert ":" in result
 
     def test_sparkline_empty(self):
-        from domains.shell.cmds.dashboard import _sparkline
+        from domain.shell._internal.cmds.dashboard import _sparkline
         assert _sparkline([]) == ""
 
     def test_sparkline_single_value(self):
-        from domains.shell.cmds.dashboard import _sparkline
+        from domain.shell._internal.cmds.dashboard import _sparkline
         result = _sparkline([5.0])
         assert len(result) >= 1
 
     def test_sparkline_multiple_values(self):
-        from domains.shell.cmds.dashboard import _sparkline
+        from domain.shell._internal.cmds.dashboard import _sparkline
         result = _sparkline([1.0, 2.0, 3.0, 4.0, 5.0])
         assert len(result) > 0
 
     def test_sparkline_with_width(self):
-        from domains.shell.cmds.dashboard import _sparkline
+        from domain.shell._internal.cmds.dashboard import _sparkline
         result = _sparkline([1.0, 2.0, 3.0], width=2)
         assert len(result) <= 3
 
     def test_status_icon_running(self):
-        from domains.shell.cmds.dashboard import _status_icon
+        from domain.shell._internal.cmds.dashboard import _status_icon
         icon = _status_icon("running")
         assert isinstance(icon, str)
 
     def test_status_icon_error(self):
-        from domains.shell.cmds.dashboard import _status_icon
+        from domain.shell._internal.cmds.dashboard import _status_icon
         icon = _status_icon("error")
         assert isinstance(icon, str)
 
     def test_status_icon_unknown(self):
-        from domains.shell.cmds.dashboard import _status_icon
+        from domain.shell._internal.cmds.dashboard import _status_icon
         icon = _status_icon("unknown_status")
         assert icon == "?"
 
     def test_progress_bar(self):
-        from domains.shell.cmds.dashboard import _progress_bar
+        from domain.shell._internal.cmds.dashboard import _progress_bar
         bar = _progress_bar(50.0)
         assert isinstance(bar, str)
         assert len(bar) > 0
 
     def test_progress_bar_full(self):
-        from domains.shell.cmds.dashboard import _progress_bar
+        from domain.shell._internal.cmds.dashboard import _progress_bar
         bar = _progress_bar(100.0)
         assert isinstance(bar, str)
 
     def test_progress_bar_empty(self):
-        from domains.shell.cmds.dashboard import _progress_bar
+        from domain.shell._internal.cmds.dashboard import _progress_bar
         bar = _progress_bar(0.0)
         assert isinstance(bar, str)
 
 
 class TestStatusUtils:
     def test_fmt_uptime_seconds(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(30) == "30s"
 
     def test_fmt_uptime_minutes(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(120) == "2m 0s"
 
     def test_fmt_uptime_hours(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         result = _fmt_uptime(3660)
         assert "1h" in result
         assert "01m" in result
 
     def test_fmt_uptime_zero(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(0) == "0s"
 
     def test_fmt_uptime_exact_hour(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(3600) == "1h 00m"
 
 
 class TestLinuxCmdUtils:
     def test_format_size_bytes(self):
-        from domains.shell.cmds.linux import LinuxCommandsMixin
+        from domain.shell._internal.cmds.linux import LinuxCommandsMixin
         result = LinuxCommandsMixin._format_size(100, human=False)
         assert "100" in result
 
     def test_format_size_human_bytes(self):
-        from domains.shell.cmds.linux import LinuxCommandsMixin
+        from domain.shell._internal.cmds.linux import LinuxCommandsMixin
         result = LinuxCommandsMixin._format_size(500, human=True)
         assert "B" in result
 
     def test_format_size_human_kb(self):
-        from domains.shell.cmds.linux import LinuxCommandsMixin
+        from domain.shell._internal.cmds.linux import LinuxCommandsMixin
         result = LinuxCommandsMixin._format_size(2048, human=True)
         assert "K" in result
 
     def test_format_size_human_mb(self):
-        from domains.shell.cmds.linux import LinuxCommandsMixin
+        from domain.shell._internal.cmds.linux import LinuxCommandsMixin
         result = LinuxCommandsMixin._format_size(2097152, human=True)
         assert "M" in result
 
     def test_fmt_error_file_not_found(self):
-        from domains.shell.cmds.linux import LinuxCommandsMixin
+        from domain.shell._internal.cmds.linux import LinuxCommandsMixin
         result = LinuxCommandsMixin._fmt_error(FileNotFoundError("test.txt"), "cat")
         assert "not found" in result.lower() or "cat" in result
 
     def test_fmt_error_permission(self):
-        from domains.shell.cmds.linux import LinuxCommandsMixin
+        from domain.shell._internal.cmds.linux import LinuxCommandsMixin
         result = LinuxCommandsMixin._fmt_error(PermissionError("denied"), "rm")
         assert "permission" in result.lower() or "rm" in result
 
     def test_fmt_error_generic(self):
-        from domains.shell.cmds.linux import LinuxCommandsMixin
+        from domain.shell._internal.cmds.linux import LinuxCommandsMixin
         result = LinuxCommandsMixin._fmt_error(ValueError("bad value"), "test")
         assert "ValueError" in result
 
     def test_fmt_error_no_cmd(self):
-        from domains.shell.cmds.linux import LinuxCommandsMixin
+        from domain.shell._internal.cmds.linux import LinuxCommandsMixin
         result = LinuxCommandsMixin._fmt_error(RuntimeError("oops"))
         assert "RuntimeError" in result
 

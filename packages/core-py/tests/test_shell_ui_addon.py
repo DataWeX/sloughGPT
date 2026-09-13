@@ -6,7 +6,7 @@ VM process syscall handling, and run_program device wiring.
 import types
 
 from domain.shell._internal.kernel import Kernel
-from domains.shell.addons import shell_ui
+from domain.shell._internal.addons import shell_ui
 
 SYS_SRC = "\n".join([
     "LOAD_CONST R7, 111", "LOAD_CONST R0, 42", "SYSCALL",

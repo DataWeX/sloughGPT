@@ -343,7 +343,7 @@ class TestAuditSingleton:
 
 # ── cmds/data_cmds.py ──────────────────────────────────────────────────────
 
-from domains.shell.cmds import data_cmds
+from domain.shell._internal.cmds import data_cmds
 from domain.shell._internal.console import Console
 from domain.shell._internal.io import MemoryIO
 
@@ -569,7 +569,7 @@ class TestDataCmdsTokenizer:
 
 # ── cmds/models_cmd.py ─────────────────────────────────────────────────────
 
-from domains.shell.cmds import models_cmd
+from domain.shell._internal.cmds import models_cmd
 
 
 class TestModelsCmd:
@@ -652,7 +652,7 @@ class TestModelsCmd:
 
 # ── cmds/souls_cmd.py ──────────────────────────────────────────────────────
 
-from domains.shell.cmds import souls_cmd
+from domain.shell._internal.cmds import souls_cmd
 
 
 class TestSoulsCmd:

@@ -6,8 +6,8 @@ Run: PYTHONPATH=packages/core-py python -m pytest tests/test_neural_bindings_mor
 import numpy as np
 import pytest
 
-from domains.shell.addons.neural import NeuralEmbeddingStore
-from domains.shell.addons.neural_bindings import Property, engine
+from domain.shell._internal.addons.neural import NeuralEmbeddingStore
+from domain.shell._internal.addons.neural_bindings import Property, engine
 from domain.shell._internal.kernel import Kernel
 
 

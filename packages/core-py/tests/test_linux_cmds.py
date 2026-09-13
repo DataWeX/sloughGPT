@@ -7,7 +7,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from domains.shell.cmds.linux import LinuxCommandsMixin
+from domain.shell._internal.cmds.linux import LinuxCommandsMixin
 
 
 # ── Fake host for mixin ───────────────────────────────────────────────────────

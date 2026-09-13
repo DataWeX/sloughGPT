@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from domains.shell.cmds.dashboard import (
+from domain.shell._internal.cmds.dashboard import (
     _format_uptime,
     _format_ts,
     _sparkline,

@@ -13,7 +13,7 @@ import types
 
 import pytest
 
-from domains.shell.addons.filesystem import (
+from domain.shell._internal.addons.filesystem import (
     VFS, VFSEntry, VFSDirectory, VFSWriteOnlyFile,
 )
 

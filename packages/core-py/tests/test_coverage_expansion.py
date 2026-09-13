@@ -1379,7 +1379,7 @@ class TestModuleInfo:
     """Test ModuleInfo dataclass."""
 
     def test_module_info_defaults(self):
-        from domains.shell.addons.module_loader import ModuleInfo
+        from domain.shell._internal.addons.module_loader import ModuleInfo
         info = ModuleInfo(name="test", path="/tmp/test.py")
         assert info.state == "unloaded"
         assert info.error is None
@@ -1398,21 +1398,21 @@ class TestModuleLoaderOperations:
     """Test ModuleLoader operations."""
 
     def test_set_kernel(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         kernel = MagicMock()
         loader.set_kernel(kernel)
         assert loader._kernel is kernel
 
     def test_discover_nonexistent_dir(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         loader.add_addon_dir("/nonexistent/path")
         found = loader.discover()
         assert found == []
 
     def test_discover_with_python_files(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         # Create a temporary addon directory with a .py file
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
@@ -1428,7 +1428,7 @@ class TestModuleLoaderOperations:
         assert "readme" not in found
 
     def test_discover_skips_existing(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         (addon_dir / "test_addon.py").write_text("# test addon")
@@ -1441,18 +1441,18 @@ class TestModuleLoaderOperations:
         assert found2 == []
 
     def test_get_module(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         assert loader.get_module("nonexistent") is None
 
     def test_load_not_found(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         with pytest.raises(ImportError, match="Module not found"):
             loader.load("nonexistent")
 
     def test_load_already_loaded(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader, ModuleInfo
+        from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         # Create a valid addon module
@@ -1477,7 +1477,7 @@ class Addon:
         assert result is info.instance
 
     def test_load_with_hot_reload(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -1501,7 +1501,7 @@ class Addon:
         assert result is not None
 
     def test_load_with_setup_function(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -1516,12 +1516,12 @@ def setup(kernel):
         assert result is not None
 
     def test_load_with_subclass_addon(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
-        from domains.shell.addons.base import Addon
+        from domain.shell._internal.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.base import Addon
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
-from domains.shell.addons.base import Addon as BaseAddon
+from domain.shell._internal.addons.base import Addon as BaseAddon
 
 class MyAddon(BaseAddon):
     def setup(self, kernel):
@@ -1535,7 +1535,7 @@ class MyAddon(BaseAddon):
         assert result is not None
 
     def test_load_fires_hooks(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -1558,7 +1558,7 @@ class Addon:
         assert "hooked_addon" in post_load_calls
 
     def test_load_failure(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -1572,7 +1572,7 @@ raise RuntimeError("load failed")
             loader.load("bad_addon")
 
     def test_unload(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -1600,20 +1600,20 @@ class Addon:
         assert "unloadable" in post_unload_calls
 
     def test_unload_not_loaded(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         result = loader.unload("nonexistent")
         assert result is False
 
     def test_unload_not_in_loaded_state(self):
-        from domains.shell.addons.module_loader import ModuleLoader, ModuleInfo
+        from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
         loader = ModuleLoader()
         loader._modules["test"] = ModuleInfo(name="test", path="/tmp/test.py", state="error")
         result = loader.unload("test")
         assert result is False
 
     def test_unload_cleanup_failure(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -1632,7 +1632,7 @@ class Addon:
         assert result is True  # Still succeeds despite cleanup error
 
     def test_reload(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -1648,7 +1648,7 @@ class Addon:
         assert result is not None
 
     def test_loaded(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader, ModuleInfo
+        from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
         loader = ModuleLoader()
         loader._modules["m1"] = ModuleInfo(name="m1", path="/tmp/m1.py", state="loaded")
         loader._modules["m2"] = ModuleInfo(name="m2", path="/tmp/m2.py", state="error")
@@ -1656,7 +1656,7 @@ class Addon:
         assert loaded == ["m1"]
 
     def test_errors(self):
-        from domains.shell.addons.module_loader import ModuleLoader, ModuleInfo
+        from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
         loader = ModuleLoader()
         loader._modules["m1"] = ModuleInfo(name="m1", path="/tmp/m1.py", state="loaded")
         loader._modules["m2"] = ModuleInfo(name="m2", path="/tmp/m2.py", state="error")
@@ -1665,7 +1665,7 @@ class Addon:
         assert errors[0].name == "m2"
 
     def test_summary_with_modules(self):
-        from domains.shell.addons.module_loader import ModuleLoader, ModuleInfo
+        from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
         loader = ModuleLoader()
         loader._modules["m1"] = ModuleInfo(name="m1", path="/tmp/m1.py", state="loaded")
         loader._modules["m2"] = ModuleInfo(name="m2", path="/tmp/m2.py", state="error")
@@ -1678,20 +1678,20 @@ class Addon:
         assert summary["by_state"]["unloaded"] == 1
 
     def test_on_invalid_event(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         # Should not add to non-existent event
         loader.on("nonexistent", lambda name: None)
 
     def test_load_with_dependencies(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader, ModuleInfo
-        from domains.shell.addons.base import Addon as BaseAddon
+        from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
+        from domain.shell._internal.addons.base import Addon as BaseAddon
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
 
         # Create dep module
         dep_content = '''
-from domains.shell.addons.base import Addon as BaseAddon
+from domain.shell._internal.addons.base import Addon as BaseAddon
 class Addon(BaseAddon):
     def setup(self, kernel):
         pass
@@ -1700,7 +1700,7 @@ class Addon(BaseAddon):
 
         # Create main module that depends on dep
         main_content = '''
-from domains.shell.addons.base import Addon as BaseAddon
+from domain.shell._internal.addons.base import Addon as BaseAddon
 class Addon(BaseAddon):
     def setup(self, kernel):
         pass
@@ -1720,7 +1720,7 @@ class Addon(BaseAddon):
         assert loader.get_module("dep_addon").state == "loaded"
 
     def test_load_addon_with_version(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -1751,27 +1751,27 @@ class TestFmtUptime:
     """Test the _fmt_uptime helper."""
 
     def test_seconds_only(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(30) == "30s"
 
     def test_minutes_and_seconds(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(125) == "2m 5s"
 
     def test_hours_and_minutes(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(5400) == "1h 30m"
 
     def test_zero(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(0) == "0s"
 
     def test_exactly_60(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(60) == "1m 0s"
 
     def test_exactly_3600(self):
-        from domains.shell.cmds.status import _fmt_uptime
+        from domain.shell._internal.cmds.status import _fmt_uptime
         assert _fmt_uptime(3600) == "1h 00m"
 
 
@@ -1790,7 +1790,7 @@ class TestStatusCommand:
         return Console(io)
 
     def test_status_healthy(self):
-        from domains.shell.cmds.status import run
+        from domain.shell._internal.cmds.status import run
         console = self._make_console()
         api = MagicMock()
         api.health.return_value = {
@@ -1804,7 +1804,7 @@ class TestStatusCommand:
         assert result == 0
 
     def test_status_unhealthy(self):
-        from domains.shell.cmds.status import run
+        from domain.shell._internal.cmds.status import run
         console = self._make_console()
         api = MagicMock()
         api.health.return_value = {
@@ -1818,7 +1818,7 @@ class TestStatusCommand:
         assert result == 0
 
     def test_status_unknown(self):
-        from domains.shell.cmds.status import run
+        from domain.shell._internal.cmds.status import run
         console = self._make_console()
         api = MagicMock()
         api.health.return_value = {"status": "unknown"}
@@ -1826,7 +1826,7 @@ class TestStatusCommand:
         assert result == 1
 
     def test_status_invalid_response(self):
-        from domains.shell.cmds.status import run
+        from domain.shell._internal.cmds.status import run
         console = self._make_console()
         api = MagicMock()
         api.health.return_value = "not a dict"
@@ -1834,7 +1834,7 @@ class TestStatusCommand:
         assert result == 1
 
     def test_status_exception(self):
-        from domains.shell.cmds.status import run
+        from domain.shell._internal.cmds.status import run
         console = self._make_console()
         api = MagicMock()
         api.health.side_effect = ConnectionError("refused")
@@ -1842,7 +1842,7 @@ class TestStatusCommand:
         assert result == 1
 
     def test_status_json_output(self):
-        from domains.shell.cmds.status import run
+        from domain.shell._internal.cmds.status import run
         console = self._make_console()
         api = MagicMock()
         api.health.return_value = {
@@ -1856,7 +1856,7 @@ class TestStatusCommand:
         assert result == 0
 
     def test_status_json_flag_j(self):
-        from domains.shell.cmds.status import run
+        from domain.shell._internal.cmds.status import run
         console = self._make_console()
         api = MagicMock()
         api.health.return_value = {
@@ -1878,7 +1878,7 @@ class TestStatusHelp:
     """Test the status command help attribute."""
 
     def test_help_string(self):
-        from domains.shell.cmds import status
+        from domain.shell._internal.cmds import status
         assert hasattr(status, "help")
         assert isinstance(status.help, str)
         assert len(status.help) > 0
@@ -2075,7 +2075,7 @@ class TestModuleLoaderEdgeCases:
 
     def test_list_modules(self):
         """Test list_modules returns all modules."""
-        from domains.shell.addons.module_loader import ModuleLoader, ModuleInfo
+        from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
         loader = ModuleLoader()
         loader._modules["m1"] = ModuleInfo(name="m1", path="/tmp/m1.py")
         loader._modules["m2"] = ModuleInfo(name="m2", path="/tmp/m2.py")
@@ -2084,7 +2084,7 @@ class TestModuleLoaderEdgeCases:
 
     def test_load_with_already_loaded_dependency(self, tmp_path):
         """Test load skips dependencies that are already loaded."""
-        from domains.shell.addons.module_loader import ModuleLoader, ModuleInfo
+        from domain.shell._internal.addons.module_loader import ModuleLoader, ModuleInfo
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -2113,7 +2113,7 @@ class Addon:
 
     def test_load_module_spec_none(self, tmp_path):
         """Test load when spec_from_file_location returns None."""
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         # Create a file that will fail to load
@@ -2130,7 +2130,7 @@ class Addon:
 
     def test_load_legacy_setup_without_kernel(self, tmp_path):
         """Test load with legacy setup function when no kernel is set."""
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
@@ -2147,11 +2147,11 @@ def setup(kernel):
 
     def test_load_addon_class_setup(self, tmp_path):
         """Test load with Addon class that has setup method."""
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''
-from domains.shell.addons.base import Addon as BaseAddon
+from domain.shell._internal.addons.base import Addon as BaseAddon
 
 class Addon(BaseAddon):
     def setup(self, kernel):
@@ -2168,7 +2168,7 @@ class Addon(BaseAddon):
 
     def test_unload_cleanup_exception(self, tmp_path):
         """Test unload handles cleanup exceptions gracefully."""
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_content = '''

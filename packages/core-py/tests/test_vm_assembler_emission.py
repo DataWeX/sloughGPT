@@ -21,7 +21,7 @@ documented quirks:
 import pytest
 
 
-from domains.shell.vm import (
+from domain.shell._internal.vm import (
     X86Assembler,
     X86CPU,
     FLAG_ZF,

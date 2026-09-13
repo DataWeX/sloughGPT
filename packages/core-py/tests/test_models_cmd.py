@@ -6,7 +6,7 @@ import io
 import pytest
 from unittest.mock import MagicMock
 
-from domains.shell.cmds import models_cmd
+from domain.shell._internal.cmds import models_cmd
 
 
 class FakeAPI:

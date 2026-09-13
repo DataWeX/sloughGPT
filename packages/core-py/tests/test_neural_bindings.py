@@ -1,7 +1,7 @@
 """Tests for domains.shell.addons.neural_bindings — Property descriptor."""
 
 import pytest
-from domains.shell.addons.neural_bindings import Property
+from domain.shell._internal.addons.neural_bindings import Property
 
 
 class TestProperty:

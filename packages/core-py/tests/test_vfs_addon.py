@@ -1,6 +1,6 @@
 """Tests for domains.shell.addons.filesystem — VFSEntry, VFSGeneratedFile, VFSWriteOnlyFile, VFSDirectory."""
 
-from domains.shell.addons.filesystem import (
+from domain.shell._internal.addons.filesystem import (
     VFSEntry, VFSGeneratedFile, VFSWriteOnlyFile, VFSDirectory,
 )
 

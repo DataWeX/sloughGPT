@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from domains.shell.addons import neural
-from domains.shell.addons.neural import (
+from domain.shell._internal.addons import neural
+from domain.shell._internal.addons.neural import (
     BatchProcessor,
     BatchRequest,
     CacheStrategy,

@@ -316,7 +316,7 @@ class TestDevices:
         assert k.free_tensor(info["block_id"]) is True
 
     def test_vfs_requires_filesystem_addon(self):
-        from domains.shell.addons import filesystem
+        from domain.shell._internal.addons import filesystem
         k = Kernel()
         k.install_addon(filesystem)
         assert k.vfs is k._vfs

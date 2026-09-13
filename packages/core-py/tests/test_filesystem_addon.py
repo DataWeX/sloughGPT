@@ -7,8 +7,8 @@ import tempfile
 import pytest
 
 from domain.shell._internal.kernel import Kernel
-from domains.shell.addons import filesystem
-from domains.shell.addons.filesystem import (
+from domain.shell._internal.addons import filesystem
+from domain.shell._internal.addons.filesystem import (
     VFS, VFSEntry, VFSDirectory, VFSGeneratedFile, VFSWriteOnlyFile,
 )
 
@@ -182,7 +182,7 @@ class TestKernelFilesystemAddon:
         from domain.shell._internal.kernel import Kernel
         k = Kernel()
         k.boot()
-        from domains.shell.addons import filesystem
+        from domain.shell._internal.addons import filesystem
         filesystem.setup(k)
         return k
 

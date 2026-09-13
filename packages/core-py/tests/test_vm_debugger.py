@@ -141,52 +141,52 @@ class TestModuleLoader:
     """Test the kernel module loader."""
 
     def test_loader_creation(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         assert loader.list_modules() == []
 
     def test_add_addon_dir(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         loader.add_addon_dir("/tmp/test_addons")
         assert len(loader._addon_dirs) == 1
 
     def test_discover_empty(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         found = loader.discover()
         assert found == []
 
     def test_module_info_states(self):
-        from domains.shell.addons.module_loader import ModuleInfo
+        from domain.shell._internal.addons.module_loader import ModuleInfo
         info = ModuleInfo(name="test", path="/tmp/test.py")
         assert info.state == "unloaded"
         assert info.error is None
 
     def test_summary(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         summary = loader.summary()
         assert summary["total"] == 0
         assert summary["loaded"] == []
 
     def test_loaded_list(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         assert loader.loaded() == []
 
     def test_errors_list(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         assert loader.errors() == []
 
     def test_discover_with_addon_dir(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "test_addon.py"
         addon_file.write_text("""
-from domains.shell.addons.base import Addon
+from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):
@@ -203,7 +203,7 @@ class Addon:
         assert len(loader.list_modules()) == 1
 
     def test_load_addon(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "my_addon.py"
@@ -236,12 +236,12 @@ class Addon:
         assert info.author == "Test"
 
     def test_unload_addon(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "unload_test.py"
         addon_file.write_text("""
-from domains.shell.addons.base import Addon
+from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):
@@ -259,7 +259,7 @@ class Addon:
         assert loader.loaded() == []
 
     def test_hot_reload(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         import sys
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
@@ -289,12 +289,12 @@ class Addon:
         assert addon2.version == 2
 
     def test_lifecycle_hooks(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "hook_test.py"
         addon_file.write_text("""
-from domains.shell.addons.base import Addon
+from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):
@@ -318,7 +318,7 @@ class Addon:
         ]
 
     def test_load_nonexistent_raises(self):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         loader = ModuleLoader()
         try:
             loader.load("nonexistent_module")
@@ -327,7 +327,7 @@ class Addon:
             assert "nonexistent_module" in str(e)
 
     def test_load_broken_addon(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "broken.py"
@@ -345,12 +345,12 @@ class Addon:
         assert "intentional error" in info.error
 
     def test_summary_with_loaded(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "summary_addon.py"
         addon_file.write_text("""
-from domains.shell.addons.base import Addon
+from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):
@@ -366,7 +366,7 @@ class Addon:
         assert summary["by_state"]["loaded"] == 1
 
     def test_cleanup_called_on_unload(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "cleanup_addon.py"
@@ -386,12 +386,12 @@ class Addon:
         assert loader.loaded() == []
 
     def test_set_kernel(self, tmp_path):
-        from domains.shell.addons.module_loader import ModuleLoader
+        from domain.shell._internal.addons.module_loader import ModuleLoader
         addon_dir = tmp_path / "addons"
         addon_dir.mkdir()
         addon_file = addon_dir / "kernel_test.py"
         addon_file.write_text("""
-from domains.shell.addons.base import Addon
+from domain.shell._internal.addons.base import Addon
 
 class Addon:
     def setup(self, kernel):

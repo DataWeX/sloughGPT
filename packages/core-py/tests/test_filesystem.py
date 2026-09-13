@@ -6,7 +6,7 @@ import os
 import pytest
 from pathlib import Path
 
-from domains.shell.addons.filesystem import (
+from domain.shell._internal.addons.filesystem import (
     VFSEntry,
     VFSGeneratedFile,
     VFSWriteOnlyFile,

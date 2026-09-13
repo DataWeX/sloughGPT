@@ -13,7 +13,7 @@ from domain.shell._internal.kernel_devices import DeviceDriver, DeviceType
 from domain.shell._internal.kernel_interrupts import Interrupt, InterruptType
 from domain.shell._internal.kernel_syscall import SyscallResult
 
-from domains.shell.addons.neural import (
+from domain.shell._internal.addons.neural import (
     NeuralOp,
     NeuralState,
     NeuralProcessType,

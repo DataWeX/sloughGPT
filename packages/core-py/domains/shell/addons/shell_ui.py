@@ -6,7 +6,7 @@ from kernel.py. These are shell-level concerns (UI, command dispatch, VM
 assembly) that don't belong in kernel core.
 
 Install via:
-    from domains.shell.addons import shell_ui
+    domain.shell._internal.addons import shell_ui
     kernel.install_addon(shell_ui)
 """
 from __future__ import annotations

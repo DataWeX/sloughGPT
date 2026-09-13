@@ -7,7 +7,7 @@ Each addon is a module with a setup(kernel) function that registers
 capabilities on the kernel. Addons are installed via kernel.install_addon().
 
 Usage:
-    from domains.shell.addons import neural, filesystem, shell_ui
+    domain.shell._internal.addons import neural, filesystem, shell_ui
     kernel.install_addon(neural)
     kernel.install_addon(filesystem)
     kernel.install_addon(shell_ui)
