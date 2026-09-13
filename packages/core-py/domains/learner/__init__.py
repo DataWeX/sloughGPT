@@ -1,7 +1,11 @@
-"""Continual learner — ingests web + conversation data, fine-tunes SloNet incrementally."""
+"""Backward-compatibility shim — imports from the new ``domain.learner`` package."""
 
-from __future__ import annotations
+from domain.learner import (
+    ContinualLearner,
+    get_learner,
+)
 
-from .continual import ContinualLearner, get_learner
-
-__all__ = ["ContinualLearner", "get_learner"]
+__all__ = [
+    "ContinualLearner",
+    "get_learner",
+]

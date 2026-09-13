@@ -1,6 +1,11 @@
-"""Backward-compatibility shim — imports from the new ``domain.models`` package."""
+"""models — Pluggable model backends.
 
-from domain.models import (
+Public API:
+    ModelInterface, ModelLoader, SloughGPTModel
+    rotate_half, apply_rotary_pos_emb
+"""
+
+from domain.models._internal.models import (
     ModelInterface,
     ModelLoader,
     SloughGPTModel,
