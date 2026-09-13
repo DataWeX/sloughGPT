@@ -141,6 +141,13 @@ class StagedLoader:
         """Update model load progress (0.0 to 1.0)."""
         self._model_progress = min(1.0, max(0.0, progress))
         self._model_progress_message = message
+        # Record metrics
+        try:
+            from domains.infrastructure.metrics import get_metrics_collector
+            collector = get_metrics_collector()
+            collector.record_startup_model_progress(progress)
+        except Exception:
+            pass
 
     def on(self, stage: Stage, name: str, hook: Callable[[], Coroutine[Any, Any, None]], timeout: float = 30.0) -> None:
         """Register a hook for a given stage."""
@@ -162,14 +169,25 @@ class StagedLoader:
             extra={"tag": "START"},
         )
 
+        stage_start = time.monotonic()
         tasks = []
         for name, hook, timeout in hooks:
             tasks.append(self._run_hook(stage, name, hook, timeout))
 
         await asyncio.gather(*tasks)
 
+        stage_duration = time.monotonic() - stage_start
         self._stage = stage
         self._stage_time[stage] = time.monotonic()
+
+        # Record metrics
+        try:
+            from domains.infrastructure.metrics import get_metrics_collector
+            collector = get_metrics_collector()
+            collector.record_startup_stage(stage.name.lower(), int(stage), self.elapsed)
+            collector.record_startup_stage_duration(stage.name.lower(), stage_duration)
+        except Exception:
+            pass
 
         ok_count = sum(1 for name, _, _ in hooks if name not in self._errors)
         logger.info(
@@ -193,6 +211,13 @@ class StagedLoader:
             if info:
                 info.status = HookStatus.OK
                 info.end_time = time.monotonic()
+                # Record hook metrics
+                try:
+                    from domains.infrastructure.metrics import get_metrics_collector
+                    collector = get_metrics_collector()
+                    collector.record_startup_hook(name, info.duration)
+                except Exception:
+                    pass
         except TimeoutError:
             logger.warning(
                 "Stage %s hook '%s' timed out after %.1fs",

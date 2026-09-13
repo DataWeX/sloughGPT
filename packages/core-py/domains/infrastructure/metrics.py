@@ -47,6 +47,14 @@ class MetricsCollector:
         self._model_loaded: bool = False
         self._model_name: str = ""
 
+        # Startup metrics
+        self._startup_stage: str = "init"
+        self._startup_stage_value: int = 0
+        self._startup_elapsed: float = 0.0
+        self._startup_model_progress: float = 0.0
+        self._startup_hook_durations: Dict[str, float] = {}
+        self._startup_stage_durations: Dict[str, float] = {}
+
     # ── Recording methods ────────────────────────────────────────────
 
     def record_request(self, path: str, status: int, duration: float) -> None:
@@ -77,6 +85,28 @@ class MetricsCollector:
         with self._lock:
             self._model_loaded = loaded
             self._model_name = name
+
+    def record_startup_stage(self, stage: str, stage_value: int, elapsed: float) -> None:
+        """Record startup stage completion."""
+        with self._lock:
+            self._startup_stage = stage
+            self._startup_stage_value = stage_value
+            self._startup_elapsed = elapsed
+
+    def record_startup_model_progress(self, progress: float) -> None:
+        """Record model load progress (0.0 to 1.0)."""
+        with self._lock:
+            self._startup_model_progress = progress
+
+    def record_startup_hook(self, hook_name: str, duration: float) -> None:
+        """Record startup hook duration."""
+        with self._lock:
+            self._startup_hook_durations[hook_name] = duration
+
+    def record_startup_stage_duration(self, stage: str, duration: float) -> None:
+        """Record total stage duration."""
+        with self._lock:
+            self._startup_stage_durations[stage] = duration
 
     # ── Prometheus text format ────────────────────────────────────────
 
@@ -159,9 +189,36 @@ class MetricsCollector:
                 lines.append("# TYPE sloughgpt_system_cpu_usage gauge")
                 lines.append(f"sloughgpt_system_cpu_usage {cpu_pct:.1f}")
 
-                lines.append("# HELP sloughgpt_system_memory_percent Memory usage percentage.")
-                lines.append("# TYPE sloughgpt_system_memory_percent gauge")
-                lines.append(f"sloughgpt_system_memory_percent {mem.percent:.1f}")
+            lines.append("# HELP sloughgpt_system_memory_percent Memory usage percentage.")
+            lines.append("# TYPE sloughgpt_system_memory_percent gauge")
+            lines.append(f"sloughgpt_system_memory_percent {mem.percent:.1f}")
+
+            # Startup metrics
+            lines.append("# HELP sloughgpt_startup_stage Current startup stage value.")
+            lines.append("# TYPE sloughgpt_startup_stage gauge")
+            lines.append(f"sloughgpt_startup_stage {self._startup_stage_value}")
+
+            lines.append("# HELP sloughgpt_startup_elapsed_seconds Time since startup began.")
+            lines.append("# TYPE sloughgpt_startup_elapsed_seconds gauge")
+            lines.append(f"sloughgpt_startup_elapsed_seconds {self._startup_elapsed:.1f}")
+
+            lines.append("# HELP sloughgpt_startup_model_progress Model load progress (0-1).")
+            lines.append("# TYPE sloughgpt_startup_model_progress gauge")
+            lines.append(f"sloughgpt_startup_model_progress {self._startup_model_progress:.2f}")
+
+            # Startup hook durations
+            if self._startup_hook_durations:
+                lines.append("# HELP sloughgpt_startup_hook_duration_seconds Startup hook duration.")
+                lines.append("# TYPE sloughgpt_startup_hook_duration_seconds gauge")
+                for hook, duration in sorted(self._startup_hook_durations.items()):
+                    lines.append(f'sloughgpt_startup_hook_duration_seconds{{hook="{hook}"}} {duration:.2f}')
+
+            # Startup stage durations
+            if self._startup_stage_durations:
+                lines.append("# HELP sloughgpt_startup_stage_duration_seconds Startup stage duration.")
+                lines.append("# TYPE sloughgpt_startup_stage_duration_seconds gauge")
+                for stage, duration in sorted(self._startup_stage_durations.items()):
+                    lines.append(f'sloughgpt_startup_stage_duration_seconds{{stage="{stage}"}} {duration:.2f}')
 
         return "\n".join(lines) + "\n"
 
