@@ -170,6 +170,67 @@ class StartupHistory:
                 if r.total_duration > threshold_seconds
             ]
 
+    def compare_runs(self, run_a_index: int, run_b_index: int) -> dict[str, Any] | None:
+        """Compare two startup runs.
+
+        Args:
+            run_a_index: Index of first run (0 = oldest)
+            run_b_index: Index of second run
+
+        Returns:
+            Comparison dict or None if indices invalid.
+        """
+        with self._lock:
+            if run_a_index < 0 or run_a_index >= len(self._records):
+                return None
+            if run_b_index < 0 or run_b_index >= len(self._records):
+                return None
+
+            a = self._records[run_a_index]
+            b = self._records[run_b_index]
+
+            # Compare stages
+            stage_comparison = {}
+            all_stages = set(a.stage_durations.keys()) | set(b.stage_durations.keys())
+            for stage in all_stages:
+                a_dur = a.stage_durations.get(stage, 0)
+                b_dur = b.stage_durations.get(stage, 0)
+                diff = b_dur - a_dur
+                pct = (diff / a_dur * 100) if a_dur > 0 else 0
+                stage_comparison[stage] = {
+                    "run_a": round(a_dur, 2),
+                    "run_b": round(b_dur, 2),
+                    "diff": round(diff, 2),
+                    "diff_percent": round(pct, 1),
+                }
+
+            # Compare hooks
+            hook_comparison = {}
+            all_hooks = set(a.hook_durations.keys()) | set(b.hook_durations.keys())
+            for hook in all_hooks:
+                a_dur = a.hook_durations.get(hook, 0)
+                b_dur = b.hook_durations.get(hook, 0)
+                diff = b_dur - a_dur
+                pct = (diff / a_dur * 100) if a_dur > 0 else 0
+                hook_comparison[hook] = {
+                    "run_a": round(a_dur, 2),
+                    "run_b": round(b_dur, 2),
+                    "diff": round(diff, 2),
+                    "diff_percent": round(pct, 1),
+                }
+
+            total_diff = b.total_duration - a.total_duration
+            total_pct = (total_diff / a.total_duration * 100) if a.total_duration > 0 else 0
+
+            return {
+                "run_a": a.to_dict(),
+                "run_b": b.to_dict(),
+                "total_diff": round(total_diff, 2),
+                "total_diff_percent": round(total_pct, 1),
+                "stage_comparison": stage_comparison,
+                "hook_comparison": hook_comparison,
+            }
+
     def get_alerts(self) -> list[dict[str, Any]]:
         """Check for startup performance alerts.
 

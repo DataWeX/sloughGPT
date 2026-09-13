@@ -61,6 +61,7 @@ class HealthRouter:
         self.router.add_api_route("/startup-diagnostics", self.startup_diagnostics, methods=["GET"])
         self.router.add_api_route("/startup-config", self.startup_config, methods=["GET"])
         self.router.add_api_route("/startup-health", self.startup_health, methods=["GET"])
+        self.router.add_api_route("/startup-compare", self.startup_compare, methods=["GET"])
         self.router.add_api_route(
             "/startup-stream", self.startup_stream, methods=["GET"], response_model=None
         )
@@ -327,6 +328,37 @@ class HealthRouter:
             "stage": loader.stage_name,
             "elapsed_seconds": round(loader.elapsed, 1),
         })
+
+    @endpoint("health.startup_compare")
+    async def startup_compare(self, run_a: int = 0, run_b: int = 1) -> dict:
+        """Compare two startup runs.
+
+        Args:
+            run_a: Index of first run (0 = oldest, -1 = most recent)
+            run_b: Index of second run
+
+        Returns:
+            Envelope with comparison of two startup runs.
+        """
+        from infrastructure.startup_history import get_startup_history
+
+        history = get_startup_history()
+        records = history.get_records(limit=50)
+
+        # Handle negative indices
+        if run_a < 0:
+            run_a = len(records) + run_a
+        if run_b < 0:
+            run_b = len(records) + run_b
+
+        comparison = history.compare_runs(run_a, run_b)
+        if comparison is None:
+            return success_response(data={
+                "error": "Invalid run indices",
+                "available_runs": len(records),
+            })
+
+        return success_response(data=comparison)
 
     async def startup_stream(self, request: Request) -> StreamingResponse:
         """SSE stream for real-time startup progress updates.
