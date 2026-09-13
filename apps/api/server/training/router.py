@@ -918,3 +918,63 @@ async def get_training_trends(
                 "trend": "stable",
             },
         })
+
+
+@router.get("/monitor")
+async def training_monitor_status():
+    """Training monitoring status and alerts.
+
+    Returns current monitoring state, alerts, and metrics history.
+    Useful for detecting training issues like loss divergence,
+    gradient explosion, or resource exhaustion.
+    """
+    from domains.training.monitor import get_training_monitor
+
+    monitor = get_training_monitor()
+    return success_response(data=monitor.get_status())
+
+
+@router.get("/monitor/alerts")
+async def training_monitor_alerts(severity: str | None = None, limit: int = 50):
+    """Get training alerts.
+
+    Args:
+        severity: Filter by severity (info, warning, error, critical)
+        limit: Maximum number of alerts to return
+    """
+    from domains.training.monitor import AlertSeverity, get_training_monitor
+
+    monitor = get_training_monitor()
+    severity_filter = AlertSeverity(severity) if severity else None
+    alerts = monitor.get_alerts(severity=severity_filter, limit=limit)
+    return success_response(data={
+        "alerts": [a.to_dict() for a in alerts],
+        "total": len(alerts),
+    })
+
+
+@router.get("/monitor/metrics")
+async def training_monitor_metrics(limit: int = 100):
+    """Get training metrics history.
+
+    Args:
+        limit: Maximum number of metrics snapshots to return
+    """
+    from domains.training.monitor import get_training_monitor
+
+    monitor = get_training_monitor()
+    metrics = monitor.get_metrics_history(limit=limit)
+    return success_response(data={
+        "metrics": [m.to_dict() for m in metrics],
+        "total": len(metrics),
+    })
+
+
+@router.post("/monitor/reset")
+async def training_monitor_reset():
+    """Reset training monitor state."""
+    from domains.training.monitor import get_training_monitor
+
+    monitor = get_training_monitor()
+    monitor.reset()
+    return success_response(data={"message": "Monitor reset"})

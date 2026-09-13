@@ -1051,6 +1051,14 @@ class SloughGPTTrainer:
 
         self._nan_count = 0
 
+        # Record loss to training monitor
+        try:
+            from domains.training.monitor import get_training_monitor
+            monitor = get_training_monitor()
+            monitor.record_loss(loss_val, epoch=getattr(self, "current_epoch", 0), step=self.global_step)
+        except Exception:
+            pass
+
         # Add EWC penalty if enabled (prevents forgetting previous tasks)
         if self._ewc is not None and self._ewc.task_snapshots:
             ewc_loss, ewc_stats = self._ewc.ewc_loss()
@@ -1079,6 +1087,15 @@ class SloughGPTTrainer:
                         g = p.grad.data if hasattr(p.grad, 'data') else p.grad
                         total_norm += float(np.sum(g ** 2))
                 total_norm = total_norm ** 0.5
+
+                # Record gradient norm to training monitor
+                try:
+                    from domains.training.monitor import get_training_monitor
+                    monitor = get_training_monitor()
+                    monitor.record_gradient(total_norm, epoch=getattr(self, "current_epoch", 0), step=self.global_step)
+                except Exception:
+                    pass
+
                 clip_coef = self.config.max_grad_norm / (total_norm + 1e-6)
                 if clip_coef < 1.0:
                     for p in params:
