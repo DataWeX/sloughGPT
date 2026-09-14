@@ -144,6 +144,11 @@ class StartupOrchestrator:
         self._lifecycle = None
         self._routers_registered = False
         self._model_load_task: asyncio.Task | None = None
+        # PGQ Tree for background startup work — sync hooks run in its
+        # ThreadPoolExecutor so they never starve the uvicorn event loop.
+        from domain.infrastructure._internal.pugqeep.engine import Tree
+
+        self._bg_tree = Tree("startup-bg", pool_workers=4)
 
     async def _init_lifecycle(self):
         """Lazy-init lifecycle manager with EventBus."""
@@ -324,15 +329,18 @@ class StartupOrchestrator:
         """
         # Start preloading common modules in background (non-blocking)
         from infrastructure.startup_preloader import preload_common_modules
+
         preload_common_modules(delay=0.5)
 
         # Start terminal visualization
         from infrastructure.startup_terminal import get_terminal_viz
+
         viz = get_terminal_viz()
         viz.start()
 
         # Emit startup start webhook
-        from infrastructure.startup_webhooks import get_webhook_manager, WebhookEvent
+        from infrastructure.startup_webhooks import WebhookEvent, get_webhook_manager
+
         webhook_mgr = get_webhook_manager()
         await webhook_mgr.emit(WebhookEvent.STARTUP_START, {"server": "sloughgpt"})
 
@@ -348,6 +356,7 @@ class StartupOrchestrator:
         # Server starts accepting requests, model loads in background
         async def _init_db_pool():
             from infrastructure.db_pool import get_db
+
             # Warm the singleton so first request is instant
             get_db("uploads_mogdb")
 
@@ -372,6 +381,7 @@ class StartupOrchestrator:
             # Wait up to 120s for model to load
             for _ in range(240):
                 import state as server_state
+
                 if server_state.model is not None:
                     return
                 # Lazy guard path: provider is set but model is None
@@ -397,27 +407,42 @@ class StartupOrchestrator:
             await self._phase4_multimodal()
 
         async def _init_metrics():
-            # Prometheus metrics collector — offload sync imports to thread
+            from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
+
             def _metrics_sync():
                 from domain.infrastructure.metrics import get_metrics_collector
+
                 get_metrics_collector()
-            await asyncio.to_thread(_metrics_sync)
+
+            proc = PgqProcess(fn=_metrics_sync, name="metrics", timeout=10)
+            stem = self._bg_tree.branch([proc])
+            await asyncio.to_thread(stem._done_event.wait)
 
         async def _init_autotrainer():
-            # Offload sync import + start to thread
+            from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
+
             def _autotrainer_sync():
                 from domain.training._internal.auto_trainer import start_auto_trainer_if_enabled
+
                 start_auto_trainer_if_enabled()
-            await asyncio.to_thread(_autotrainer_sync)
+
+            proc = PgqProcess(fn=_autotrainer_sync, name="autotrainer", timeout=10)
+            stem = self._bg_tree.branch([proc])
+            await asyncio.to_thread(stem._done_event.wait)
 
         async def _init_rag():
-            # RAG document ingestion — entire pipeline offloaded to thread
+            from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
+
             def _rag_sync():
                 from domain.cognitive._internal.rag_service import get_rag_service
+
                 rag = get_rag_service()
-                if hasattr(rag, 'auto_ingest_repo_docs'):
+                if hasattr(rag, "auto_ingest_repo_docs"):
                     rag.auto_ingest_repo_docs()
-            await asyncio.to_thread(_rag_sync)
+
+            proc = PgqProcess(fn=_rag_sync, name="rag_ingest", timeout=60)
+            stem = self._bg_tree.branch([proc])
+            await asyncio.to_thread(stem._done_event.wait)
 
         loader.on(Stage.BACKGROUND, "wandb", _init_wandb, timeout=30.0)
         loader.on(Stage.BACKGROUND, "multimodal", _init_multimodal, timeout=30.0)
@@ -534,37 +559,44 @@ class StartupOrchestrator:
                 )
 
         # Fire-and-forget: model loads in background while routers register
-        task = asyncio.create_task(asyncio.to_thread(_load_and_register))
-        task.add_done_callback(self._on_model_load_done)
+        from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
+
+        load_proc = PgqProcess(fn=_load_and_register, name="model_load")
+        load_proc.on_complete(lambda p: self._on_pgq_model_load_done(p))
+        load_proc.on_fail(lambda p: self._on_pgq_model_load_done(p))
+        self._bg_tree.branch([load_proc])
 
         # Report progress to staged loader
         from infrastructure.staged_loader import get_staged_loader
+
         loader = get_staged_loader()
         loader.set_model_progress(0.1, "Starting model load...")
         STARTUP_PHASE.update(
             phase="loading_model", step=4, total=9, message="Loading model weights..."
         )
 
-    def _on_model_load_done(self, task: asyncio.Task):
-        # Report progress to staged loader
+    def _on_pgq_model_load_done(self, proc):
+        """Callback when model load PGQ process completes or fails."""
+        from domain.infrastructure._internal.pugqeep.engine import ProcessStatus
         from infrastructure.staged_loader import get_staged_loader
+
         loader = get_staged_loader()
 
-        try:
-            task.result()
+        if proc.status == ProcessStatus.COMPLETED:
             loader.set_model_progress(1.0, "Model loaded successfully")
-        except asyncio.CancelledError:
-            logger.debug("Model load task cancelled (server shutting down)", extra={"tag": "START"})
+        elif proc.status == ProcessStatus.CANCELLED:
+            logger.debug("Model load cancelled (server shutting down)", extra={"tag": "START"})
             loader.set_model_progress(0.0, "Model load cancelled")
             return
-        except Exception as e:
-            logger.error("Model load task failed: %s", e, extra={"tag": "START"})
-            loader.set_model_progress(0.0, f"Model load failed: {e}")
+        else:
+            logger.error("Model load failed: %s", proc.error, extra={"tag": "START"})
+            loader.set_model_progress(0.0, f"Model load failed: {proc.error}")
             return
 
         # Sync to persistent model catalog
         try:
             import state as server_state
+
             from domain.infrastructure.model_catalog import get_model_catalog
 
             catalog = get_model_catalog()
@@ -715,7 +747,9 @@ class StartupOrchestrator:
                     try:
                         import asyncio as _aio
 
-                        from domain.training._internal.service import list_checkpoints as _service_list_checkpoints
+                        from domain.training._internal.service import (
+                            list_checkpoints as _service_list_checkpoints,
+                        )
 
                         _loop = _aio.new_event_loop()
                         try:
@@ -727,7 +761,10 @@ class StartupOrchestrator:
                             "Checkpoint warmup failed (non-fatal): %s", e, extra={"tag": "START"}
                         )
 
-                threading.Thread(target=_warm_checkpoints, name="ckpt-warmup", daemon=True).start()
+                from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
+
+                warmup_proc = PgqProcess(fn=_warm_checkpoints, name="ckpt-warmup")
+                self._bg_tree.branch([warmup_proc])
 
                 return
             except Exception as e:
@@ -840,6 +877,7 @@ class StartupOrchestrator:
 
         # Warn if auth is disabled
         import os
+
         if os.environ.get("SLO_AUTH_REQUIRED", "false").lower() not in ("true", "1", "yes"):
             logger.warning(
                 "Auth disabled (SLO_AUTH_REQUIRED=false) — all endpoints are accessible without credentials. "
@@ -975,7 +1013,6 @@ class StartupOrchestrator:
         if self._lifecycle is not None:
             try:
                 await self._lifecycle.shutdown(timeout=30.0)
-                return
             except Exception as e:
                 logger.warning("Lifecycle shutdown error: %s", e, extra={"tag": "START"})
 
@@ -989,6 +1026,10 @@ class StartupOrchestrator:
         await self._shutdown_pool()
         await self._shutdown_executor()
         await self._shutdown_process_guard()
+        try:
+            self._bg_tree.shutdown()
+        except Exception:
+            pass
 
 
 async def _restore_training_runtime():
@@ -1026,6 +1067,7 @@ def _start_parent_preload(model_type: str):
     the event loop is starved by heavy C-extension weight loading).
     """
     import time
+
     import state as server_state
 
     def _preload():
@@ -1246,8 +1288,8 @@ def _build_guard_for_model(cfg, model_type: str):
 
         if not get_process_guard_enabled():
             return None
-        from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
         from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
+        from domain.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
 
         slnc_path = str(_get_model_dir(model_type) / "model.slnc")
         if not os.path.exists(slnc_path):
@@ -1296,6 +1338,7 @@ def _build_guard_for_model(cfg, model_type: str):
 def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     """Register a fully-loaded (eager) model with registry + providers."""
     import state as server_state
+
     from domain.infrastructure.model_registry import get_model_registry
     from domain.infrastructure.safetensors_loader import _get_model_dir
     from domain.models._internal.provider import setup_providers
@@ -1394,6 +1437,7 @@ def _autoload_model(cfg: ServerConfig):
     import time as _time
 
     import state as server_state
+
     from domain.infrastructure.constants import DEFAULT_LOAD_MAX_RETRIES, DEFAULT_LOAD_RETRY_DELAY
 
     max_retries = DEFAULT_LOAD_MAX_RETRIES
