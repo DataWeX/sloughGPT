@@ -378,6 +378,10 @@ class StartupOrchestrator:
         # ── Stage 2: READY ───────────────────────────────────────
         # Wait for model to finish loading, then full API available
         async def _wait_for_model():
+            # If autoload is disabled, no model will ever arrive — skip the wait.
+            raw = self._config.autoload_model
+            if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
+                return
             # Wait up to 120s for model to load
             for _ in range(240):
                 import state as server_state
