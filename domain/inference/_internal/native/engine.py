@@ -295,7 +295,7 @@ class NativeEngine:
         Side effects:
             - mmap-allocates the weight file and copies it into the C weight block
         """
-        from domains.infrastructure.slnc.parser import SLNCParser
+        from domain.infrastructure._internal.slnc.parser import SLNCParser
 
         parser = SLNCParser(slnc_path)
         try:

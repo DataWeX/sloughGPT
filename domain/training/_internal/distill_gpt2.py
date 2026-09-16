@@ -131,7 +131,7 @@ class TextDataset:
 
 def _load_gpt2_numpy() -> tuple[dict, ArchConfig, dict]:
     """Load GPT-2 weights as numpy arrays + arch config + tokenizer vocab."""
-    from domains.infrastructure.slnc.parser import SLNCParser
+    from domain.infrastructure._internal.slnc.parser import SLNCParser
 
     hf_path = Path.home() / ".cache/huggingface/hub/models--gpt2"
     snapshots = sorted((hf_path / "snapshots").glob("*"))

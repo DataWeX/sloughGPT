@@ -432,9 +432,8 @@ def compress_checkpoint(
         return None
 
     try:
-        from domains.infrastructure.pugqeep.library import PointLibrary
-
         from domain.infrastructure._internal.pugqeep import PointCompressor
+        from domain.infrastructure._internal.pugqeep.library import PointLibrary
         from domain.training._internal.slonet import import_from_sou
     except ImportError as exc:
         logger.warning("Pugqeep/SloNet not available: %s", exc, extra={"tag": "TRAIN"})

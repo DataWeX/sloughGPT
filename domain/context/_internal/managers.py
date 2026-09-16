@@ -20,7 +20,7 @@ from typing import Any
 logger = logging.getLogger("slo.context.managers")
 import threading
 
-from domains.infrastructure.repository import FileRepository, JsonSerializer
+from domain.infrastructure._internal.repository import FileRepository, JsonSerializer
 
 _lock = threading.Lock()
 

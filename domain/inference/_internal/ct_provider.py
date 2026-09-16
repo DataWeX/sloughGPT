@@ -49,7 +49,7 @@ class CTransformProvider:
         cls, slnc_path: str, model_id: str = "c-model", seq_capacity: int = 2048
     ) -> CTransformProvider:
         """Load from .slnc file via the NativeEngine."""
-        from domains.infrastructure.slnc.parser import SLNCParser
+        from domain.infrastructure._internal.slnc.parser import SLNCParser
 
         from .native.engine import NativeEngine
 

@@ -460,7 +460,7 @@ class KGTrainingPipeline:
             TaskQueue instance, created on first call.
         """
         if self._queue is None:
-            from domains.infrastructure.pugqeep.task_queue import TaskQueue
+            from domain.infrastructure._internal.pugqeep.task_queue import TaskQueue
 
             storage = Path("data/kg_pipeline")
             try:
@@ -503,7 +503,7 @@ class KGTrainingPipeline:
         if not triples:
             raise ValueError("triples list must not be empty")
 
-        from domains.infrastructure.pugqeep.task_queue import Task, TaskPriority
+        from domain.infrastructure._internal.pugqeep.task_queue import Task, TaskPriority
 
         queue = self._get_queue()
         submitted = 0

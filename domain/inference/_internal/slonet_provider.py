@@ -555,8 +555,7 @@ class SloNetChatProvider:
         """
         import time as _time
 
-        from domains.infrastructure.slnc.parser import SLNCParser
-
+        from domain.infrastructure._internal.slnc.parser import SLNCParser
         from domain.infrastructure._internal.weight_loader import build_model_from_config
 
         _t0 = _time.monotonic()
@@ -637,8 +636,7 @@ class SloNetChatProvider:
         if quantize:
             from pathlib import Path as PathlibPath
 
-            from domains.infrastructure.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
-
+            from domain.infrastructure._internal.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
             from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
 
             if not bool(_HAS_AVX2):
@@ -883,7 +881,7 @@ class SloNetChatProvider:
         Returns:
             Lazy SloNetChatProvider. ``_model`` is None until first use.
         """
-        from domains.infrastructure.slnc.parser import SLNCParser
+        from domain.infrastructure._internal.slnc.parser import SLNCParser
 
         parser = SLNCParser(slnc_path)
         try:

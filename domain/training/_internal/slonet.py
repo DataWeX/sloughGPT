@@ -1910,7 +1910,7 @@ class SloLinear(SloLayer):
         After compression, the Point replaces raw storage. The generated
         data is synced into self.weight for backward compatibility.
         """
-        from domains.infrastructure.pugqeep.point_weight import PointWeight
+        from domain.infrastructure._internal.pugqeep.point_weight import PointWeight
 
         pw = PointWeight.from_array(
             self.weight.data,
@@ -5004,7 +5004,7 @@ def import_from_sou(path: str) -> SloNet:
     if not p.exists():
         points_path = p.with_suffix(".points.json")
         if points_path.exists():
-            from domains.infrastructure.pugqeep.model_tree import load_from_points
+            from domain.infrastructure._internal.pugqeep.model_tree import load_from_points
 
             tree, meta = load_from_points(str(p))
             net = SloTransformer(
