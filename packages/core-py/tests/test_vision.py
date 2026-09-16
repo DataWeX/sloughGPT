@@ -3,6 +3,7 @@
 Covers: dataclass creation, model building, get_vision_model factory,
 preprocessing, embedding, captioning, detection, training, forward pass.
 """
+
 from __future__ import annotations
 
 import sys
@@ -131,6 +132,7 @@ class TestVisionCNN:
         cnn = VisionCNN()
         img = np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8)
         from PIL import Image
+
         pil_img = Image.fromarray(img)
         cap = cnn.caption(pil_img)
         assert "untrained" in cap.text.lower()
@@ -140,6 +142,7 @@ class TestVisionCNN:
         cnn = VisionCNN()
         img = np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8)
         from PIL import Image
+
         pil_img = Image.fromarray(img)
         objs = cnn.detect(pil_img)
         assert len(objs) == 1
@@ -181,6 +184,7 @@ class TestVisionCNN:
         targets = np.random.randn(2, 64).astype(np.float32)
         cnn.train_on_batch(images, targets)
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8))
         cap = cnn.caption(img)
         assert "learned_feat" in cap.text or "untrained" in cap.text.lower()
@@ -188,6 +192,7 @@ class TestVisionCNN:
     def test_preprocess_rgb(self):
         cnn = VisionCNN()
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8))
         result = cnn._preprocess(img)
         assert result.shape == (1, 3, 32, 32)
@@ -198,6 +203,7 @@ class TestVisionCNN:
     def test_preprocess_grayscale_to_rgb(self):
         cnn = VisionCNN()
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (32, 32), dtype=np.uint8), mode="L")
         img = img.convert("RGB")
         result = cnn._preprocess(img)
@@ -206,6 +212,7 @@ class TestVisionCNN:
     def test_preprocess_resizes(self):
         cnn = VisionCNN()
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (200, 100, 3), dtype=np.uint8))
         result = cnn._preprocess(img)
         assert result.shape == (1, 3, 32, 32)
@@ -214,6 +221,7 @@ class TestVisionCNN:
         cnn = VisionCNN()
         assert cnn._model is None
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8))
         embed = cnn.get_embedding(img)
         assert cnn._model is not None
@@ -223,12 +231,14 @@ class TestVisionCNN:
         cnn = VisionCNN()
         cnn.build_model(embed_dim=64)
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8))
         embed = cnn.get_embedding(img)
         assert embed.ndim == 1
 
     def test_forward_pass(self):
         from domain.training._internal.slonet import tensor as _tensor
+
         cnn = VisionCNN()
         cnn.build_model(embed_dim=64)
         x = _tensor(np.random.randn(1, 3, 32, 32).astype(np.float32), requires_grad=False)
@@ -242,6 +252,7 @@ class TestVisionCNN:
         targets = np.random.randn(2, 64).astype(np.float32)
         cnn.train_on_batch(images, targets)
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8))
         objs = cnn.detect(img)
         assert len(objs) == 1
@@ -252,6 +263,7 @@ class TestVisionCNN:
         cnn.build_model(embed_dim=32)
         assert cnn._embed_dim == 32
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8))
         embed = cnn.get_embedding(img)
         assert embed.ndim == 1
@@ -322,6 +334,7 @@ class TestVisionCNNTraining:
     def test_caption_empty_image(self):
         cnn = VisionCNN()
         from PIL import Image
+
         img = Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8))
         cap = cnn.caption(img)
         assert isinstance(cap, ImageCaption)
@@ -329,6 +342,7 @@ class TestVisionCNNTraining:
     def test_caption_white_image(self):
         cnn = VisionCNN()
         from PIL import Image
+
         img = Image.fromarray(np.full((32, 32, 3), 255, dtype=np.uint8))
         cap = cnn.caption(img)
         assert isinstance(cap, ImageCaption)
@@ -336,6 +350,7 @@ class TestVisionCNNTraining:
     def test_detect_empty_image(self):
         cnn = VisionCNN()
         from PIL import Image
+
         img = Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8))
         objs = cnn.detect(img)
         assert len(objs) == 1
@@ -345,6 +360,7 @@ class TestVisionCNNTraining:
         cnn = VisionCNN()
         cnn.build_model(embed_dim=64)
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8))
         e1 = cnn.get_embedding(img)
         e2 = cnn.get_embedding(img)
@@ -354,6 +370,7 @@ class TestVisionCNNTraining:
         cnn = VisionCNN()
         cnn.build_model(embed_dim=64)
         from PIL import Image
+
         img1 = Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8))
         img2 = Image.fromarray(np.full((32, 32, 3), 255, dtype=np.uint8))
         e1 = cnn.get_embedding(img1)
@@ -365,12 +382,14 @@ class TestVisionCNNTraining:
             cnn = VisionCNN()
             cnn.build_model(embed_dim=embed_dim)
             from PIL import Image
+
             img = Image.fromarray(np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8))
             embed = cnn.get_embedding(img)
             assert embed.ndim == 1
 
     def test_forward_output_shape(self):
         from domain.training._internal.slonet import tensor as _tensor
+
         cnn = VisionCNN()
         cnn.build_model(embed_dim=64)
         x = _tensor(np.random.randn(2, 3, 32, 32).astype(np.float32), requires_grad=False)
@@ -381,6 +400,7 @@ class TestVisionCNNTraining:
         cnn = VisionCNN()
         cnn.build_model(embed_dim=64)
         from PIL import Image
+
         img = Image.fromarray(np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8))
         objs = cnn.detect(img)
         cap = cnn.caption(img)
@@ -419,4 +439,3 @@ class TestImageCaptionEdgeCases:
     def test_tags_with_empty_strings(self):
         c = ImageCaption(text="x", confidence=0.5, tags=["", "", ""])
         assert len(c.tags) == 3
-

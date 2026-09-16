@@ -14,7 +14,6 @@ Tests:
   - QuantizedLinear wrapper
 """
 
-
 import numpy as np
 import pytest
 

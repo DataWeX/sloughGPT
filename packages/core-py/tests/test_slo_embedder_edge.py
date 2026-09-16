@@ -1,6 +1,5 @@
 """Edge-case tests for slo_embedder — targets gaps in the existing 87 tests."""
 
-
 import numpy as np
 import pytest
 

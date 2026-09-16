@@ -69,9 +69,7 @@ def main():
     logger.info(
         "Result: %s",
         json.dumps(
-            dict(
-                    result.items() if isinstance(result, dict) else {"result": str(result)}.items()
-                ),
+            dict(result.items() if isinstance(result, dict) else {"result": str(result)}.items()),
             default=str,
             indent=2,
         ),

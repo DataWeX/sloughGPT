@@ -15,6 +15,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", require_addon=True)
 
         obj = Obj()
@@ -25,6 +26,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", require_addon=False)
 
         obj = Obj()
@@ -35,6 +37,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         obj = Obj()
@@ -44,6 +47,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", default_factory=lambda: [1, 2, 3])
 
         obj = Obj()
@@ -53,6 +57,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         assert isinstance(Obj.x, Property)
@@ -61,6 +66,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         assert isinstance(Obj.__dict__["x"].__get__(None, Obj), Property)
@@ -76,6 +82,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", default_factory=factory)
 
         obj = Obj()
@@ -87,6 +94,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -97,6 +105,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         obj1 = Obj()
@@ -112,6 +121,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return calls.append(name)
+
             x = Property("_x", require_addon=True)
 
         obj = Obj()
@@ -125,6 +135,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return calls.append(name)
+
             x = Property("_x", require_addon=False)
 
         obj = Obj()
@@ -136,6 +147,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
             y = Property("_y")
             z = Property("_z")
@@ -152,6 +164,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_internal_x")
 
         obj = Obj()
@@ -162,6 +175,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         obj = Obj()
@@ -172,6 +186,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -183,6 +198,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -194,6 +210,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -205,6 +222,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", default_factory=lambda: [1])
 
         obj = Obj()
@@ -216,6 +234,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         obj = Obj()
@@ -227,6 +246,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         assert isinstance(Obj.__dict__["x"], Property)
@@ -236,6 +256,7 @@ class TestProperty:
         class Base:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         class Child(Base):
@@ -251,6 +272,7 @@ class TestProperty:
         class Base:
             def _require_addon(self, name):
                 return calls.append("base")
+
             x = Property("_x", require_addon=True)
 
         class Child(Base):
@@ -268,6 +290,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         obj = Obj()
@@ -279,6 +302,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         obj = Obj()
@@ -293,6 +317,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x", default_factory=complex_factory)
 
         obj = Obj()
@@ -303,6 +328,7 @@ class TestProperty:
         class Obj:
             def _require_addon(self, name):
                 return None
+
             x = Property("_x")
 
         instances = [Obj() for _ in range(5)]

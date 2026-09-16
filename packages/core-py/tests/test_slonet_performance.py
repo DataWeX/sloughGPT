@@ -89,12 +89,14 @@ class TestCUDAGraphManager:
     def test_init(self):
         def model(x):
             return x
+
         manager = CUDAGraphManager(model)
         assert manager.is_captured is False
 
     def test_capture(self):
         def model(x):
             return x
+
         manager = CUDAGraphManager(model)
         result = manager.capture()
         assert result is False
@@ -102,6 +104,7 @@ class TestCUDAGraphManager:
     def test_replay(self):
         def model(x):
             return np.array([1.0, 2.0])
+
         manager = CUDAGraphManager(model)
         result = manager.replay(np.array([0]))
         assert np.allclose(result, [1.0, 2.0])

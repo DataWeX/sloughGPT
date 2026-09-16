@@ -1010,7 +1010,10 @@ class MorphTokenizer:
         root1, root2 = self.stem(word1), self.stem(word2)
         if root1 == root2:
             return 1
-        if len(root1) == len(root2) and sum(a != b for a, b in zip(root1, root2, strict=False)) <= 1:
+        if (
+            len(root1) == len(root2)
+            and sum(a != b for a, b in zip(root1, root2, strict=False)) <= 1
+        ):
             return 2
         return 3
 

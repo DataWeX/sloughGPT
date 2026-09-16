@@ -42,8 +42,10 @@ def _fd_grad_x(x_np, w_np, b_np, stride=1, padding=0, eps=1e-6):
     xf = x_np.astype(np.float64)
     wf = w_np.astype(np.float64)
     bf = b_np.astype(np.float64)
+
     def loss(xx):
         return (_naive_conv(xx, wf, bf, stride, padding) ** 2).sum()
+
     g = np.zeros_like(xf)
     it = np.nditer(xf, flags=["multi_index"])
     while not it.finished:
@@ -62,8 +64,10 @@ def _fd_grad_w(x_np, w_np, b_np, stride=1, padding=0, eps=1e-6):
     xf = x_np.astype(np.float64)
     wf = w_np.astype(np.float64)
     bf = b_np.astype(np.float64)
+
     def loss(ww):
         return (_naive_conv(xf, ww, bf, stride, padding) ** 2).sum()
+
     g = np.zeros_like(wf)
     it = np.nditer(wf, flags=["multi_index"])
     while not it.finished:
@@ -82,8 +86,10 @@ def _fd_grad_b(x_np, w_np, b_np, stride=1, padding=0, eps=1e-6):
     xf = x_np.astype(np.float64)
     wf = w_np.astype(np.float64)
     bf = b_np.astype(np.float64)
+
     def loss(bb):
         return (_naive_conv(xf, wf, bb, stride, padding) ** 2).sum()
+
     g = np.zeros_like(bf)
     it = np.nditer(bf, flags=["multi_index"])
     while not it.finished:

@@ -667,7 +667,9 @@ def main(argv: list[str] | None = None) -> int:
             "generation control_avg civ_avg control_best civ_best "
             "births alive lessons predations defenses raids"
         )
-        for ch, vh in zip(result.get("control", {}).get("history", []), civ.get("history", []), strict=False):
+        for ch, vh in zip(
+            result.get("control", {}).get("history", []), civ.get("history", []), strict=False
+        ):
             print(
                 f"{ch.get('generation', 0):<10d} {ch.get('avg_fitness', 0):<12.4f} "
                 f"{vh.get('avg_fitness', 0):<7.4f} {ch.get('best_fitness', 0):<13.4f} "

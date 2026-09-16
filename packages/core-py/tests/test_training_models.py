@@ -780,8 +780,10 @@ class TestTrainingPipelineExtra:
     def test_stage_stores_handler(self):
         cfg = PipelineConfig(name="p")
         pipe = TrainingPipeline(cfg)
+
         def handler(x):
             return x
+
         pipe.add_stage("s", PipelineStageType.TRAIN, handler)
         assert pipe.stages[0]["handler"] is handler
 

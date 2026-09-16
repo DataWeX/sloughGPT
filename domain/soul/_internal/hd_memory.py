@@ -86,9 +86,7 @@ class HDMemoryStore:
         role_vec = self.role_vectors.get(role, hd.encode("ROLE_USER"))
         return hd.bind(content_vec, role_vec)
 
-    def add(
-        self, content: str, role: str = "user", metadata: dict[str, Any] | None = None
-    ) -> str:
+    def add(self, content: str, role: str = "user", metadata: dict[str, Any] | None = None) -> str:
         """
         Add a memory item.
 

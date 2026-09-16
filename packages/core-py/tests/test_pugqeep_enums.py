@@ -866,8 +866,10 @@ class TestEngineMetrics:
 class TestResultCache:
     def test_put_and_get(self):
         cache = ResultCache(maxsize=10)
+
         def fn():
             return None
+
         fn.__name__ = "test_fn"
         cache.put(fn, (1, 2), {"a": 1}, "result")
         hit, val = cache.get(fn, (1, 2), {"a": 1})
@@ -876,8 +878,10 @@ class TestResultCache:
 
     def test_miss(self):
         cache = ResultCache(maxsize=10)
+
         def fn():
             return None
+
         fn.__name__ = "test_fn"
         hit, val = cache.get(fn, (1,), {})
         assert hit is False
@@ -885,8 +889,10 @@ class TestResultCache:
 
     def test_maxsize_eviction(self):
         cache = ResultCache(maxsize=2)
+
         def fn():
             return None
+
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v1")
         cache.put(fn, (2,), {}, "v2")
@@ -895,8 +901,10 @@ class TestResultCache:
 
     def test_clear(self):
         cache = ResultCache(maxsize=10)
+
         def fn():
             return None
+
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         count = cache.clear()
@@ -905,8 +913,10 @@ class TestResultCache:
 
     def test_invalidate_specific(self):
         cache = ResultCache(maxsize=10)
+
         def fn():
             return None
+
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         assert cache.invalidate(fn, (1,), {}) is True
@@ -914,26 +924,34 @@ class TestResultCache:
 
     def test_invalidate_not_found(self):
         cache = ResultCache(maxsize=10)
+
         def fn():
             return None
+
         fn.__name__ = "fn"
         assert cache.invalidate(fn, (1,), {}) is False
 
     def test_invalidate_all(self):
         cache = ResultCache(maxsize=10)
+
         def fn():
             return None
+
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         assert cache.invalidate() is True
 
     def test_invalidate_by_fn(self):
         cache = ResultCache(maxsize=10)
+
         def fn1():
             return None
+
         fn1.__name__ = "fn1"
+
         def fn2():
             return None
+
         fn2.__name__ = "fn2"
         cache.put(fn1, (1,), {}, "v1")
         cache.put(fn2, (2,), {}, "v2")
@@ -942,8 +960,10 @@ class TestResultCache:
 
     def test_stats(self):
         cache = ResultCache(maxsize=10)
+
         def fn():
             return None
+
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         cache.get(fn, (1,), {})
@@ -954,8 +974,10 @@ class TestResultCache:
 
     def test_ttl_expired(self):
         cache = ResultCache(maxsize=10, ttl=0.01)
+
         def fn():
             return None
+
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         time.sleep(0.02)
@@ -965,8 +987,10 @@ class TestResultCache:
     def test_size_property(self):
         cache = ResultCache(maxsize=10)
         assert cache.size == 0
+
         def fn():
             return None
+
         fn.__name__ = "fn"
         cache.put(fn, (1,), {}, "v")
         assert cache.size == 1
@@ -977,8 +1001,10 @@ class TestResultCache:
 
     def test_invalidate_fn_not_found(self):
         cache = ResultCache(maxsize=10)
+
         def fn():
             return None
+
         fn.__name__ = "fn"
         assert cache.invalidate(fn) is False
 

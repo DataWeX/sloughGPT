@@ -150,9 +150,7 @@ def _fetch_model_names() -> list[str]:
         if r.status_code == 200:
             data = r.json()
             models = data if isinstance(data, list) else data.get("models", [])
-            return sorted(
-                {m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)}
-            )
+            return sorted({m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)})
     except Exception as e:
         logger.debug("model names fetch failed: %s", e)
     return []

@@ -1127,9 +1127,7 @@ class TestPointLibrary:
 
     def test_decompress_to_cluster(self):
         lib = self._library()
-        lib.compress_and_store(
-            np.arange(16, dtype=np.float32), "w", method="cluster", n_clusters=8
-        )
+        lib.compress_and_store(np.arange(16, dtype=np.float32), "w", method="cluster", n_clusters=8)
         out = lib.decompress_to("w", shape=(4, 4))
         assert out.shape == (4, 4)
 

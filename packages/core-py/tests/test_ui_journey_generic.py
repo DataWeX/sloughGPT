@@ -6,7 +6,6 @@ Usage:
 """
 
 
-
 class TestGenericCore:
     """Tests for the generic core library."""
 

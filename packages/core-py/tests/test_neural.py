@@ -206,8 +206,10 @@ class TestNeuralEngineDevice:
     def test_forward_pass(self):
         dev = NeuralEngineDevice()
         dev.open()
+
         def model(x):
             return x * 2
+
         dev.load_model("double", model)
         result = dev.ioctl("forward", "double", np.array([1, 2, 3]))
         assert result.success

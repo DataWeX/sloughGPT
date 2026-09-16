@@ -227,9 +227,7 @@ class DuplicateDetector:
     def load_from_store(self, store) -> None:
         self._store = store
 
-    def check(
-        self, text: str, embed_fn=None, query_vector=None
-    ) -> tuple[bool, str | None, float]:
+    def check(self, text: str, embed_fn=None, query_vector=None) -> tuple[bool, str | None, float]:
         """Check if text is a near-duplicate of existing facts.
 
         Args:

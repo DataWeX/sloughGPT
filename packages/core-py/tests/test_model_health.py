@@ -52,8 +52,7 @@ class TestModelHealthMonitor:
     def test_detect_drift_stable(self, tmp_path):
         monitor = ModelHealthMonitor(db_path=str(tmp_path / "health.json"))
         monitor._history = [
-            {"timestamp": i, "perplexity": 10.0, "loss": 2.3, "num_sentences": 15}
-            for i in range(6)
+            {"timestamp": i, "perplexity": 10.0, "loss": 2.3, "num_sentences": 15} for i in range(6)
         ]
         result = monitor.detect_drift()
         assert result["drifted"] is False
@@ -62,8 +61,7 @@ class TestModelHealthMonitor:
     def test_detect_drift_significant(self, tmp_path):
         monitor = ModelHealthMonitor(db_path=str(tmp_path / "health.json"))
         monitor._history = [
-            {"timestamp": i, "perplexity": 10.0, "loss": 2.3, "num_sentences": 15}
-            for i in range(5)
+            {"timestamp": i, "perplexity": 10.0, "loss": 2.3, "num_sentences": 15} for i in range(5)
         ]
         monitor._history.append(
             {"timestamp": 5.0, "perplexity": 20.0, "loss": 3.0, "num_sentences": 15}
@@ -75,8 +73,7 @@ class TestModelHealthMonitor:
     def test_detect_drift_custom_threshold(self, tmp_path):
         monitor = ModelHealthMonitor(db_path=str(tmp_path / "health.json"))
         monitor._history = [
-            {"timestamp": i, "perplexity": 10.0, "loss": 2.3, "num_sentences": 15}
-            for i in range(6)
+            {"timestamp": i, "perplexity": 10.0, "loss": 2.3, "num_sentences": 15} for i in range(6)
         ]
         monitor._history.append(
             {"timestamp": 6.0, "perplexity": 11.0, "loss": 2.4, "num_sentences": 15}

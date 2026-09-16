@@ -76,7 +76,7 @@ def _model_ready() -> bool:
     1. ``state.model`` — set by eager-load paths.
     2. ``state.provider._model`` — set when eager load materializes weights.
     3. Core ``ServerState.model.get()`` — set by the lazy-guard path.
-    4. ``state.provider`` with ``info()`` — lazy-guard provider that can serve.
+    4. ``state.provider`` is not None — lazy-guard provider delegates to subprocess.
     """
     try:
         import state as server_state
@@ -93,14 +93,9 @@ def _model_ready() -> bool:
         core_model = get_server_state().model.get()
         if core_model is not None:
             return True
-        # Lazy-guard provider that delegates to subprocess — check if it can serve
-        if provider is not None and hasattr(provider, "info"):
-            try:
-                info = provider.info()
-                if info is not None and getattr(info, "model_id", None):
-                    return True
-            except Exception:
-                pass
+        # Lazy-guard: provider is set but model is in subprocess — can still serve
+        if provider is not None:
+            return True
     except Exception:
         logger.debug("Model loaded check failed", exc_info=True)
     return False

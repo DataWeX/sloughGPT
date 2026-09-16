@@ -21712,9 +21712,7 @@ class TestNoteTimelineDeeper:
 
 class TestConsoleDeeper:
     def test_table(self, repl):
-        _run_with_io(
-            repl, [], lambda: repl._table([["a", "b"], ["c", "d"]], header=["X", "Y"])
-        )
+        _run_with_io(repl, [], lambda: repl._table([["a", "b"], ["c", "d"]], header=["X", "Y"]))
         assert repl._last_exit_code == 0
 
     def test_box(self, repl):

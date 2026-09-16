@@ -246,25 +246,31 @@ def load_native_model():
                 else:
                     itos_map = {int(k): v for k, v in itos.items()}
                 stoi_map = {v: k for k, v in itos_map.items()}
+
                 def encode(text):
-                    return np.array(
-                                    [stoi_map.get(c, 0) for c in text], dtype=np.int64
-                                ).reshape(1, -1)
+                    return np.array([stoi_map.get(c, 0) for c in text], dtype=np.int64).reshape(
+                        1, -1
+                    )
+
                 def decode_tokens(ids):
                     return "".join(
-                                    itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map
-                                )
+                        itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map
+                    )
+
                 return net, None, encode, decode_tokens, charset
             else:
                 vocab_size = md.get("vocab_size", 256)
+
                 def encode(text):
-                    return np.array(
-                                    [ord(c) % vocab_size for c in text], dtype=np.int64
-                                ).reshape(1, -1)
+                    return np.array([ord(c) % vocab_size for c in text], dtype=np.int64).reshape(
+                        1, -1
+                    )
+
                 def decode_tokens(ids):
                     return "".join(
-                                    chr(int(i)) if 32 <= int(i) < 127 else "?" for i in ids.flatten()
-                                )
+                        chr(int(i)) if 32 <= int(i) < 127 else "?" for i in ids.flatten()
+                    )
+
                 return net, None, encode, decode_tokens, ""
 
     # 2. Try the bench LSTM .soul
@@ -592,14 +598,17 @@ def main():
                     charset = "".join(charset)
                 itos_map = {int(k): v for k, v in itos.items()}
                 stoi_map = {v: k for k, v in itos_map.items()}
+
                 def encode(text):
-                    return np.array(
-                                    [stoi_map.get(c, 0) for c in text], dtype=np.int64
-                                ).reshape(1, -1)
+                    return np.array([stoi_map.get(c, 0) for c in text], dtype=np.int64).reshape(
+                        1, -1
+                    )
+
                 def decode_tokens(ids):
                     return "".join(
-                                    itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map
-                                )
+                        itos_map.get(int(i), "?") for i in ids.flatten() if int(i) in itos_map
+                    )
+
                 responses, latencies, token_counts = [], [], []
                 print(f"Model: Transformer ({sum(p.numel() for p in net.parameters()):,} params)")
                 for prompt in prompts:

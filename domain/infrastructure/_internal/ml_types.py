@@ -217,16 +217,12 @@ def tensor(
     return arr
 
 
-def zeros(
-    shape: tuple[int, ...], dtype: Any = np.float32, device: str | None = None
-) -> np.ndarray:
+def zeros(shape: tuple[int, ...], dtype: Any = np.float32, device: str | None = None) -> np.ndarray:
     """Create zero-filled array — replaces torch.zeros."""
     return np.zeros(shape, dtype=dtype)
 
 
-def ones(
-    shape: tuple[int, ...], dtype: Any = np.float32, device: str | None = None
-) -> np.ndarray:
+def ones(shape: tuple[int, ...], dtype: Any = np.float32, device: str | None = None) -> np.ndarray:
     """Create ones-filled array — replaces torch.ones."""
     return np.ones(shape, dtype=dtype)
 
@@ -244,9 +240,7 @@ def full_like(a: np.ndarray, fill_value: float, dtype: Any | None = None) -> np.
     return np.full_like(a, fill_value, dtype=dt)
 
 
-def empty(
-    shape: tuple[int, ...], dtype: Any = np.float32, device: str | None = None
-) -> np.ndarray:
+def empty(shape: tuple[int, ...], dtype: Any = np.float32, device: str | None = None) -> np.ndarray:
     """Create uninitialized array — replaces torch.empty."""
     return np.empty(shape, dtype=dtype)
 

@@ -218,6 +218,7 @@ def _read_raw_key(fd: int) -> _RawKey:
 
 # ── Terminal helpers ──────────────────────────────────────────────────────────
 
+
 class _RawTerminal:
     """Context manager that puts the terminal in raw mode and restores it."""
 
@@ -259,6 +260,7 @@ _RESET = "\033[0m"
 
 
 # ── InteractivePrompt ─────────────────────────────────────────────────────────
+
 
 class InteractivePrompt:
     """Interactive arrow-key prompts for line-mode shell.
@@ -345,9 +347,13 @@ class InteractivePrompt:
                         lines.append(f"{_ERASE_LINE}\r   {text}")
 
             if len(filtered) > max_visible:
-                lines.append(f"{_ERASE_LINE}\r   {_DIM}({len(filtered)} items, {cursor + 1}/{len(filtered)}){_RESET}")
+                lines.append(
+                    f"{_ERASE_LINE}\r   {_DIM}({len(filtered)} items, {cursor + 1}/{len(filtered)}){_RESET}"
+                )
 
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
@@ -479,10 +485,14 @@ class InteractivePrompt:
                 lines.append(f"{_ERASE_LINE}\r{prefix} {check} {display}")
 
             if len(filtered) > max_visible:
-                lines.append(f"{_ERASE_LINE}\r   ({len(filtered)} items, {cursor + 1}/{len(filtered)})")
+                lines.append(
+                    f"{_ERASE_LINE}\r   ({len(filtered)} items, {cursor + 1}/{len(filtered)})"
+                )
 
             n_checked = len(checked)
-            lines.append(f"{_ERASE_LINE}\r  Space: toggle  Enter: confirm ({n_checked} selected)  Esc: cancel{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  Space: toggle  Enter: confirm ({n_checked} selected)  Esc: cancel{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
@@ -745,7 +755,9 @@ class InteractivePrompt:
 
     # ── Edit (validated text input) ────────────────────────────────────
 
-    def edit(self, message: str, default: str = "", validator: Callable[[str], str | None] | None = None) -> str:
+    def edit(
+        self, message: str, default: str = "", validator: Callable[[str], str | None] | None = None
+    ) -> str:
         """Interactive text input with inline validation.
 
         Args:
@@ -793,13 +805,18 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return ""
+                        _clear()
+                        return ""
                     if key.kind == _KEY_ENTER:
-                        _clear(); return "".join(buf)
+                        _clear()
+                        return "".join(buf)
                     if key.kind == _KEY_BACKSPACE:
-                        if cursor > 0: buf.pop(cursor - 1); cursor -= 1
+                        if cursor > 0:
+                            buf.pop(cursor - 1)
+                            cursor -= 1
                     elif key.kind == _KEY_DELETE:
-                        if cursor < len(buf): buf.pop(cursor)
+                        if cursor < len(buf):
+                            buf.pop(cursor)
                     elif key.kind == _KEY_LEFT:
                         cursor = max(0, cursor - 1)
                     elif key.kind == _KEY_RIGHT:
@@ -809,7 +826,8 @@ class InteractivePrompt:
                     elif key.kind == _KEY_END:
                         cursor = len(buf)
                     elif key.kind == _KEY_CHAR:
-                        buf.insert(cursor, key.char); cursor += 1
+                        buf.insert(cursor, key.char)
+                        cursor += 1
         except (termios.error, OSError):
             return self._ask_fallback(message, "")
 
@@ -839,7 +857,7 @@ class InteractivePrompt:
             sys.stdout.write("\033[2J\033[H")  # clear + home
             sys.stdout.write(f"{_BOLD}{_CYAN}{title}{_RESET}  ")
             sys.stdout.write(f"{_DIM}(↑/↓/j/k scroll, q quit){_RESET}\n")
-            visible = lines[offset:offset + height]
+            visible = lines[offset : offset + height]
             for line in visible:
                 sys.stdout.write(f"  {line}\n")
             pos = f"Line {offset + 1}-{min(offset + height, total)} of {total}"
@@ -875,8 +893,7 @@ class InteractivePrompt:
 
     # ── Confirm action ─────────────────────────────────────────────────
 
-    def confirm_action(self, action: str, details: str = "",
-                       danger: bool = False) -> bool:
+    def confirm_action(self, action: str, details: str = "", danger: bool = False) -> bool:
         """Confirm an action with a descriptive prompt.
 
         Args:
@@ -891,8 +908,7 @@ class InteractivePrompt:
             return self._confirm_fallback(f"{action}? (y/N)", False)
         return self._confirm_action_raw(action, details, danger)
 
-    def _confirm_action_raw(self, action: str, details: str,
-                            danger: bool) -> bool:
+    def _confirm_action_raw(self, action: str, details: str, danger: bool) -> bool:
         fd = self._get_fd()
         selected = False
 
@@ -922,16 +938,20 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return False
+                        _clear()
+                        return False
                     if key.kind == _KEY_ENTER:
-                        _clear(); return selected
+                        _clear()
+                        return selected
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         selected = not selected
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return True
+                            _clear()
+                            return True
                         if key.char in ("n", "N"):
-                            _clear(); return False
+                            _clear()
+                            return False
         except (termios.error, OSError):
             return self._confirm_fallback(f"{action}? (y/N)", False)
 
@@ -986,20 +1006,23 @@ class InteractivePrompt:
         styles = {
             "single": ("\u250c", "\u2500", "\u2510", "\u2502", "\u2514", "\u2518"),
             "double": ("\u2554", "\u2550", "\u2557", "\u2551", "\u255a", "\u255d"),
-            "thick":  ("\u250f", "\u2501", "\u2513", "\u2503", "\u2517", "\u251b"),
+            "thick": ("\u250f", "\u2501", "\u2513", "\u2503", "\u2517", "\u251b"),
             "dashed": ("\u250c", "\u2504", "\u2510", "\u2502", "\u2514", "\u2518"),
         }
         tl, h, tr, v, bl, br = styles.get(style, styles["double"])
         inner = h * (width - 2)
         pad = " " * max(0, width - len(text) - 3)
         self._io.write(f"  {_BOLD}{_CYAN}{tl}{inner}{tr}{_RESET}")
-        self._io.write(f"  {_BOLD}{_CYAN}{v}{_RESET} {_BOLD}{text}{_RESET}{pad}{_BOLD}{_CYAN}{v}{_RESET}")
+        self._io.write(
+            f"  {_BOLD}{_CYAN}{v}{_RESET} {_BOLD}{text}{_RESET}{pad}{_BOLD}{_CYAN}{v}{_RESET}"
+        )
         self._io.write(f"  {_BOLD}{_CYAN}{bl}{inner}{br}{_RESET}")
 
     # ── Slider ─────────────────────────────────────────────────────────
 
-    def slider(self, message: str, min_val: int = 0, max_val: int = 100,
-               default: int = 50, step: int = 1) -> int:
+    def slider(
+        self, message: str, min_val: int = 0, max_val: int = 100, default: int = 50, step: int = 1
+    ) -> int:
         """Interactive numeric slider with visual bar.
 
         Args:
@@ -1020,8 +1043,7 @@ class InteractivePrompt:
                 return default
         return self._slider_raw(message, min_val, max_val, default, step)
 
-    def _slider_raw(self, message: str, min_val: int, max_val: int,
-                    default: int, step: int) -> int:
+    def _slider_raw(self, message: str, min_val: int, max_val: int, default: int, step: int) -> int:
         fd = self._get_fd()
         value = default
         bar_w = 30
@@ -1050,9 +1072,11 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return value
+                        _clear()
+                        return value
                     if key.kind == _KEY_LEFT:
                         value = max(min_val, value - step)
                     elif key.kind == _KEY_RIGHT:
@@ -1106,9 +1130,11 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return on
+                        _clear()
+                        return on
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         on = not on
                     if key.kind == _KEY_CHAR:
@@ -1121,8 +1147,9 @@ class InteractivePrompt:
 
     # ── Tag input ──────────────────────────────────────────────────────
 
-    def tag_input(self, message: str, defaults: list[str] | None = None,
-                  placeholder: str = "Add tag...") -> list[str]:
+    def tag_input(
+        self, message: str, defaults: list[str] | None = None, placeholder: str = "Add tag..."
+    ) -> list[str]:
         """Interactive tag input. Type and press Enter to add, Backspace to remove.
 
         Args:
@@ -1138,8 +1165,7 @@ class InteractivePrompt:
             return [t.strip() for t in raw.split(",") if t.strip()] if raw else (defaults or [])
         return self._tag_input_raw(message, defaults or [], placeholder)
 
-    def _tag_input_raw(self, message: str, defaults: list[str],
-                       placeholder: str) -> list[str]:
+    def _tag_input_raw(self, message: str, defaults: list[str], placeholder: str) -> list[str]:
         fd = self._get_fd()
         tags: list[str] = list(defaults)
         buf: list[str] = []
@@ -1151,10 +1177,7 @@ class InteractivePrompt:
             if not tags and not buf:
                 tag_str = f" {_DIM}{placeholder}{_RESET}"
             input_part = "".join(buf)
-            return (
-                f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}"
-                f"{tag_str} {input_part}{_HIDE_CURSOR}"
-            )
+            return f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}{tag_str} {input_part}{_HIDE_CURSOR}"
 
         def _clear() -> None:
             sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
@@ -1169,7 +1192,8 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return tags
+                        _clear()
+                        return tags
                     if key.kind == _KEY_ENTER:
                         word = "".join(buf).strip()
                         if word:
@@ -1192,14 +1216,16 @@ class InteractivePrompt:
                         else:
                             buf.append(key.char)
                     if key.kind == _KEY_ENTER and not "".join(buf).strip():
-                        _clear(); return tags
+                        _clear()
+                        return tags
         except (termios.error, OSError):
             return tags
 
     # ── Select tree ────────────────────────────────────────────────────
 
-    def select_tree(self, title: str, tree: dict[str, list[str] | dict],
-                    expanded: set[str] | None = None) -> str | None:
+    def select_tree(
+        self, title: str, tree: dict[str, list[str] | dict], expanded: set[str] | None = None
+    ) -> str | None:
         """Interactive tree selector with expand/collapse.
 
         Args:
@@ -1223,8 +1249,9 @@ class InteractivePrompt:
                 leaves.extend(v)
         return leaves
 
-    def _select_tree_raw(self, title: str, tree: dict[str, list[str] | dict],
-                         expanded: set[str]) -> str | None:
+    def _select_tree_raw(
+        self, title: str, tree: dict[str, list[str] | dict], expanded: set[str]
+    ) -> str | None:
         fd = self._get_fd()
         flat: list[tuple[str, int, str]] = []
 
@@ -1276,11 +1303,15 @@ class InteractivePrompt:
                         text = f"{_DIM}{name}{_RESET}"
                     display_text = f"{prefix}{icon} {text}"
                     if flat.index(filtered[i]) == cursor:
-                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} {display_text}{_RESET_REVERSE}{_RESET}")
+                        lines.append(
+                            f"{_ERASE_LINE}\r{_REVERSE} {display_text}{_RESET_REVERSE}{_RESET}"
+                        )
                     else:
                         lines.append(f"{_ERASE_LINE}\r  {display_text}")
 
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select/expand  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_DIM}Enter: select/expand  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
@@ -1306,7 +1337,8 @@ class InteractivePrompt:
                     prev_count = len(lines)
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(prev_count); return None
+                        _clear(prev_count)
+                        return None
                     if key.kind == _KEY_ENTER:
                         if 0 <= cursor < len(filtered):
                             name, _, kind = filtered[cursor]
@@ -1337,8 +1369,9 @@ class InteractivePrompt:
 
     # ── Spin wait ──────────────────────────────────────────────────────
 
-    def spin_wait(self, message: str, check_fn: Callable[[], bool],
-                  interval: float = 0.1, timeout: float = 0) -> bool:
+    def spin_wait(
+        self, message: str, check_fn: Callable[[], bool], interval: float = 0.1, timeout: float = 0
+    ) -> bool:
         """Wait for a condition with a spinner. Returns True when ready.
 
         Args:
@@ -1352,6 +1385,7 @@ class InteractivePrompt:
         """
         if not self._is_tty:
             import time as _t
+
             start = _t.monotonic()
             while not check_fn():
                 _t.sleep(interval)
@@ -1360,9 +1394,11 @@ class InteractivePrompt:
             return True
         return self._spin_wait_raw(message, check_fn, interval, timeout)
 
-    def _spin_wait_raw(self, message: str, check_fn: Callable[[], bool],
-                       interval: float, timeout: float) -> bool:
+    def _spin_wait_raw(
+        self, message: str, check_fn: Callable[[], bool], interval: float, timeout: float
+    ) -> bool:
         import time as _t
+
         fd = self._get_fd()
         frames = ["\u25cf", "\u25cf\u25cf", "\u25cf\u25cf\u25cf", "\u25cf"]
         idx = 0
@@ -1436,12 +1472,15 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return False
+                        _clear()
+                        return False
                     if key.kind == _KEY_ENTER:
                         typed = "".join(buf).strip().lower()
-                        _clear(); return typed == phrase.lower()
+                        _clear()
+                        return typed == phrase.lower()
                     if key.kind == _KEY_BACKSPACE:
-                        if buf: buf.pop()
+                        if buf:
+                            buf.pop()
                     elif key.kind == _KEY_CHAR:
                         buf.append(key.char)
         except (termios.error, OSError):
@@ -1450,11 +1489,11 @@ class InteractivePrompt:
 
     # ── File browser ───────────────────────────────────────────────────
 
-    def file_browser(self, title: str, start_dir: str = ".",
-                     pattern: str = "*") -> str | None:
+    def file_browser(self, title: str, start_dir: str = ".", pattern: str = "*") -> str | None:
         """Interactive file browser with directory navigation."""
         import glob as _glob
         import os as _os
+
         if not self._is_tty:
             return self._select_fallback(title, ["(no TTY)"])
 
@@ -1470,11 +1509,14 @@ class InteractivePrompt:
                 return entries
             except PermissionError:
                 return [f"{_RED}(permission denied){_RESET}"]
+
         return self._file_browser_raw(title, _os.path.abspath(start_dir), _list_dir)
 
-    def _file_browser_raw(self, title: str, start: str,
-                          list_fn: Callable[[str], list[str]]) -> str | None:
+    def _file_browser_raw(
+        self, title: str, start: str, list_fn: Callable[[str], list[str]]
+    ) -> str | None:
         import os as _os
+
         fd = self._get_fd()
         current = start
         cursor = 0
@@ -1505,7 +1547,9 @@ class InteractivePrompt:
                         lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {text}{_RESET_REVERSE}{_RESET}")
                     else:
                         lines.append(f"{_ERASE_LINE}\r   {text}")
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Backspace: parent{_RESET}{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Backspace: parent{_RESET}{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
@@ -1531,14 +1575,16 @@ class InteractivePrompt:
                     prev_count = len(lines)
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(prev_count); return None
+                        _clear(prev_count)
+                        return None
                     if key.kind == _KEY_ENTER:
                         if 0 <= cursor < len(filtered):
                             selected = filtered[cursor]
                             if selected.startswith("\U0001f4c1"):
                                 dirname = selected[2:].rstrip("/")
                                 current = _os.path.abspath(_os.path.join(current, dirname))
-                                cursor = 0; query = ""
+                                cursor = 0
+                                query = ""
                             else:
                                 _clear(prev_count)
                                 return _os.path.join(current, selected[2:])
@@ -1548,11 +1594,14 @@ class InteractivePrompt:
                         cursor = min(len(filtered) - 1, cursor + 1)
                     elif key.kind == _KEY_BACKSPACE:
                         if query:
-                            query = query[:-1]; cursor = 0
+                            query = query[:-1]
+                            cursor = 0
                         elif current != "/":
-                            current = _os.path.dirname(current); cursor = 0
+                            current = _os.path.dirname(current)
+                            cursor = 0
                     elif key.kind == _KEY_CHAR:
-                        query += key.char; cursor = 0
+                        query += key.char
+                        cursor = 0
         except (termios.error, OSError):
             return None
 
@@ -1571,8 +1620,9 @@ class InteractivePrompt:
 
     # ── Multi choice ───────────────────────────────────────────────────
 
-    def multi_choice(self, title: str, options: list[str],
-                     defaults: list[int] | None = None) -> list[str]:
+    def multi_choice(
+        self, title: str, options: list[str], defaults: list[int] | None = None
+    ) -> list[str]:
         """Select multiple options with Space to toggle, Enter to confirm."""
         if not options:
             return []
@@ -1580,8 +1630,7 @@ class InteractivePrompt:
             return self._select_multi_fallback(title, options)
         return self._multi_choice_raw(title, options, defaults or [])
 
-    def _multi_choice_raw(self, title: str, options: list[str],
-                          defaults: list[int]) -> list[str]:
+    def _multi_choice_raw(self, title: str, options: list[str], defaults: list[int]) -> list[str]:
         fd = self._get_fd()
         selected: set[int] = set(defaults)
         cursor = 0
@@ -1596,7 +1645,9 @@ class InteractivePrompt:
         def _render() -> list[str]:
             filtered = _get_filtered()
             lines: list[str] = []
-            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}({len(selected)} selected){_RESET}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}({len(selected)} selected){_RESET}"
+            )
             if query:
                 lines.append(f"{_ERASE_LINE}\r  Filter: {_DIM}{query}{_RESET}{_HIDE_CURSOR}")
             else:
@@ -1606,12 +1657,20 @@ class InteractivePrompt:
             else:
                 for i in range(min(max_visible, len(filtered))):
                     orig_idx, text = filtered[i]
-                    check = f"{_GREEN}\u2611{_RESET}" if orig_idx in selected else f"{_DIM}\u2610{_RESET}"
+                    check = (
+                        f"{_GREEN}\u2611{_RESET}"
+                        if orig_idx in selected
+                        else f"{_DIM}\u2610{_RESET}"
+                    )
                     if orig_idx == cursor:
-                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} {check} {text}{_RESET_REVERSE}{_RESET}")
+                        lines.append(
+                            f"{_ERASE_LINE}\r{_REVERSE} {check} {text}{_RESET_REVERSE}{_RESET}"
+                        )
                     else:
                         lines.append(f"{_ERASE_LINE}\r  {check} {text}")
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}Space: toggle  Enter: confirm  Type to filter{_RESET}{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_DIM}Space: toggle  Enter: confirm  Type to filter{_RESET}{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
@@ -1636,7 +1695,8 @@ class InteractivePrompt:
                     prev_count = len(lines)
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(prev_count); return []
+                        _clear(prev_count)
+                        return []
                     if key.kind == _KEY_ENTER:
                         _clear(prev_count)
                         filtered = _get_filtered()
@@ -1655,7 +1715,8 @@ class InteractivePrompt:
                             query = query[:-1]
                             cursor = min(cursor, len(options) - 1)
                     elif key.kind == _KEY_CHAR:
-                        query += key.char; cursor = 0
+                        query += key.char
+                        cursor = 0
         except (termios.error, OSError):
             return self._select_multi_fallback(title, options)
 
@@ -1672,12 +1733,14 @@ class InteractivePrompt:
             selected date as "YYYY-MM-DD"
         """
         import datetime as _dt
+
         if not self._is_tty:
             return self._ask_fallback(message, default or _dt.date.today().isoformat())
         return self._date_picker_raw(message, default)
 
     def _date_picker_raw(self, message: str, default: str) -> str:
         import datetime as _dt
+
         fd = self._get_fd()
         if default:
             try:
@@ -1716,9 +1779,11 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default or _dt.date.today().isoformat()
+                        _clear()
+                        return default or _dt.date.today().isoformat()
                     if key.kind == _KEY_ENTER:
-                        _clear(); return cur.isoformat()
+                        _clear()
+                        return cur.isoformat()
                     if key.kind == _KEY_LEFT:
                         focus = max(0, focus - 1)
                     elif key.kind == _KEY_RIGHT:
@@ -1745,6 +1810,7 @@ class InteractivePrompt:
                                 cur = cur.replace(day=cur.day - 1)
                             except ValueError:
                                 import calendar
+
                                 cur = cur.replace(day=calendar.monthrange(cur.year, cur.month)[1])
         except (termios.error, OSError):
             return default or _dt.date.today().isoformat()
@@ -1778,11 +1844,16 @@ class InteractivePrompt:
                 lines.append(f"  {prefix}{color}{display}{_RESET}")
             if not lines:
                 lines = [f"  {_DIM}(no matches){_RESET}"]
-            query_display = f"  {_BOLD}Search:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to search history{_RESET}"
+            query_display = (
+                f"  {_BOLD}Search:{_RESET} {query}{_CYAN}\u2502{_RESET}"
+                if query
+                else f"  {_DIM}Type to search history{_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, type=search, enter=select){_RESET}\n"
                 + query_display
-                + "\n" + "\n".join(lines)
+                + "\n"
+                + "\n".join(lines)
                 + f"{_HIDE_CURSOR}"
             )
 
@@ -1794,16 +1865,19 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     flt = _filtered()
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return None
+                        _clear()
+                        return None
                     if key.kind == _KEY_ENTER:
-                        _clear(); return flt[idx] if flt else None
+                        _clear()
+                        return flt[idx] if flt else None
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % max(len(flt), 1)
                     elif key.kind == _KEY_DOWN:
@@ -1823,8 +1897,9 @@ class InteractivePrompt:
 
     # ── Process manager ───────────────────────────────────────────────
 
-    def process_manager(self, processes: list[dict[str, str]],
-                        message: str = "Processes:") -> dict[str, str] | None:
+    def process_manager(
+        self, processes: list[dict[str, str]], message: str = "Processes:"
+    ) -> dict[str, str] | None:
         """Interactive process manager with live status.
 
         Args:
@@ -1838,8 +1913,9 @@ class InteractivePrompt:
             return processes[0] if processes else None
         return self._process_manager_raw(processes, message)
 
-    def _process_manager_raw(self, processes: list[dict[str, str]],
-                             message: str) -> dict[str, str] | None:
+    def _process_manager_raw(
+        self, processes: list[dict[str, str]], message: str
+    ) -> dict[str, str] | None:
         fd = self._get_fd()
         idx = 0
 
@@ -1848,13 +1924,13 @@ class InteractivePrompt:
             for i, proc in enumerate(processes):
                 name = proc.get("name", "?")
                 status = proc.get("status", "?")
-                status_color = _GREEN if status == "running" else _YELLOW if status == "pending" else _RED
+                status_color = (
+                    _GREEN if status == "running" else _YELLOW if status == "pending" else _RED
+                )
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
                 reset = _RESET if i == idx else ""
-                lines.append(
-                    f"  {prefix}{color}{name:<30} {status_color}{status}{_RESET}{reset}"
-                )
+                lines.append(f"  {prefix}{color}{name:<30} {status_color}{status}{_RESET}{reset}")
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, enter=select){_RESET}\n"
                 + "\n".join(lines)
@@ -1869,15 +1945,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return None
+                        _clear()
+                        return None
                     if key.kind == _KEY_ENTER:
-                        _clear(); return processes[idx]
+                        _clear()
+                        return processes[idx]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(processes)
                     elif key.kind == _KEY_DOWN:
@@ -1907,7 +1986,7 @@ class InteractivePrompt:
 
         def _render() -> str:
             flt = _filtered()
-            visible = flt[scroll:scroll + max_visible]
+            visible = flt[scroll : scroll + max_visible]
             lines = []
             for line in visible:
                 if "error" in line.lower():
@@ -1923,11 +2002,16 @@ class InteractivePrompt:
             if not lines:
                 lines = [f"  {_DIM}(no logs){_RESET}"]
             pos = f"  {_DIM}{scroll + 1}-{min(scroll + max_visible, len(flt))}/{len(flt)}{_RESET}"
-            query_display = f"  {_BOLD}Filter:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to filter{_RESET}"
+            query_display = (
+                f"  {_BOLD}Filter:{_RESET} {query}{_CYAN}\u2502{_RESET}"
+                if query
+                else f"  {_DIM}Type to filter{_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows=scroll, type=filter){_RESET}\n"
                 + query_display
-                + "\n" + "\n".join(lines)
+                + "\n"
+                + "\n".join(lines)
                 + f"\n{pos}{_HIDE_CURSOR}"
             )
 
@@ -1939,16 +2023,19 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     flt = _filtered()
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return None
+                        _clear()
+                        return None
                     if key.kind == _KEY_ENTER:
-                        _clear(); return flt[scroll] if flt else None
+                        _clear()
+                        return flt[scroll] if flt else None
                     if key.kind == _KEY_UP:
                         scroll = max(0, scroll - 1)
                     elif key.kind == _KEY_DOWN:
@@ -1971,15 +2058,17 @@ class InteractivePrompt:
 
     # ── Config editor ─────────────────────────────────────────────────
 
-    def config_editor(self, config: dict[str, str | int | float | bool],
-                      message: str = "Config:") -> dict[str, str | int | float | bool]:
+    def config_editor(
+        self, config: dict[str, str | int | float | bool], message: str = "Config:"
+    ) -> dict[str, str | int | float | bool]:
         """Interactive config editor for key-value pairs."""
         if not self._is_tty:
             return config
         return self._config_editor_raw(config, message)
 
-    def _config_editor_raw(self, config: dict[str, str | int | float | bool],
-                           message: str) -> dict[str, str | int | float | bool]:
+    def _config_editor_raw(
+        self, config: dict[str, str | int | float | bool], message: str
+    ) -> dict[str, str | int | float | bool]:
         fd = self._get_fd()
         keys = list(config.keys())
         idx = 0
@@ -1992,12 +2081,18 @@ class InteractivePrompt:
                 val = config[key]
                 val_str = str(val)
                 if editing and i == idx:
-                    lines.append(f"  {_REVERSE}{_CYAN}>> {key} = {edit_buf}\u2502{_RESET_REVERSE}{_RESET}")
+                    lines.append(
+                        f"  {_REVERSE}{_CYAN}>> {key} = {edit_buf}\u2502{_RESET_REVERSE}{_RESET}"
+                    )
                 else:
                     prefix = ">> " if i == idx else "   "
                     color = _CYAN if i == idx else ""
                     lines.append(f"  {prefix}{color}{key} = {val_str}{_RESET}")
-            help_text = f"  {_DIM}(arrows=navigate, enter=edit, esc=save){_RESET}" if not editing else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
+            help_text = (
+                f"  {_DIM}(arrows=navigate, enter=edit, esc=save){_RESET}"
+                if not editing
+                else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
                 + "\n".join(lines)
@@ -2012,7 +2107,8 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
@@ -2046,7 +2142,8 @@ class InteractivePrompt:
                             edit_buf = edit_buf[:-1]
                     else:
                         if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                            _clear(); return config
+                            _clear()
+                            return config
                         if key.kind == _KEY_ENTER:
                             editing = True
                             edit_buf = str(config[keys[idx]])
@@ -2073,8 +2170,8 @@ class InteractivePrompt:
         max_visible = 20
 
         def _render() -> str:
-            visible_old = old_lines[scroll:scroll + max_visible]
-            visible_new = new_lines[scroll:scroll + max_visible]
+            visible_old = old_lines[scroll : scroll + max_visible]
+            visible_new = new_lines[scroll : scroll + max_visible]
             lines = []
             max_len = max(len(visible_old), len(visible_new))
             for i in range(max_len):
@@ -2083,13 +2180,9 @@ class InteractivePrompt:
                 old_display = old_line[:35] + "..." if len(old_line) > 35 else old_line
                 new_display = new_line[:35] + "..." if len(new_line) > 35 else new_line
                 if old_line != new_line:
-                    lines.append(
-                        f"  {_RED}{old_display:<38}{_RESET} {_GREEN}{new_display}{_RESET}"
-                    )
+                    lines.append(f"  {_RED}{old_display:<38}{_RESET} {_GREEN}{new_display}{_RESET}")
                 else:
-                    lines.append(
-                        f"  {_DIM}{old_display:<38}{_RESET} {_DIM}{new_display}{_RESET}"
-                    )
+                    lines.append(f"  {_DIM}{old_display:<38}{_RESET} {_DIM}{new_display}{_RESET}")
             if not lines:
                 lines = [f"  {_DIM}(no differences){_RESET}"]
             pos = f"  {_DIM}{scroll + 1}-{min(scroll + max_visible, max(len(old_lines), len(new_lines)))}/{max(len(old_lines), len(new_lines))}{_RESET}"
@@ -2107,13 +2200,15 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC, _KEY_ENTER):
-                        _clear(); return new
+                        _clear()
+                        return new
                     if key.kind == _KEY_UP:
                         scroll = max(0, scroll - 1)
                     elif key.kind == _KEY_DOWN:
@@ -2129,16 +2224,20 @@ class InteractivePrompt:
 
     # ── Interactive search ────────────────────────────────────────────
 
-    def interactive_search(self, items: list[str], preview_fn: Callable[[str], str] | None = None,
-                           message: str = "Search:") -> str | None:
+    def interactive_search(
+        self,
+        items: list[str],
+        preview_fn: Callable[[str], str] | None = None,
+        message: str = "Search:",
+    ) -> str | None:
         """Interactive search with type-to-filter and optional preview."""
         if not self._is_tty:
             return self._select_fallback(message, items[:10]) if items else None
         return self._interactive_search_raw(items, preview_fn, message)
 
-    def _interactive_search_raw(self, items: list[str],
-                                preview_fn: Callable[[str], str] | None,
-                                message: str) -> str | None:
+    def _interactive_search_raw(
+        self, items: list[str], preview_fn: Callable[[str], str] | None, message: str
+    ) -> str | None:
         fd = self._get_fd()
         query = ""
         idx = 0
@@ -2165,11 +2264,16 @@ class InteractivePrompt:
             if not lines:
                 lines = [f"  {_DIM}(no matches){_RESET}"]
             count = f"  {_DIM}{len(flt)}/{len(items)} results{_RESET}"
-            query_display = f"  {_BOLD}Search:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to search{_RESET}"
+            query_display = (
+                f"  {_BOLD}Search:{_RESET} {query}{_CYAN}\u2502{_RESET}"
+                if query
+                else f"  {_DIM}Type to search{_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, type=search){_RESET}\n"
                 + query_display
-                + "\n" + "\n".join(lines)
+                + "\n"
+                + "\n".join(lines)
                 + f"\n{count}\n{preview_str}{_HIDE_CURSOR}"
             )
 
@@ -2181,16 +2285,19 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     flt = _filtered()
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return None
+                        _clear()
+                        return None
                     if key.kind == _KEY_ENTER:
-                        _clear(); return flt[idx] if flt else None
+                        _clear()
+                        return flt[idx] if flt else None
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % max(len(flt), 1)
                     elif key.kind == _KEY_DOWN:
@@ -2210,8 +2317,9 @@ class InteractivePrompt:
 
     # ── Wizard builder ────────────────────────────────────────────────
 
-    def wizard(self, steps: list[dict[str, str | list[str] | None]],
-               message: str = "Wizard") -> dict[str, str]:
+    def wizard(
+        self, steps: list[dict[str, str | list[str] | None]], message: str = "Wizard"
+    ) -> dict[str, str]:
         """Multi-step wizard with labeled steps.
 
         Each step is a dict with:
@@ -2221,12 +2329,14 @@ class InteractivePrompt:
             'default': default value
         """
         if not self._is_tty:
-            return {s.get("label", f"step{i}"): str(s.get("default", ""))
-                    for i, s in enumerate(steps)}
+            return {
+                s.get("label", f"step{i}"): str(s.get("default", "")) for i, s in enumerate(steps)
+            }
         return self._wizard_raw(steps, message)
 
-    def _wizard_raw(self, steps: list[dict[str, str | list[str] | None]],
-                    message: str) -> dict[str, str]:
+    def _wizard_raw(
+        self, steps: list[dict[str, str | list[str] | None]], message: str
+    ) -> dict[str, str]:
         fd = self._get_fd()
         results: dict[str, str] = {}
         current = 0
@@ -2239,7 +2349,9 @@ class InteractivePrompt:
                 if i < current:
                     lines.append(f"  {_GREEN}\u2713{_RESET} {label}")
                 elif i == current:
-                    lines.append(f"  {_CYAN}\u25b6{_RESET} {_BOLD}{label}{_RESET}  {_DIM}({step_type}){_RESET}")
+                    lines.append(
+                        f"  {_CYAN}\u25b6{_RESET} {_BOLD}{label}{_RESET}  {_DIM}({step_type}){_RESET}"
+                    )
                 else:
                     lines.append(f"  {_DIM}\u25fb{label}{_RESET}")
             step = steps[current]
@@ -2260,7 +2372,8 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while current < len(steps):
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
@@ -2269,7 +2382,9 @@ class InteractivePrompt:
                     step_type = str(step.get("type", "input"))
                     default = str(step.get("default", ""))
                     if step_type == "confirm":
-                        result = self._confirm_fallback(f"  {label}?", default.lower() in ("true", "1", "yes"))
+                        result = self._confirm_fallback(
+                            f"  {label}?", default.lower() in ("true", "1", "yes")
+                        )
                         results[label] = str(result)
                         current += 1
                     elif step_type == "select":
@@ -2292,32 +2407,36 @@ class InteractivePrompt:
 
     # ── Spreadsheet editor ────────────────────────────────────────────
 
-    def spreadsheet_editor(self, headers: list[str], rows: list[list[str]],
-                           message: str = "Spreadsheet:") -> list[list[str]]:
+    def spreadsheet_editor(
+        self, headers: list[str], rows: list[list[str]], message: str = "Spreadsheet:"
+    ) -> list[list[str]]:
         """Interactive spreadsheet editor with cell navigation."""
         if not self._is_tty:
             return rows
         return self._spreadsheet_editor_raw(headers, rows, message)
 
-    def _spreadsheet_editor_raw(self, headers: list[str], rows: list[list[str]],
-                                message: str) -> list[list[str]]:
+    def _spreadsheet_editor_raw(
+        self, headers: list[str], rows: list[list[str]], message: str
+    ) -> list[list[str]]:
         fd = self._get_fd()
         col = 0
         row = 0
         editing = False
         edit_buf = ""
-        col_widths = [max(len(h), max((len(r[i]) for r in rows), default=0))
-                     for i, h in enumerate(headers)]
+        col_widths = [
+            max(len(h), max((len(r[i]) for r in rows), default=0)) for i, h in enumerate(headers)
+        ]
 
         def _render() -> str:
             lines = []
-            header = "  " + "  ".join(f"{_BOLD}{h:<{col_widths[i]}}{_RESET}"
-                                      for i, h in enumerate(headers))
+            header = "  " + "  ".join(
+                f"{_BOLD}{h:<{col_widths[i]}}{_RESET}" for i, h in enumerate(headers)
+            )
             lines.append(header)
             for r_idx, r in enumerate(rows):
                 cells = []
                 for c_idx, c in enumerate(r):
-                    display = c[:col_widths[c_idx]]
+                    display = c[: col_widths[c_idx]]
                     if r_idx == row and c_idx == col and editing:
                         cells.append(f"{_REVERSE}{_CYAN}{edit_buf}\u2502{_RESET_REVERSE}")
                     elif r_idx == row and c_idx == col:
@@ -2330,7 +2449,11 @@ class InteractivePrompt:
                         cells.append(display)
                 lines.append("  " + "  ".join(cells))
             pos = f"  {_DIM}row {row + 1}/{len(rows)}, col {col + 1}/{len(headers)}{_RESET}"
-            help_text = f"  {_DIM}(arrows=move, enter=edit, tab=new row, esc=done){_RESET}" if not editing else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
+            help_text = (
+                f"  {_DIM}(arrows=move, enter=edit, tab=new row, esc=done){_RESET}"
+                if not editing
+                else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
                 + "\n".join(lines)
@@ -2345,7 +2468,8 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
@@ -2365,7 +2489,8 @@ class InteractivePrompt:
                             edit_buf = edit_buf[:-1]
                     else:
                         if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                            _clear(); return rows
+                            _clear()
+                            return rows
                         if key.kind == _KEY_ENTER:
                             editing = True
                             edit_buf = rows[row][col]
@@ -2391,8 +2516,9 @@ class InteractivePrompt:
 
     # ── Hierarchical menu ─────────────────────────────────────────────
 
-    def hierarchical_menu(self, menu: dict[str, str | list[str] | dict],
-                          message: str = "Menu:") -> str | None:
+    def hierarchical_menu(
+        self, menu: dict[str, str | list[str] | dict], message: str = "Menu:"
+    ) -> str | None:
         """Navigate a hierarchical menu with nested dicts.
 
         Args:
@@ -2407,8 +2533,9 @@ class InteractivePrompt:
             return None
         return self._hierarchical_menu_raw(menu, message)
 
-    def _hierarchical_menu_raw(self, menu: dict[str, str | list[str] | dict],
-                               message: str) -> str | None:
+    def _hierarchical_menu_raw(
+        self, menu: dict[str, str | list[str] | dict], message: str
+    ) -> str | None:
         fd = self._get_fd()
         path: list[dict] = [menu]
         idx = 0
@@ -2434,7 +2561,8 @@ class InteractivePrompt:
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, enter=open, backspace=back){_RESET}\n"
                 + breadcrumb_str
-                + "\n" + "\n".join(lines)
+                + "\n"
+                + "\n".join(lines)
                 + f"{_HIDE_CURSOR}"
             )
 
@@ -2446,21 +2574,24 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     items = _items()
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return None
+                        _clear()
+                        return None
                     if key.kind == _KEY_ENTER:
                         val = _current()[items[idx]]
                         if isinstance(val, dict):
                             path.append(val)
                             idx = 0
                         else:
-                            _clear(); return str(val)
+                            _clear()
+                            return str(val)
                     if key.kind == _KEY_BACKSPACE:
                         if len(path) > 1:
                             path.pop()
@@ -2474,8 +2605,9 @@ class InteractivePrompt:
 
     # ── Form builder ──────────────────────────────────────────────────
 
-    def form(self, fields: list[dict[str, str | list[str] | None | bool]],
-             message: str = "Form") -> dict[str, str]:
+    def form(
+        self, fields: list[dict[str, str | list[str] | None | bool]], message: str = "Form"
+    ) -> dict[str, str]:
         """Multi-field form with validation.
 
         Each field is a dict with:
@@ -2486,12 +2618,14 @@ class InteractivePrompt:
             'required': bool
         """
         if not self._is_tty:
-            return {f.get("label", f"field{i}"): str(f.get("default", ""))
-                    for i, f in enumerate(fields)}
+            return {
+                f.get("label", f"field{i}"): str(f.get("default", "")) for i, f in enumerate(fields)
+            }
         return self._form_raw(fields, message)
 
-    def _form_raw(self, fields: list[dict[str, str | list[str] | None | bool]],
-                  message: str) -> dict[str, str]:
+    def _form_raw(
+        self, fields: list[dict[str, str | list[str] | None | bool]], message: str
+    ) -> dict[str, str]:
         fd = self._get_fd()
         results: dict[str, str] = {}
         idx = 0
@@ -2512,12 +2646,20 @@ class InteractivePrompt:
                         display = "*" * len(edit_buf)
                     else:
                         display = edit_buf
-                    lines.append(f"  {_REVERSE}{_CYAN}{label}{req_str}: {display}\u2502{_RESET_REVERSE}{_RESET}")
+                    lines.append(
+                        f"  {_REVERSE}{_CYAN}{label}{req_str}: {display}\u2502{_RESET_REVERSE}{_RESET}"
+                    )
                 elif i == idx:
-                    lines.append(f"  {_REVERSE}{_CYAN}{label}{req_str}: {value}{_RESET_REVERSE}{_RESET}")
+                    lines.append(
+                        f"  {_REVERSE}{_CYAN}{label}{req_str}: {value}{_RESET_REVERSE}{_RESET}"
+                    )
                 else:
                     lines.append(f"  {label}{req_str}: {value}")
-            help_text = f"  {_DIM}(arrows=navigate, enter=edit, esc=submit){_RESET}" if not editing else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
+            help_text = (
+                f"  {_DIM}(arrows=navigate, enter=edit, esc=submit){_RESET}"
+                if not editing
+                else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
                 + "\n".join(lines)
@@ -2532,7 +2674,8 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
@@ -2560,7 +2703,8 @@ class InteractivePrompt:
                             edit_buf = edit_buf[:-1]
                     else:
                         if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                            _clear(); return results
+                            _clear()
+                            return results
                         if key.kind == _KEY_ENTER:
                             editing = True
                             edit_buf = results.get(label, default)
@@ -2607,13 +2751,15 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC, _KEY_ENTER):
-                        _clear(); return items
+                        _clear()
+                        return items
                     if key.kind == _KEY_UP or (key.kind == _KEY_CHAR and key.char == "k"):
                         idx = (idx - 1) % max(len(items), 1)
                     elif key.kind == _KEY_DOWN or (key.kind == _KEY_CHAR and key.char == "j"):
@@ -2639,15 +2785,17 @@ class InteractivePrompt:
 
     # ── Kanban board ──────────────────────────────────────────────────
 
-    def kanban_board(self, columns: dict[str, list[str]],
-                     message: str = "Kanban") -> dict[str, list[str]]:
+    def kanban_board(
+        self, columns: dict[str, list[str]], message: str = "Kanban"
+    ) -> dict[str, list[str]]:
         """Interactive kanban board with move between columns."""
         if not self._is_tty:
             return columns
         return self._kanban_board_raw(columns, message)
 
-    def _kanban_board_raw(self, columns: dict[str, list[str]],
-                          message: str) -> dict[str, list[str]]:
+    def _kanban_board_raw(
+        self, columns: dict[str, list[str]], message: str
+    ) -> dict[str, list[str]]:
         fd = self._get_fd()
         col_idx = 0
         item_idx = 0
@@ -2681,13 +2829,15 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC, _KEY_ENTER):
-                        _clear(); return columns
+                        _clear()
+                        return columns
                     col_items = columns[col_names[col_idx]]
                     if key.kind == _KEY_LEFT or (key.kind == _KEY_CHAR and key.char == "h"):
                         col_idx = (col_idx - 1) % len(col_names)
@@ -2718,9 +2868,9 @@ class InteractivePrompt:
 
     # ── Calendar view ─────────────────────────────────────────────────
 
-    def calendar_view(self, year: int, month: int,
-                      events: dict[int, str] | None = None,
-                      message: str = "Calendar") -> int | None:
+    def calendar_view(
+        self, year: int, month: int, events: dict[int, str] | None = None, message: str = "Calendar"
+    ) -> int | None:
         """Interactive calendar view with day selection.
 
         Args:
@@ -2736,9 +2886,11 @@ class InteractivePrompt:
             return None
         return self._calendar_view_raw(year, month, events or {}, message)
 
-    def _calendar_view_raw(self, year: int, month: int,
-                           events: dict[int, str], message: str) -> int | None:
+    def _calendar_view_raw(
+        self, year: int, month: int, events: dict[int, str], message: str
+    ) -> int | None:
         import calendar as _cal
+
         fd = self._get_fd()
         day = 1
         cal = _cal.monthcalendar(year, month)
@@ -2779,15 +2931,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return None
+                        _clear()
+                        return None
                     if key.kind == _KEY_ENTER:
-                        _clear(); return day
+                        _clear()
+                        return day
                     if key.kind == _KEY_UP:
                         day = max(1, day - 7)
                     elif key.kind == _KEY_DOWN:
@@ -2823,19 +2978,21 @@ class InteractivePrompt:
         def _render() -> str:
             hex_str = f"#{r:02x}{g:02x}{b:02x}"
             bar_w = 20
+
             def _bar(val: int, color: str) -> str:
                 filled = int(val / 255 * bar_w)
                 block = "\u2588" * filled
                 gap = " " * (bar_w - filled)
                 return f"\u2588{color}{block}{_RESET}\u2591{gap}"
+
             r_bar = _bar(r, _RED if focus == 0 else "")
             g_bar = _bar(g, _GREEN if focus == 1 else "")
             b_bar = _bar(b, _CYAN if focus == 2 else "")
             lines = [
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_BOLD}{hex_str}{_RESET}",
-                f"{_ERASE_LINE}\r  {_RED if focus==0 else ''}R {r:>3}{_RESET} {r_bar}",
-                f"{_ERASE_LINE}\r  {_GREEN if focus==1 else ''}G {g:>3}{_RESET} {g_bar}",
-                f"{_ERASE_LINE}\r  {_CYAN if focus==2 else ''}B {b:>3}{_RESET} {b_bar}",
+                f"{_ERASE_LINE}\r  {_RED if focus == 0 else ''}R {r:>3}{_RESET} {r_bar}",
+                f"{_ERASE_LINE}\r  {_GREEN if focus == 1 else ''}G {g:>3}{_RESET} {g_bar}",
+                f"{_ERASE_LINE}\r  {_CYAN if focus == 2 else ''}B {b:>3}{_RESET} {b_bar}",
                 f"{_ERASE_LINE}\r  {_DIM}Left/Right: channel  Up/Down: adjust  Enter: confirm{_RESET}{_HIDE_CURSOR}",
             ]
             return "\n".join(lines)
@@ -2855,9 +3012,11 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return f"#{r:02x}{g:02x}{b:02x}"
+                        _clear()
+                        return f"#{r:02x}{g:02x}{b:02x}"
                     if key.kind == _KEY_LEFT:
                         focus = (focus + 1) % 3
                     elif key.kind == _KEY_RIGHT:
@@ -2876,7 +3035,7 @@ class InteractivePrompt:
     def _hex_to_rgb(self, hex_str: str) -> tuple[int, int, int]:
         h = hex_str.lstrip("#")
         if len(h) == 3:
-            h = h[0]*2 + h[1]*2 + h[2]*2
+            h = h[0] * 2 + h[1] * 2 + h[2] * 2
         try:
             return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
         except (ValueError, IndexError):
@@ -2884,8 +3043,7 @@ class InteractivePrompt:
 
     # ── Confirm with timeout ───────────────────────────────────────────
 
-    def confirm_timeout(self, message: str, timeout: float = 5.0,
-                        default: bool = True) -> bool:
+    def confirm_timeout(self, message: str, timeout: float = 5.0, default: bool = True) -> bool:
         """Confirm with an auto-timeout. Returns default if not answered.
 
         Args:
@@ -2900,8 +3058,7 @@ class InteractivePrompt:
             return self._confirm_fallback(message, default)
         return self._confirm_timeout_raw(message, timeout, default)
 
-    def _confirm_timeout_raw(self, message: str, timeout: float,
-                             default: bool) -> bool:
+    def _confirm_timeout_raw(self, message: str, timeout: float, default: bool) -> bool:
         fd = self._get_fd()
         selected = not default  # opposite of default for visual
         import select as _select
@@ -2936,31 +3093,41 @@ class InteractivePrompt:
                     elapsed = _t.monotonic() - start
                     remaining = max(0, timeout - elapsed)
                     if remaining <= 0:
-                        _clear(); return default
+                        _clear()
+                        return default
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render(remaining)}")
                     sys.stdout.flush()
                     r, _, _ = _select.select([fd], [], [], 0.1)
                     if r:
                         key = _read_raw_key(fd)
                         if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                            _clear(); return default
+                            _clear()
+                            return default
                         if key.kind == _KEY_ENTER:
-                            _clear(); return selected
+                            _clear()
+                            return selected
                         if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                             selected = not selected
                         if key.kind == _KEY_CHAR:
                             if key.char in ("y", "Y"):
-                                _clear(); return True
+                                _clear()
+                                return True
                             if key.char in ("n", "N"):
-                                _clear(); return False
+                                _clear()
+                                return False
         except (termios.error, OSError):
             return default
 
     # ── Spin until ─────────────────────────────────────────────────────
 
-    def spin_until(self, message: str, async_fn: Callable[[], Any],
-                   check: Callable[[Any], bool],
-                   interval: float = 0.1, timeout: float = 0) -> Any:
+    def spin_until(
+        self,
+        message: str,
+        async_fn: Callable[[], Any],
+        check: Callable[[Any], bool],
+        interval: float = 0.1,
+        timeout: float = 0,
+    ) -> Any:
         """Wait for an async function's result to satisfy a condition.
 
         Args:
@@ -2975,6 +3142,7 @@ class InteractivePrompt:
         """
         if not self._is_tty:
             import time as _t
+
             start = _t.monotonic()
             while True:
                 result = async_fn()
@@ -2985,10 +3153,16 @@ class InteractivePrompt:
                     return None
         return self._spin_until_raw(message, async_fn, check, interval, timeout)
 
-    def _spin_until_raw(self, message: str, async_fn: Callable[[], Any],
-                        check: Callable[[Any], bool],
-                        interval: float, timeout: float) -> Any:
+    def _spin_until_raw(
+        self,
+        message: str,
+        async_fn: Callable[[], Any],
+        check: Callable[[Any], bool],
+        interval: float,
+        timeout: float,
+    ) -> Any:
         import time as _t
+
         fd = self._get_fd()
         frames = ["\u25cf", "\u25cf\u25cf", "\u25cf\u25cf\u25cf", "\u25cf"]
         idx = 0
@@ -3022,6 +3196,7 @@ class InteractivePrompt:
                     idx += 1
         except (termios.error, OSError):
             import time as _t
+
             start = _t.monotonic()
             while True:
                 result = async_fn()
@@ -3036,6 +3211,7 @@ class InteractivePrompt:
     def time_picker(self, message: str, default: str = "") -> str:
         """Interactive time picker with hour/minute/AM-PM navigation."""
         import datetime as _dt
+
         if not self._is_tty:
             now = _dt.datetime.now()
             return self._ask_fallback(message, default or now.strftime("%I:%M %p"))
@@ -3043,6 +3219,7 @@ class InteractivePrompt:
 
     def _time_picker_raw(self, message: str, default: str) -> str:
         import datetime as _dt
+
         fd = self._get_fd()
         now = _dt.datetime.now()
         h, m = now.hour, now.minute
@@ -3055,8 +3232,10 @@ class InteractivePrompt:
                 ampm = parts[1].upper() if len(parts) > 1 else ampm
             except (ValueError, IndexError):
                 pass
-        if h > 12: h -= 12
-        if h == 0: h = 12
+        if h > 12:
+            h -= 12
+        if h == 0:
+            h = 12
         focus = 0
 
         def _render() -> str:
@@ -3083,28 +3262,35 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default or now.strftime("%I:%M %p")
+                        _clear()
+                        return default or now.strftime("%I:%M %p")
                     if key.kind == _KEY_ENTER:
-                        _clear(); return f"{h:>2}:{m:02d} {ampm}"
+                        _clear()
+                        return f"{h:>2}:{m:02d} {ampm}"
                     if key.kind == _KEY_LEFT:
                         focus = (focus - 1) % 3
                     elif key.kind == _KEY_RIGHT:
                         focus = (focus + 1) % 3
                     elif key.kind == _KEY_UP:
-                        if focus == 0: h = h % 12 + 1
-                        elif focus == 1: m = (m + 5) % 60
-                        else: ampm = "PM" if ampm == "AM" else "AM"
+                        if focus == 0:
+                            h = h % 12 + 1
+                        elif focus == 1:
+                            m = (m + 5) % 60
+                        else:
+                            ampm = "PM" if ampm == "AM" else "AM"
                     elif key.kind == _KEY_DOWN:
-                        if focus == 0: h = (h - 2) % 12 + 1
-                        elif focus == 1: m = (m - 5) % 60
-                        else: ampm = "PM" if ampm == "AM" else "AM"
+                        if focus == 0:
+                            h = (h - 2) % 12 + 1
+                        elif focus == 1:
+                            m = (m - 5) % 60
+                        else:
+                            ampm = "PM" if ampm == "AM" else "AM"
         except (termios.error, OSError):
             return default or now.strftime("%I:%M %p")
 
     # ── Progress ETA ───────────────────────────────────────────────────
 
-    def progress_eta(self, label: str, current: int, total: int,
-                     elapsed: float = 0) -> None:
+    def progress_eta(self, label: str, current: int, total: int, elapsed: float = 0) -> None:
         """Display a progress bar with estimated time remaining."""
         frac = current / max(total, 1)
         bar_w = 25
@@ -3152,29 +3338,37 @@ class InteractivePrompt:
             filtered = _get_filtered()
             lines: list[str] = []
             lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
-            lines.append(f"{_ERASE_LINE}\r  {_BOLD}\u26b2 Search:{_RESET} {_BOLD}{query}{_RESET}\u2502{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_BOLD}\u26b2 Search:{_RESET} {_BOLD}{query}{_RESET}\u2502{_HIDE_CURSOR}"
+            )
             if not filtered:
                 lines.append(f"{_ERASE_LINE}\r  {_DIM}No matching options{_RESET}")
             else:
                 for i in range(min(max_visible, len(filtered))):
                     idx = scroll + i
-                    if idx >= len(filtered): break
+                    if idx >= len(filtered):
+                        break
                     text = _truncate(filtered[idx], 50)
                     if idx == cursor:
                         lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {text}{_RESET_REVERSE}{_RESET}")
                     else:
                         lines.append(f"{_ERASE_LINE}\r   {text}")
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
             sys.stdout.write(_HIDE_CURSOR)
-            for line in lines: sys.stdout.write(f"{line}\n")
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
             sys.stdout.flush()
 
         def _clear(line_count: int) -> None:
-            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
-            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
 
         try:
             with _RawTerminal(fd):
@@ -3187,27 +3381,36 @@ class InteractivePrompt:
                     prev_count = len(lines)
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(prev_count); return options[0]
+                        _clear(prev_count)
+                        return options[0]
                     if key.kind == _KEY_ENTER:
                         _clear(prev_count)
                         return filtered[cursor] if 0 <= cursor < len(filtered) else options[0]
                     if key.kind == _KEY_UP:
                         cursor = max(0, cursor - 1)
-                        if cursor < scroll: scroll = cursor
+                        if cursor < scroll:
+                            scroll = cursor
                     elif key.kind == _KEY_DOWN:
                         cursor = min(len(filtered) - 1, cursor + 1)
-                        if cursor >= scroll + max_visible: scroll = cursor - max_visible + 1
+                        if cursor >= scroll + max_visible:
+                            scroll = cursor - max_visible + 1
                     elif key.kind == _KEY_BACKSPACE:
-                        if query: query = query[:-1]; cursor = 0; scroll = 0
+                        if query:
+                            query = query[:-1]
+                            cursor = 0
+                            scroll = 0
                     elif key.kind == _KEY_CHAR:
-                        query += key.char; cursor = 0; scroll = 0
+                        query += key.char
+                        cursor = 0
+                        scroll = 0
         except (termios.error, OSError):
             return self._select_fallback(title, options)
 
     # ── Table select ───────────────────────────────────────────────────
 
-    def table_select(self, headers: list[str], rows: list[list[str]],
-                     title: str = "Select row") -> int | None:
+    def table_select(
+        self, headers: list[str], rows: list[list[str]], title: str = "Select row"
+    ) -> int | None:
         """Interactive table with row selection. Returns selected row index."""
         if not rows:
             return None
@@ -3215,8 +3418,9 @@ class InteractivePrompt:
             return 0
         return self._table_select_raw(headers, rows, title)
 
-    def _table_select_raw(self, headers: list[str], rows: list[list[str]],
-                          title: str) -> int | None:
+    def _table_select_raw(
+        self, headers: list[str], rows: list[list[str]], title: str
+    ) -> int | None:
         fd = self._get_fd()
         cursor = 0
         scroll = 0
@@ -3224,17 +3428,24 @@ class InteractivePrompt:
         widths = [len(h) for h in headers]
         for row in rows:
             for i, cell in enumerate(row):
-                if i < len(widths): widths[i] = max(widths[i], len(str(cell)))
+                if i < len(widths):
+                    widths[i] = max(widths[i], len(str(cell)))
 
         def _render() -> list[str]:
             lines: list[str] = []
             lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
-            lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths, strict=False))}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths, strict=False))}"
+            )
             lines.append(f"{_ERASE_LINE}\r  {_DIM}{_dash_row(widths)}{_RESET}")
             for i in range(min(max_visible, len(rows))):
                 idx = scroll + i
-                if idx >= len(rows): break
-                cells = "  ".join(str(rows[idx][j]).ljust(widths[j]) for j in range(min(len(widths), len(rows[idx]))))
+                if idx >= len(rows):
+                    break
+                cells = "  ".join(
+                    str(rows[idx][j]).ljust(widths[j])
+                    for j in range(min(len(widths), len(rows[idx])))
+                )
                 if idx == cursor:
                     lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {cells}{_RESET_REVERSE}{_RESET}")
                 else:
@@ -3244,12 +3455,15 @@ class InteractivePrompt:
 
         def _write_lines(lines: list[str]) -> None:
             sys.stdout.write(_HIDE_CURSOR)
-            for line in lines: sys.stdout.write(f"{line}\n")
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
             sys.stdout.flush()
 
         def _clear(line_count: int) -> None:
-            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
-            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
 
         try:
             with _RawTerminal(fd):
@@ -3261,22 +3475,27 @@ class InteractivePrompt:
                     prev_count = len(lines)
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(prev_count); return None
+                        _clear(prev_count)
+                        return None
                     if key.kind == _KEY_ENTER:
-                        _clear(prev_count); return cursor if 0 <= cursor < len(rows) else None
+                        _clear(prev_count)
+                        return cursor if 0 <= cursor < len(rows) else None
                     if key.kind == _KEY_UP:
                         cursor = max(0, cursor - 1)
-                        if cursor < scroll: scroll = cursor
+                        if cursor < scroll:
+                            scroll = cursor
                     elif key.kind == _KEY_DOWN:
                         cursor = min(len(rows) - 1, cursor + 1)
-                        if cursor >= scroll + max_visible: scroll = cursor - max_visible + 1
+                        if cursor >= scroll + max_visible:
+                            scroll = cursor - max_visible + 1
         except (termios.error, OSError):
             return 0
 
     # ── Year picker ────────────────────────────────────────────────────
 
-    def year_picker(self, message: str, default: int = 0,
-                    min_year: int = 1900, max_year: int = 2100) -> int:
+    def year_picker(
+        self, message: str, default: int = 0, min_year: int = 1900, max_year: int = 2100
+    ) -> int:
         """Interactive year picker with arrow keys.
 
         Args:
@@ -3289,6 +3508,7 @@ class InteractivePrompt:
             selected year as integer
         """
         import datetime as _dt
+
         if not self._is_tty:
             return int(self._ask_fallback(message, str(default or _dt.date.today().year)))
         return self._year_picker_raw(message, default or _dt.date.today().year, min_year, max_year)
@@ -3305,15 +3525,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return year
+                        _clear()
+                        return year
                     if key.kind == _KEY_ENTER:
-                        _clear(); return year
+                        _clear()
+                        return year
                     if key.kind == _KEY_UP:
                         year = min(max_y, year + 1)
                     elif key.kind == _KEY_DOWN:
@@ -3338,14 +3561,27 @@ class InteractivePrompt:
             selected month as integer (1-12)
         """
         import datetime as _dt
+
         if not self._is_tty:
             return int(self._ask_fallback(message, str(default or _dt.date.today().month)))
         return self._month_picker_raw(message, default or _dt.date.today().month)
 
     def _month_picker_raw(self, message: str, month: int) -> int:
         fd = self._get_fd()
-        months = ["January", "February", "March", "April", "May", "June",
-                  "July", "August", "September", "October", "November", "December"]
+        months = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ]
 
         def _render() -> str:
             return (
@@ -3359,15 +3595,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return month
+                        _clear()
+                        return month
                     if key.kind == _KEY_ENTER:
-                        _clear(); return month
+                        _clear()
+                        return month
                     if key.kind == _KEY_UP:
                         month = month % 12 + 1
                     elif key.kind == _KEY_DOWN:
@@ -3381,8 +3620,7 @@ class InteractivePrompt:
 
     # ── Confirm list ───────────────────────────────────────────────────
 
-    def confirm_list(self, title: str, items: list[str],
-                     default: bool = True) -> list[str]:
+    def confirm_list(self, title: str, items: list[str], default: bool = True) -> list[str]:
         """Confirm each item in a list with y/N.
 
         Args:
@@ -3399,8 +3637,7 @@ class InteractivePrompt:
             return self._confirm_multi_fallback(title, items, default)
         return self._confirm_list_raw(title, items, default)
 
-    def _confirm_list_raw(self, title: str, items: list[str],
-                          default: bool) -> list[str]:
+    def _confirm_list_raw(self, title: str, items: list[str], default: bool) -> list[str]:
         fd = self._get_fd()
         cursor = 0
         answers: dict[int, bool] = {}
@@ -3418,17 +3655,22 @@ class InteractivePrompt:
                     lines.append(f"{_ERASE_LINE}\r{_REVERSE} {icon} {item}{_RESET_REVERSE}{_RESET}")
                 else:
                     lines.append(f"{_ERASE_LINE}\r  {icon} {item}")
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}Space: toggle  Enter: confirm  y/n: toggle all{_RESET}{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_DIM}Space: toggle  Enter: confirm  y/n: toggle all{_RESET}{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
             sys.stdout.write(_HIDE_CURSOR)
-            for line in lines: sys.stdout.write(f"{line}\n")
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
             sys.stdout.flush()
 
         def _clear(line_count: int) -> None:
-            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
-            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
 
         try:
             with _RawTerminal(fd):
@@ -3440,7 +3682,8 @@ class InteractivePrompt:
                     prev_count = len(lines)
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(prev_count); return []
+                        _clear(prev_count)
+                        return []
                     if key.kind == _KEY_ENTER:
                         _clear(prev_count)
                         return [items[i] for i in range(len(items)) if answers.get(i, default)]
@@ -3452,16 +3695,19 @@ class InteractivePrompt:
                         answers[cursor] = not answers.get(cursor, default)
                     elif key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            for i in range(len(items)): answers[i] = True
+                            for i in range(len(items)):
+                                answers[i] = True
                         elif key.char in ("n", "N"):
-                            for i in range(len(items)): answers[i] = False
+                            for i in range(len(items)):
+                                answers[i] = False
         except (termios.error, OSError):
             return self._confirm_multi_fallback(title, items, default)
 
     # ── Table edit ─────────────────────────────────────────────────────
 
-    def table_edit(self, headers: list[str], rows: list[list[str]],
-                   title: str = "Edit table") -> list[list[str]]:
+    def table_edit(
+        self, headers: list[str], rows: list[list[str]], title: str = "Edit table"
+    ) -> list[list[str]]:
         """Interactive table with cell editing.
 
         Args:
@@ -3478,8 +3724,9 @@ class InteractivePrompt:
             return rows
         return self._table_edit_raw(headers, rows, title)
 
-    def _table_edit_raw(self, headers: list[str], rows: list[list[str]],
-                        title: str) -> list[list[str]]:
+    def _table_edit_raw(
+        self, headers: list[str], rows: list[list[str]], title: str
+    ) -> list[list[str]]:
         fd = self._get_fd()
         cursor_row = 0
         cursor_col = 0
@@ -3488,17 +3735,26 @@ class InteractivePrompt:
         widths = [len(h) for h in headers]
         for row in rows:
             for i, cell in enumerate(row):
-                if i < len(widths): widths[i] = max(widths[i], len(str(cell)))
+                if i < len(widths):
+                    widths[i] = max(widths[i], len(str(cell)))
 
         def _render() -> list[str]:
             lines: list[str] = []
-            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}(Tab: cell  Enter: edit/save  Esc: done){_RESET}")
-            lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths, strict=False))}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}(Tab: cell  Enter: edit/save  Esc: done){_RESET}"
+            )
+            lines.append(
+                f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths, strict=False))}"
+            )
             lines.append(f"{_ERASE_LINE}\r  {_DIM}{_dash_row(widths)}{_RESET}")
             for r_idx, row in enumerate(rows):
                 cells = []
                 for c_idx in range(min(len(widths), len(row))):
-                    val = "".join(buf) if editing and r_idx == cursor_row and c_idx == cursor_col else str(row[c_idx])
+                    val = (
+                        "".join(buf)
+                        if editing and r_idx == cursor_row and c_idx == cursor_col
+                        else str(row[c_idx])
+                    )
                     val = val.ljust(widths[c_idx])
                     if r_idx == cursor_row and c_idx == cursor_col:
                         if editing:
@@ -3512,12 +3768,15 @@ class InteractivePrompt:
 
         def _write_lines(lines: list[str]) -> None:
             sys.stdout.write(_HIDE_CURSOR)
-            for line in lines: sys.stdout.write(f"{line}\n")
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
             sys.stdout.flush()
 
         def _clear(line_count: int) -> None:
-            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
-            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
 
         try:
             with _RawTerminal(fd):
@@ -3530,15 +3789,19 @@ class InteractivePrompt:
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
                         if editing:
-                            editing = False; buf.clear()
+                            editing = False
+                            buf.clear()
                         else:
-                            _clear(prev_count); return rows
+                            _clear(prev_count)
+                            return rows
                     elif key.kind == _KEY_ENTER:
                         if editing:
                             rows[cursor_row][cursor_col] = "".join(buf)
-                            editing = False; buf.clear()
+                            editing = False
+                            buf.clear()
                         else:
-                            editing = True; buf = list(str(rows[cursor_row][cursor_col]))
+                            editing = True
+                            buf = list(str(rows[cursor_row][cursor_col]))
                     elif not editing:
                         if key.kind == _KEY_TAB:
                             cursor_col = (cursor_col + 1) % len(widths)
@@ -3552,9 +3815,11 @@ class InteractivePrompt:
                             cursor_col = min(len(widths) - 1, cursor_col + 1)
                     else:
                         if key.kind == _KEY_BACKSPACE:
-                            if buf: buf.pop()
+                            if buf:
+                                buf.pop()
                         elif key.kind == _KEY_DELETE:
-                            if buf: buf.clear()
+                            if buf:
+                                buf.clear()
                         elif key.kind == _KEY_CHAR:
                             buf.append(key.char)
         except (termios.error, OSError):
@@ -3602,34 +3867,42 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return total
+                        _clear()
+                        return total
                     if key.kind == _KEY_ENTER:
-                        _clear(); return h * 3600 + m * 60 + s
+                        _clear()
+                        return h * 3600 + m * 60 + s
                     if key.kind == _KEY_LEFT:
                         focus = (focus - 1) % 3
                     elif key.kind == _KEY_RIGHT:
                         focus = (focus + 1) % 3
                     elif key.kind == _KEY_UP:
-                        if focus == 0: h = min(99, h + 1)
-                        elif focus == 1: m = (m + 5) % 60
-                        else: s = (s + 5) % 60
+                        if focus == 0:
+                            h = min(99, h + 1)
+                        elif focus == 1:
+                            m = (m + 5) % 60
+                        else:
+                            s = (s + 5) % 60
                     elif key.kind == _KEY_DOWN:
-                        if focus == 0: h = max(0, h - 1)
-                        elif focus == 1: m = (m - 5) % 60
-                        else: s = (s - 5) % 60
+                        if focus == 0:
+                            h = max(0, h - 1)
+                        elif focus == 1:
+                            m = (m - 5) % 60
+                        else:
+                            s = (s - 5) % 60
         except (termios.error, OSError):
             return total
 
     # ── Confirm text ───────────────────────────────────────────────────
 
-    def confirm_text(self, message: str, target: str,
-                     hint: str = "") -> bool:
+    def confirm_text(self, message: str, target: str, hint: str = "") -> bool:
         """Confirm by typing exact text.
 
         Args:
@@ -3662,22 +3935,27 @@ class InteractivePrompt:
 
         def _clear() -> None:
             sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}{_CURSOR_UP}{_ERASE_LINE}{_SHOW_CURSOR}")
-            if hint: sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            if hint:
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
             sys.stdout.flush()
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return False
+                        _clear()
+                        return False
                     if key.kind == _KEY_ENTER:
-                        _clear(); return "".join(buf) == target
+                        _clear()
+                        return "".join(buf) == target
                     if key.kind == _KEY_BACKSPACE:
-                        if buf: buf.pop()
+                        if buf:
+                            buf.pop()
                     elif key.kind == _KEY_CHAR:
                         buf.append(key.char)
         except (termios.error, OSError):
@@ -3697,8 +3975,11 @@ class InteractivePrompt:
             selected week number (1-52)
         """
         import datetime as _dt
+
         if not self._is_tty:
-            return int(self._ask_fallback(message, str(default or _dt.date.today().isocalendar()[1])))
+            return int(
+                self._ask_fallback(message, str(default or _dt.date.today().isocalendar()[1]))
+            )
         return self._week_picker_raw(message, default or _dt.date.today().isocalendar()[1])
 
     def _week_picker_raw(self, message: str, week: int) -> int:
@@ -3706,6 +3987,7 @@ class InteractivePrompt:
 
         def _render() -> str:
             import datetime as _dt
+
             jan1 = _dt.date(_dt.date.today().year, 1, 1)
             start = jan1 + _dt.timedelta(weeks=week - 1)
             end = start + _dt.timedelta(days=6)
@@ -3721,15 +4003,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return week
+                        _clear()
+                        return week
                     if key.kind == _KEY_ENTER:
-                        _clear(); return week
+                        _clear()
+                        return week
                     if key.kind == _KEY_UP:
                         week = min(52, week + 1)
                     elif key.kind == _KEY_DOWN:
@@ -3750,8 +4035,11 @@ class InteractivePrompt:
             selected quarter (1-4)
         """
         import datetime as _dt
+
         if not self._is_tty:
-            return int(self._ask_fallback(message, str(default or (_dt.date.today().month - 1) // 3 + 1)))
+            return int(
+                self._ask_fallback(message, str(default or (_dt.date.today().month - 1) // 3 + 1))
+            )
         return self._quarter_picker_raw(message, default or (_dt.date.today().month - 1) // 3 + 1)
 
     def _quarter_picker_raw(self, message: str, q: int) -> int:
@@ -3767,15 +4055,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return q
+                        _clear()
+                        return q
                     if key.kind == _KEY_ENTER:
-                        _clear(); return q
+                        _clear()
+                        return q
                     if key.kind in (_KEY_UP, _KEY_RIGHT):
                         q = q % 4 + 1
                     elif key.kind in (_KEY_DOWN, _KEY_LEFT):
@@ -3841,11 +4132,26 @@ class InteractivePrompt:
             selected timezone string
         """
         timezones = [
-            "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
-            "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Moscow",
-            "Asia/Tokyo", "Asia/Shanghai", "Asia/Kolkata", "Asia/Dubai",
-            "Australia/Sydney", "Pacific/Auckland", "America/Sao_Paulo",
-            "Africa/Cairo", "Africa/Lagos", "Asia/Singapore", "Asia/Seoul",
+            "UTC",
+            "US/Eastern",
+            "US/Central",
+            "US/Mountain",
+            "US/Pacific",
+            "Europe/London",
+            "Europe/Paris",
+            "Europe/Berlin",
+            "Europe/Moscow",
+            "Asia/Tokyo",
+            "Asia/Shanghai",
+            "Asia/Kolkata",
+            "Asia/Dubai",
+            "Australia/Sydney",
+            "Pacific/Auckland",
+            "America/Sao_Paulo",
+            "Africa/Cairo",
+            "Africa/Lagos",
+            "Asia/Singapore",
+            "Asia/Seoul",
         ]
         if not self._is_tty:
             return self._ask_fallback(message, default)
@@ -3864,13 +4170,26 @@ class InteractivePrompt:
             selected 3-letter currency code
         """
         currencies = [
-            "USD - US Dollar", "EUR - Euro", "GBP - British Pound",
-            "JPY - Japanese Yen", "CNY - Chinese Yuan", "KRW - Korean Won",
-            "INR - Indian Rupee", "BRL - Brazilian Real", "CAD - Canadian Dollar",
-            "AUD - Australian Dollar", "CHF - Swiss Franc", "MXN - Mexican Peso",
-            "SGD - Singapore Dollar", "HKD - Hong Kong Dollar", "SEK - Swedish Krona",
-            "NOK - Norwegian Krone", "DKK - Danish Krone", "PLN - Polish Zloty",
-            "THB - Thai Baht", "ZAR - South African Rand",
+            "USD - US Dollar",
+            "EUR - Euro",
+            "GBP - British Pound",
+            "JPY - Japanese Yen",
+            "CNY - Chinese Yuan",
+            "KRW - Korean Won",
+            "INR - Indian Rupee",
+            "BRL - Brazilian Real",
+            "CAD - Canadian Dollar",
+            "AUD - Australian Dollar",
+            "CHF - Swiss Franc",
+            "MXN - Mexican Peso",
+            "SGD - Singapore Dollar",
+            "HKD - Hong Kong Dollar",
+            "SEK - Swedish Krona",
+            "NOK - Norwegian Krone",
+            "DKK - Danish Krone",
+            "PLN - Polish Zloty",
+            "THB - Thai Baht",
+            "ZAR - South African Rand",
         ]
         if not self._is_tty:
             return self._ask_fallback(message, default)
@@ -3890,11 +4209,26 @@ class InteractivePrompt:
             selected 2-letter language code
         """
         languages = [
-            "en - English", "es - Spanish", "fr - French", "de - German",
-            "it - Italian", "pt - Portuguese", "ru - Russian", "zh - Chinese",
-            "ja - Japanese", "ko - Korean", "ar - Arabic", "hi - Hindi",
-            "nl - Dutch", "sv - Swedish", "pl - Polish", "tr - Turkish",
-            "vi - Vietnamese", "th - Thai", "uk - Ukrainian", "cs - Czech",
+            "en - English",
+            "es - Spanish",
+            "fr - French",
+            "de - German",
+            "it - Italian",
+            "pt - Portuguese",
+            "ru - Russian",
+            "zh - Chinese",
+            "ja - Japanese",
+            "ko - Korean",
+            "ar - Arabic",
+            "hi - Hindi",
+            "nl - Dutch",
+            "sv - Swedish",
+            "pl - Polish",
+            "tr - Turkish",
+            "vi - Vietnamese",
+            "th - Thai",
+            "uk - Ukrainian",
+            "cs - Czech",
         ]
         if not self._is_tty:
             return self._ask_fallback(message, default)
@@ -3903,8 +4237,7 @@ class InteractivePrompt:
 
     # ── Confirm with preview ───────────────────────────────────────────
 
-    def confirm_with_preview(self, message: str, preview: str,
-                             default: bool = False) -> bool:
+    def confirm_with_preview(self, message: str, preview: str, default: bool = False) -> bool:
         """Confirm with a preview of what will happen.
 
         Args:
@@ -3919,8 +4252,7 @@ class InteractivePrompt:
             return self._confirm_fallback(message, default)
         return self._confirm_with_preview_raw(message, preview, default)
 
-    def _confirm_with_preview_raw(self, message: str, preview: str,
-                                  default: bool) -> bool:
+    def _confirm_with_preview_raw(self, message: str, preview: str, default: bool) -> bool:
         fd = self._get_fd()
         selected = not default
 
@@ -3955,21 +4287,24 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return selected
+                        _clear()
+                        return selected
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         selected = not selected
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return True
+                            _clear()
+                            return True
                         if key.char in ("n", "N"):
-                            _clear(); return False
+                            _clear()
+                            return False
         except (termios.error, OSError):
             return default
 
-    def progress_bar(self, label: str, current: int, total: int,
-                     width: int = 30) -> None:
+    def progress_bar(self, label: str, current: int, total: int, width: int = 30) -> None:
         """Display a progress bar with percentage.
 
         Args:
@@ -3987,8 +4322,9 @@ class InteractivePrompt:
 
     # ── Date range picker ──────────────────────────────────────────────
 
-    def date_range_picker(self, message: str,
-                          default_start: str = "", default_end: str = "") -> tuple[str, str]:
+    def date_range_picker(
+        self, message: str, default_start: str = "", default_end: str = ""
+    ) -> tuple[str, str]:
         """Pick a date range (start and end dates).
 
         Args:
@@ -4007,6 +4343,7 @@ class InteractivePrompt:
 
     def _date_range_picker_raw(self, message: str, ds: str, de: str) -> tuple[str, str]:
         import datetime as _dt
+
         today = _dt.date.today()
         if not ds:
             ds = today.strftime("%Y-%m-%d")
@@ -4035,10 +4372,18 @@ class InteractivePrompt:
     def _color_picker_raw(self, message: str, default: str) -> str:
         fd = self._get_fd()
         palette = [
-            ("#ff0000", "Red"), ("#ff8000", "Orange"), ("#ffff00", "Yellow"),
-            ("#00ff00", "Green"), ("#00ffff", "Cyan"), ("#0080ff", "Blue"),
-            ("#8000ff", "Purple"), ("#ff00ff", "Magenta"), ("#ffffff", "White"),
-            ("#808080", "Gray"), ("#000000", "Black"), ("#804000", "Brown"),
+            ("#ff0000", "Red"),
+            ("#ff8000", "Orange"),
+            ("#ffff00", "Yellow"),
+            ("#00ff00", "Green"),
+            ("#00ffff", "Cyan"),
+            ("#0080ff", "Blue"),
+            ("#8000ff", "Purple"),
+            ("#ff00ff", "Magenta"),
+            ("#ffffff", "White"),
+            ("#808080", "Gray"),
+            ("#000000", "Black"),
+            ("#804000", "Brown"),
         ]
         colors = [c[0] for c in palette]
         names = [c[1] for c in palette]
@@ -4065,15 +4410,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return colors[idx]
+                        _clear()
+                        return colors[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return colors[idx]
+                        _clear()
+                        return colors[idx]
                     if key.kind in (_KEY_UP, _KEY_RIGHT):
                         idx = (idx + 1) % len(colors)
                     elif key.kind in (_KEY_DOWN, _KEY_LEFT):
@@ -4083,8 +4431,9 @@ class InteractivePrompt:
 
     # ── Time range picker ──────────────────────────────────────────────
 
-    def time_range_picker(self, message: str,
-                          default_start: str = "", default_end: str = "") -> tuple[str, str]:
+    def time_range_picker(
+        self, message: str, default_start: str = "", default_end: str = ""
+    ) -> tuple[str, str]:
         """Pick a time range (start and end times).
 
         Args:
@@ -4103,6 +4452,7 @@ class InteractivePrompt:
 
     def _time_range_picker_raw(self, message: str, ds: str, de: str) -> tuple[str, str]:
         import datetime as _dt
+
         now = _dt.datetime.now()
         if not ds:
             ds = now.strftime("%H:%M")
@@ -4114,9 +4464,9 @@ class InteractivePrompt:
 
     # ── Number range picker ────────────────────────────────────────────
 
-    def number_range_picker(self, message: str, min_val: int = 0,
-                            max_val: int = 100, default: int = 0,
-                            step: int = 1) -> int:
+    def number_range_picker(
+        self, message: str, min_val: int = 0, max_val: int = 100, default: int = 0, step: int = 1
+    ) -> int:
         """Pick a number from a range using arrow keys.
 
         Args:
@@ -4133,8 +4483,9 @@ class InteractivePrompt:
             return int(self._ask_fallback(message, str(default)))
         return self._number_range_picker_raw(message, min_val, max_val, default, step)
 
-    def _number_range_picker_raw(self, message: str, min_val: int, max_val: int,
-                                 default: int, step: int) -> int:
+    def _number_range_picker_raw(
+        self, message: str, min_val: int, max_val: int, default: int, step: int
+    ) -> int:
         fd = self._get_fd()
         val = default
 
@@ -4157,15 +4508,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return val
+                        _clear()
+                        return val
                     if key.kind == _KEY_ENTER:
-                        _clear(); return val
+                        _clear()
+                        return val
                     if key.kind in (_KEY_UP, _KEY_RIGHT):
                         val = min(max_val, val + step)
                     elif key.kind in (_KEY_DOWN, _KEY_LEFT):
@@ -4179,8 +4533,9 @@ class InteractivePrompt:
 
     # ── Confirm with details ───────────────────────────────────────────
 
-    def confirm_with_details(self, message: str, details: dict[str, str],
-                             default: bool = False) -> bool:
+    def confirm_with_details(
+        self, message: str, details: dict[str, str], default: bool = False
+    ) -> bool:
         """Confirm with key-value details displayed.
 
         Args:
@@ -4195,8 +4550,9 @@ class InteractivePrompt:
             return self._confirm_fallback(message, default)
         return self._confirm_with_details_raw(message, details, default)
 
-    def _confirm_with_details_raw(self, message: str, details: dict[str, str],
-                                  default: bool) -> bool:
+    def _confirm_with_details_raw(
+        self, message: str, details: dict[str, str], default: bool
+    ) -> bool:
         fd = self._get_fd()
         selected = not default
 
@@ -4207,9 +4563,7 @@ class InteractivePrompt:
             else:
                 yes_text = " Yes "
                 no_text = f"{_REVERSE}{_RED} No {_RESET_REVERSE}{_RESET}"
-            detail_lines = "\n".join(
-                f"  {_DIM}{k}:{_RESET} {v}" for k, v in details.items()
-            )
+            detail_lines = "\n".join(f"  {_DIM}{k}:{_RESET} {v}" for k, v in details.items())
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}\n"
                 f"{detail_lines}\n"
@@ -4232,16 +4586,20 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return selected
+                        _clear()
+                        return selected
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         selected = not selected
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return True
+                            _clear()
+                            return True
                         if key.char in ("n", "N"):
-                            _clear(); return False
+                            _clear()
+                            return False
         except (termios.error, OSError):
             return default
 
@@ -4272,8 +4630,7 @@ class InteractivePrompt:
 
     # ── Select with filter ─────────────────────────────────────────────
 
-    def select_with_filter(self, message: str, options: list[str],
-                           default: str = "") -> str:
+    def select_with_filter(self, message: str, options: list[str], default: str = "") -> str:
         """Select from options with type-to-filter.
 
         Args:
@@ -4288,8 +4645,7 @@ class InteractivePrompt:
             return self._select_fallback(message, options)
         return self._select_with_filter_raw(message, options, default)
 
-    def _select_with_filter_raw(self, message: str, options: list[str],
-                                default: str) -> str:
+    def _select_with_filter_raw(self, message: str, options: list[str], default: str) -> str:
         fd = self._get_fd()
         idx = 0
         query = ""
@@ -4299,8 +4655,7 @@ class InteractivePrompt:
         def _filtered() -> list[int]:
             if not query:
                 return list(range(len(options)))
-            return [i for i, o in enumerate(options)
-                    if query.lower() in o.lower()]
+            return [i for i, o in enumerate(options) if query.lower() in o.lower()]
 
         def _render() -> str:
             filtered = _filtered()
@@ -4316,9 +4671,7 @@ class InteractivePrompt:
             filter_str = f"  {_DIM}filter: {query}{_RESET}" if query else ""
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(type to filter, arrows){_RESET}\n"
-                f"{filter_str}\n"
-                + "\n".join(vis)
-                + f"{_HIDE_CURSOR}"
+                f"{filter_str}\n" + "\n".join(vis) + f"{_HIDE_CURSOR}"
             )
 
         def _clear() -> None:
@@ -4329,15 +4682,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_UP:
                         filtered = _filtered()
                         if filtered:
@@ -4364,9 +4720,9 @@ class InteractivePrompt:
 
     # ── Confirm with preview and edit ──────────────────────────────────
 
-    def confirm_with_preview_and_edit(self, message: str, preview: str,
-                                      edit_prompt: str = "Edit: ",
-                                      default: bool = False) -> tuple[bool, str]:
+    def confirm_with_preview_and_edit(
+        self, message: str, preview: str, edit_prompt: str = "Edit: ", default: bool = False
+    ) -> tuple[bool, str]:
         """Confirm with preview, with option to edit before confirming.
 
         Args:
@@ -4382,8 +4738,9 @@ class InteractivePrompt:
             return (self._confirm_fallback(message, default), preview)
         return self._confirm_with_preview_and_edit_raw(message, preview, edit_prompt, default)
 
-    def _confirm_with_preview_and_edit_raw(self, message: str, preview: str,
-                                           edit_prompt: str, default: bool) -> tuple[bool, str]:
+    def _confirm_with_preview_and_edit_raw(
+        self, message: str, preview: str, edit_prompt: str, default: bool
+    ) -> tuple[bool, str]:
         fd = self._get_fd()
         selected = not default
         text = preview
@@ -4420,16 +4777,20 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return (default, text)
+                        _clear()
+                        return (default, text)
                     if key.kind == _KEY_ENTER:
-                        _clear(); return (selected, text)
+                        _clear()
+                        return (selected, text)
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         selected = not selected
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return (True, text)
+                            _clear()
+                            return (True, text)
                         if key.char in ("n", "N"):
-                            _clear(); return (False, text)
+                            _clear()
+                            return (False, text)
                         if key.char in ("e", "E"):
                             _clear()
                             edited = self._ask_fallback(edit_prompt, text)
@@ -4439,8 +4800,7 @@ class InteractivePrompt:
 
     # ── Progress bar colored ───────────────────────────────────────────
 
-    def progress_bar_colored(self, label: str, current: int, total: int,
-                             width: int = 30) -> None:
+    def progress_bar_colored(self, label: str, current: int, total: int, width: int = 30) -> None:
         """Display a colored progress bar (green→yellow→red based on progress).
 
         Args:
@@ -4492,8 +4852,9 @@ class InteractivePrompt:
 
     # ── Select with icons ──────────────────────────────────────────────
 
-    def select_with_icons(self, message: str, options: list[tuple[str, str]],
-                          default: str = "") -> str:
+    def select_with_icons(
+        self, message: str, options: list[tuple[str, str]], default: str = ""
+    ) -> str:
         """Select from options with icons.
 
         Args:
@@ -4509,8 +4870,9 @@ class InteractivePrompt:
             return self._select_fallback(message, labels)
         return self._select_with_icons_raw(message, options, default)
 
-    def _select_with_icons_raw(self, message: str, options: list[tuple[str, str]],
-                               default: str) -> str:
+    def _select_with_icons_raw(
+        self, message: str, options: list[tuple[str, str]], default: str
+    ) -> str:
         fd = self._get_fd()
         labels = [o[1] for o in options]
         icons = [o[0] for o in options]
@@ -4538,15 +4900,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return labels[idx]
+                        _clear()
+                        return labels[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return labels[idx]
+                        _clear()
+                        return labels[idx]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(options)
                     elif key.kind == _KEY_DOWN:
@@ -4556,8 +4921,7 @@ class InteractivePrompt:
 
     # ── Confirm with warning ───────────────────────────────────────────
 
-    def confirm_with_warning(self, message: str, warning: str,
-                             default: bool = False) -> bool:
+    def confirm_with_warning(self, message: str, warning: str, default: bool = False) -> bool:
         """Confirm with a warning message displayed.
 
         Args:
@@ -4572,8 +4936,7 @@ class InteractivePrompt:
             return self._confirm_fallback(message, default)
         return self._confirm_with_warning_raw(message, warning, default)
 
-    def _confirm_with_warning_raw(self, message: str, warning: str,
-                                  default: bool) -> bool:
+    def _confirm_with_warning_raw(self, message: str, warning: str, default: bool) -> bool:
         fd = self._get_fd()
         selected = not default
 
@@ -4605,23 +4968,28 @@ class InteractivePrompt:
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return selected
+                        _clear()
+                        return selected
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         selected = not selected
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return True
+                            _clear()
+                            return True
                         if key.char in ("n", "N"):
-                            _clear(); return False
+                            _clear()
+                            return False
         except (termios.error, OSError):
             return default
 
     # ── Progress bar with ETA ──────────────────────────────────────────
 
-    def progress_bar_eta(self, label: str, current: int, total: int,
-                         elapsed: float, width: int = 30) -> None:
+    def progress_bar_eta(
+        self, label: str, current: int, total: int, elapsed: float, width: int = 30
+    ) -> None:
         """Display a progress bar with percentage and ETA.
 
         Args:
@@ -4647,7 +5015,9 @@ class InteractivePrompt:
                 eta = f"{remaining / 3600:.1f}h"
         else:
             eta = "?"
-        self._io.write(f"  {_CYAN}{label}{_RESET} {_BOLD}{bar}{_RESET} {pct} {_DIM}ETA: {eta}{_RESET}")
+        self._io.write(
+            f"  {_CYAN}{label}{_RESET} {_BOLD}{bar}{_RESET} {pct} {_DIM}ETA: {eta}{_RESET}"
+        )
 
     # ── Spinner with dots ──────────────────────────────────────────────
 
@@ -4665,9 +5035,7 @@ class InteractivePrompt:
     def _spinner_with_dots_raw(self, message: str) -> None:
         dots = ["", ".", "..", "..."]
         for dot in dots:
-            sys.stdout.write(
-                f"\r  {_CYAN}\u25f7{_RESET} {message}{dot}  {_HIDE_CURSOR}"
-            )
+            sys.stdout.write(f"\r  {_CYAN}\u25f7{_RESET} {message}{dot}  {_HIDE_CURSOR}")
             sys.stdout.flush()
             time.sleep(0.25)
         sys.stdout.write(_SHOW_CURSOR)
@@ -4675,8 +5043,9 @@ class InteractivePrompt:
 
     # ── Select with pagination ─────────────────────────────────────────
 
-    def select_with_pagination(self, message: str, options: list[str],
-                               page_size: int = 10, default: str = "") -> str:
+    def select_with_pagination(
+        self, message: str, options: list[str], page_size: int = 10, default: str = ""
+    ) -> str:
         """Select from options with page navigation for large lists.
 
         Args:
@@ -4692,8 +5061,9 @@ class InteractivePrompt:
             return self._select_fallback(message, options)
         return self._select_with_pagination_raw(message, options, page_size, default)
 
-    def _select_with_pagination_raw(self, message: str, options: list[str],
-                                    page_size: int, default: str) -> str:
+    def _select_with_pagination_raw(
+        self, message: str, options: list[str], page_size: int, default: str
+    ) -> str:
         fd = self._get_fd()
         idx = 0
         page = 0
@@ -4731,15 +5101,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(options)
                         page = idx // page_size
@@ -4757,8 +5130,9 @@ class InteractivePrompt:
 
     # ── Select with search and preview ─────────────────────────────────
 
-    def select_with_search_and_preview(self, message: str, options: list[str],
-                                       preview_fn: Callable[[str], str]) -> str:
+    def select_with_search_and_preview(
+        self, message: str, options: list[str], preview_fn: Callable[[str], str]
+    ) -> str:
         """Select from options with type-to-filter and live preview.
 
         Args:
@@ -4773,8 +5147,9 @@ class InteractivePrompt:
             return self._select_fallback(message, options)
         return self._select_with_search_and_preview_raw(message, options, preview_fn)
 
-    def _select_with_search_and_preview_raw(self, message: str, options: list[str],
-                                            preview_fn: Callable[[str], str]) -> str:
+    def _select_with_search_and_preview_raw(
+        self, message: str, options: list[str], preview_fn: Callable[[str], str]
+    ) -> str:
         fd = self._get_fd()
         query = ""
         idx = 0
@@ -4782,8 +5157,7 @@ class InteractivePrompt:
         def _filtered() -> list[int]:
             if not query:
                 return list(range(len(options)))
-            return [i for i, o in enumerate(options)
-                    if query.lower() in o.lower()]
+            return [i for i, o in enumerate(options) if query.lower() in o.lower()]
 
         def _render() -> str:
             filtered = _filtered()
@@ -4802,9 +5176,7 @@ class InteractivePrompt:
             filter_str = f"  {_DIM}filter: {query}{_RESET}" if query else ""
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(type to filter, arrows){_RESET}\n"
-                f"{filter_str}\n"
-                + "\n".join(vis)
-                + f"\n{preview_str}{_HIDE_CURSOR}"
+                f"{filter_str}\n" + "\n".join(vis) + f"\n{preview_str}{_HIDE_CURSOR}"
             )
 
         def _clear() -> None:
@@ -4817,15 +5189,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_UP:
                         filtered = _filtered()
                         if filtered:
@@ -4852,8 +5227,9 @@ class InteractivePrompt:
 
     # ── Progress bar with status ───────────────────────────────────────
 
-    def progress_bar_with_status(self, label: str, current: int, total: int,
-                                 status: str = "", width: int = 30) -> None:
+    def progress_bar_with_status(
+        self, label: str, current: int, total: int, status: str = "", width: int = 30
+    ) -> None:
         """Display a progress bar with percentage and status message.
 
         Args:
@@ -4917,9 +5293,9 @@ class InteractivePrompt:
 
     # ── Select with grouping ───────────────────────────────────────────
 
-    def select_with_grouping(self, message: str,
-                             groups: dict[str, list[str]],
-                             default: str = "") -> str:
+    def select_with_grouping(
+        self, message: str, groups: dict[str, list[str]], default: str = ""
+    ) -> str:
         """Select from categorized options with group headers.
 
         Args:
@@ -4935,9 +5311,9 @@ class InteractivePrompt:
             return self._select_fallback(message, all_options)
         return self._select_with_grouping_raw(message, groups, default)
 
-    def _select_with_grouping_raw(self, message: str,
-                                  groups: dict[str, list[str]],
-                                  default: str) -> str:
+    def _select_with_grouping_raw(
+        self, message: str, groups: dict[str, list[str]], default: str
+    ) -> str:
         fd = self._get_fd()
         flat: list[tuple[str | None, str]] = []
         for group_name, items in groups.items():
@@ -4973,15 +5349,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return flat[idx][1]
+                        _clear()
+                        return flat[idx][1]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return flat[idx][1]
+                        _clear()
+                        return flat[idx][1]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(flat)
                         while flat[idx][0] is None and idx > 0:
@@ -4995,8 +5374,9 @@ class InteractivePrompt:
 
     # ── Multi-select with preview ──────────────────────────────────────
 
-    def multi_select_with_preview(self, message: str, options: list[str],
-                                  preview_fn: Callable[[str], str]) -> list[str]:
+    def multi_select_with_preview(
+        self, message: str, options: list[str], preview_fn: Callable[[str], str]
+    ) -> list[str]:
         """Multi-select from options with live preview.
 
         Args:
@@ -5011,8 +5391,9 @@ class InteractivePrompt:
             return self._select_multi_fallback(message, options)
         return self._multi_select_with_preview_raw(message, options, preview_fn)
 
-    def _multi_select_with_preview_raw(self, message: str, options: list[str],
-                                       preview_fn: Callable[[str], str]) -> list[str]:
+    def _multi_select_with_preview_raw(
+        self, message: str, options: list[str], preview_fn: Callable[[str], str]
+    ) -> list[str]:
         fd = self._get_fd()
         idx = 0
         selected: set[int] = set()
@@ -5042,15 +5423,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return [options[i] for i in sorted(selected)]
+                        _clear()
+                        return [options[i] for i in sorted(selected)]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return [options[i] for i in sorted(selected)]
+                        _clear()
+                        return [options[i] for i in sorted(selected)]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(options)
                     elif key.kind == _KEY_DOWN:
@@ -5078,8 +5462,22 @@ class InteractivePrompt:
         self._progress_bar_indeterminate_raw(label, status)
 
     def _progress_bar_indeterminate_raw(self, label: str, status: str) -> None:
-        frames = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588",
-                   "\u2587", "\u2586", "\u2585", "\u2584", "\u2583", "\u2582"]
+        frames = [
+            "\u2581",
+            "\u2582",
+            "\u2583",
+            "\u2584",
+            "\u2585",
+            "\u2586",
+            "\u2587",
+            "\u2588",
+            "\u2587",
+            "\u2586",
+            "\u2585",
+            "\u2584",
+            "\u2583",
+            "\u2582",
+        ]
         pos = 0
         for _ in range(20):
             bar = " " * pos + frames[_ % len(frames)] + " " * (20 - pos)
@@ -5095,8 +5493,9 @@ class InteractivePrompt:
 
     # ── Table with search ──────────────────────────────────────────────
 
-    def table_with_search(self, headers: list[str], rows: list[list[str]],
-                          title: str = "") -> list[list[str]]:
+    def table_with_search(
+        self, headers: list[str], rows: list[list[str]], title: str = ""
+    ) -> list[list[str]]:
         """Display a searchable table with type-to-filter.
 
         Args:
@@ -5111,12 +5510,15 @@ class InteractivePrompt:
             return rows
         return self._table_with_search_raw(headers, rows, title)
 
-    def _table_with_search_raw(self, headers: list[str], rows: list[list[str]],
-                               title: str) -> list[list[str]]:
+    def _table_with_search_raw(
+        self, headers: list[str], rows: list[list[str]], title: str
+    ) -> list[list[str]]:
         fd = self._get_fd()
         query = ""
-        col_widths = [max(len(h), max((len(str(r[i])) for r in rows), default=0))
-                      for i, h in enumerate(headers)]
+        col_widths = [
+            max(len(h), max((len(str(r[i])) for r in rows), default=0))
+            for i, h in enumerate(headers)
+        ]
 
         def _filtered() -> list[list[str]]:
             if not query:
@@ -5131,15 +5533,19 @@ class InteractivePrompt:
             lines.append(f"  {_BOLD}{header_line}{_RESET}")
             lines.append(f"  {_DIM}{'─' * sum(col_widths + [3 * (len(headers) - 1)])}{_RESET}")
             for r in filtered[:20]:
-                line = "  ".join(str(r[i]).ljust(col_widths[i]) if i < len(r) else " " * col_widths[i]
-                                 for i in range(len(headers)))
+                line = "  ".join(
+                    str(r[i]).ljust(col_widths[i]) if i < len(r) else " " * col_widths[i]
+                    for i in range(len(headers))
+                )
                 lines.append(f"  {line}")
-            filter_str = f"  {_DIM}filter: {query} ({len(filtered)} rows){_RESET}" if query else f"  {_DIM}{len(rows)} rows{_RESET}"
+            filter_str = (
+                f"  {_DIM}filter: {query} ({len(filtered)} rows){_RESET}"
+                if query
+                else f"  {_DIM}{len(rows)} rows{_RESET}"
+            )
             title_str = f"  {_BOLD}{title}{_RESET}\n" if title else ""
             return (
-                f"{_ERASE_LINE}\r{title_str}"
-                + "\n".join(lines)
-                + f"\n{filter_str}{_HIDE_CURSOR}"
+                f"{_ERASE_LINE}\r{title_str}" + "\n".join(lines) + f"\n{filter_str}{_HIDE_CURSOR}"
             )
 
         def _clear() -> None:
@@ -5154,15 +5560,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return _filtered()
+                        _clear()
+                        return _filtered()
                     if key.kind == _KEY_ENTER:
-                        _clear(); return _filtered()
+                        _clear()
+                        return _filtered()
                     elif key.kind == _KEY_BACKSPACE:
                         if query:
                             query = query[:-1]
@@ -5173,8 +5582,9 @@ class InteractivePrompt:
 
     # ── Select with countdown ──────────────────────────────────────────
 
-    def select_with_countdown(self, message: str, options: list[str],
-                              timeout: int = 10, default: int = 0) -> str:
+    def select_with_countdown(
+        self, message: str, options: list[str], timeout: int = 10, default: int = 0
+    ) -> str:
         """Select from options with auto-select countdown.
 
         Args:
@@ -5190,8 +5600,9 @@ class InteractivePrompt:
             return self._select_fallback(message, options)
         return self._select_with_countdown_raw(message, options, timeout, default)
 
-    def _select_with_countdown_raw(self, message: str, options: list[str],
-                                   timeout: int, default: int) -> str:
+    def _select_with_countdown_raw(
+        self, message: str, options: list[str], timeout: int, default: int
+    ) -> str:
         fd = self._get_fd()
         idx = default
         remaining = timeout
@@ -5202,7 +5613,11 @@ class InteractivePrompt:
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
                 lines.append(f"  {prefix}{color}{opt}{_RESET}")
-            countdown = f"  {_YELLOW}auto-select in {remaining}s{_RESET}" if remaining > 0 else f"  {_GREEN}selected!{_RESET}"
+            countdown = (
+                f"  {_YELLOW}auto-select in {remaining}s{_RESET}"
+                if remaining > 0
+                else f"  {_GREEN}selected!{_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows, enter){_RESET}\n"
                 + "\n".join(lines)
@@ -5217,21 +5632,25 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 start = time.time()
                 while True:
                     elapsed = int(time.time() - start)
                     remaining = max(0, timeout - elapsed)
                     if remaining == 0:
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     remaining_time = 1.0 - (time.time() - start) % 1.0
                     key = _read_raw_key(fd, timeout=remaining_time)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(options)
                         start = time.time()
@@ -5243,8 +5662,9 @@ class InteractivePrompt:
 
     # ── Confirm with countdown ─────────────────────────────────────────
 
-    def confirm_with_countdown(self, message: str, timeout: int = 10,
-                               default: bool = False) -> bool:
+    def confirm_with_countdown(
+        self, message: str, timeout: int = 10, default: bool = False
+    ) -> bool:
         """Confirm with auto-confirm countdown.
 
         Args:
@@ -5259,8 +5679,7 @@ class InteractivePrompt:
             return self._confirm_fallback(message, default)
         return self._confirm_with_countdown_raw(message, timeout, default)
 
-    def _confirm_with_countdown_raw(self, message: str, timeout: int,
-                                    default: bool) -> bool:
+    def _confirm_with_countdown_raw(self, message: str, timeout: int, default: bool) -> bool:
         fd = self._get_fd()
         selected = not default
         remaining = timeout
@@ -5293,31 +5712,35 @@ class InteractivePrompt:
                     elapsed = int(time.time() - start)
                     remaining = max(0, timeout - elapsed)
                     if remaining == 0:
-                        _clear(); return default
+                        _clear()
+                        return default
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     remaining_time = 1.0 - (time.time() - start) % 1.0
                     key = _read_raw_key(fd, timeout=remaining_time)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return selected
+                        _clear()
+                        return selected
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         selected = not selected
                         start = time.time()
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return True
+                            _clear()
+                            return True
                         if key.char in ("n", "N"):
-                            _clear(); return False
+                            _clear()
+                            return False
                         start = time.time()
         except (termios.error, OSError):
             return default
 
     # ── Progress bar striped ───────────────────────────────────────────
 
-    def progress_bar_stripe(self, label: str, current: int, total: int,
-                            width: int = 30) -> None:
+    def progress_bar_stripe(self, label: str, current: int, total: int, width: int = 30) -> None:
         """Display a striped progress bar.
 
         Args:
@@ -5339,8 +5762,7 @@ class InteractivePrompt:
 
     # ── Spinner with dots and ETA ──────────────────────────────────────
 
-    def spinner_with_dots_eta(self, message: str, elapsed: float,
-                              progress: float = 0) -> None:
+    def spinner_with_dots_eta(self, message: str, elapsed: float, progress: float = 0) -> None:
         """Display a spinner with dots animation and ETA.
 
         Args:
@@ -5353,8 +5775,7 @@ class InteractivePrompt:
             return
         self._spinner_with_dots_eta_raw(message, elapsed, progress)
 
-    def _spinner_with_dots_eta_raw(self, message: str, elapsed: float,
-                                   progress: float) -> None:
+    def _spinner_with_dots_eta_raw(self, message: str, elapsed: float, progress: float) -> None:
         frames = ["\u250f", "\u2513", "\u251b", "\u2517"]
         dots = ["", ".", "..", "..."]
         if elapsed < 60:
@@ -5428,28 +5849,32 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return False
+                        _clear()
+                        return False
                     if key.kind == _KEY_ENTER:
-                        _clear(); return "".join(buf).lower() == phrase.lower()
+                        _clear()
+                        return "".join(buf).lower() == phrase.lower()
                     if key.kind == _KEY_BACKSPACE:
-                        if buf: buf.pop()
+                        if buf:
+                            buf.pop()
                     elif key.kind == _KEY_CHAR:
                         buf.append(key.char)
                         if "".join(buf).lower() == phrase.lower():
-                            _clear(); return True
+                            _clear()
+                            return True
         except (termios.error, OSError):
             return False
 
     # ── Progress bar gradient ──────────────────────────────────────────
 
-    def progress_bar_gradient(self, label: str, current: int, total: int,
-                              width: int = 30) -> None:
+    def progress_bar_gradient(self, label: str, current: int, total: int, width: int = 30) -> None:
         """Display a gradient-colored progress bar (red→yellow→green).
 
         Args:
@@ -5461,7 +5886,16 @@ class InteractivePrompt:
         frac = current / max(total, 1)
         filled = int(frac * width)
         empty = width - filled
-        gradient_blocks = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588"]
+        gradient_blocks = [
+            "\u2581",
+            "\u2582",
+            "\u2583",
+            "\u2584",
+            "\u2585",
+            "\u2586",
+            "\u2587",
+            "\u2588",
+        ]
         bar = ""
         for i in range(filled):
             block_frac = i / max(width, 1)
@@ -5494,9 +5928,7 @@ class InteractivePrompt:
         start = time.time()
         i = 0
         while time.time() - start < duration:
-            sys.stdout.write(
-                f"\r  {_CYAN}{dots[i % len(dots)]}{_RESET} {message}  {_HIDE_CURSOR}"
-            )
+            sys.stdout.write(f"\r  {_CYAN}{dots[i % len(dots)]}{_RESET} {message}  {_HIDE_CURSOR}")
             sys.stdout.flush()
             time.sleep(0.3)
             i += 1
@@ -5505,9 +5937,9 @@ class InteractivePrompt:
 
     # ── Select with preview and icons ──────────────────────────────────
 
-    def select_with_preview_and_icons(self, message: str,
-                                      options: list[tuple[str, str]],
-                                      preview_fn: Callable[[str], str]) -> str:
+    def select_with_preview_and_icons(
+        self, message: str, options: list[tuple[str, str]], preview_fn: Callable[[str], str]
+    ) -> str:
         """Select from icon+label options with live preview.
 
         Args:
@@ -5523,9 +5955,9 @@ class InteractivePrompt:
             return self._select_fallback(message, labels)
         return self._select_with_preview_and_icons_raw(message, options, preview_fn)
 
-    def _select_with_preview_and_icons_raw(self, message: str,
-                                           options: list[tuple[str, str]],
-                                           preview_fn: Callable[[str], str]) -> str:
+    def _select_with_preview_and_icons_raw(
+        self, message: str, options: list[tuple[str, str]], preview_fn: Callable[[str], str]
+    ) -> str:
         fd = self._get_fd()
         labels = [o[1] for o in options]
         icons = [o[0] for o in options]
@@ -5554,15 +5986,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return labels[idx]
+                        _clear()
+                        return labels[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return labels[idx]
+                        _clear()
+                        return labels[idx]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(options)
                     elif key.kind == _KEY_DOWN:
@@ -5572,8 +6007,9 @@ class InteractivePrompt:
 
     # ── Multi confirm ──────────────────────────────────────────────────
 
-    def multi_confirm(self, message: str, items: list[str],
-                      default: bool = True) -> dict[str, bool]:
+    def multi_confirm(
+        self, message: str, items: list[str], default: bool = True
+    ) -> dict[str, bool]:
         """Confirm multiple items with toggle.
 
         Args:
@@ -5588,8 +6024,7 @@ class InteractivePrompt:
             return dict.fromkeys(items, default)
         return self._multi_confirm_raw(message, items, default)
 
-    def _multi_confirm_raw(self, message: str, items: list[str],
-                           default: bool) -> dict[str, bool]:
+    def _multi_confirm_raw(self, message: str, items: list[str], default: bool) -> dict[str, bool]:
         fd = self._get_fd()
         idx = 0
         states = dict.fromkeys(items, default)
@@ -5617,15 +6052,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return states
+                        _clear()
+                        return states
                     if key.kind == _KEY_ENTER:
-                        _clear(); return states
+                        _clear()
+                        return states
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(items)
                     elif key.kind == _KEY_DOWN:
@@ -5637,8 +6075,9 @@ class InteractivePrompt:
 
     # ── Progress bar segmented ─────────────────────────────────────────
 
-    def progress_bar_segmented(self, label: str, segments: list[tuple[str, int]],
-                               width: int = 30) -> None:
+    def progress_bar_segmented(
+        self, label: str, segments: list[tuple[str, int]], width: int = 30
+    ) -> None:
         """Display a segmented progress bar with different colors per segment.
 
         Args:
@@ -5649,8 +6088,11 @@ class InteractivePrompt:
         """
         total = sum(v for _, v in segments)
         colors = {
-            "green": _GREEN, "yellow": _YELLOW, "red": _RED,
-            "cyan": _CYAN, "magenta": "\033[35m",
+            "green": _GREEN,
+            "yellow": _YELLOW,
+            "red": _RED,
+            "cyan": _CYAN,
+            "magenta": "\033[35m",
         }
         bar = ""
         for name, val in segments:
@@ -5685,9 +6127,7 @@ class InteractivePrompt:
             for j in range(6):
                 idx = (i + j) % len(waves)
                 wave_str += waves[idx]
-            sys.stdout.write(
-                f"\r  {_CYAN}{wave_str}{_RESET} {message}  {_HIDE_CURSOR}"
-            )
+            sys.stdout.write(f"\r  {_CYAN}{wave_str}{_RESET} {message}  {_HIDE_CURSOR}")
             sys.stdout.flush()
             time.sleep(0.15)
             i += 1
@@ -5696,17 +6136,17 @@ class InteractivePrompt:
 
     # ── Confirm list with preview ──────────────────────────────────────
 
-    def confirm_list_with_preview(self, message: str, items: list[str],
-                                  preview_fn: Callable[[str], str],
-                                  default: bool = True) -> list[str]:
+    def confirm_list_with_preview(
+        self, message: str, items: list[str], preview_fn: Callable[[str], str], default: bool = True
+    ) -> list[str]:
         """Confirm a list of items with preview, returning confirmed items."""
         if not self._is_tty:
             return items if default else []
         return self._confirm_list_with_preview_raw(message, items, preview_fn, default)
 
-    def _confirm_list_with_preview_raw(self, message: str, items: list[str],
-                                       preview_fn: Callable[[str], str],
-                                       default: bool) -> list[str]:
+    def _confirm_list_with_preview_raw(
+        self, message: str, items: list[str], preview_fn: Callable[[str], str], default: bool
+    ) -> list[str]:
         fd = self._get_fd()
         idx = 0
         states = dict.fromkeys(items, default)
@@ -5737,15 +6177,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return [item for item, v in states.items() if v]
+                        _clear()
+                        return [item for item, v in states.items() if v]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return [item for item, v in states.items() if v]
+                        _clear()
+                        return [item for item, v in states.items() if v]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(items)
                     elif key.kind == _KEY_DOWN:
@@ -5757,14 +6200,18 @@ class InteractivePrompt:
 
     # ── Progress bar multi segment ─────────────────────────────────────
 
-    def progress_bar_multi_segment(self, label: str,
-                                   segments: list[tuple[str, int, str]],
-                                   width: int = 30) -> None:
+    def progress_bar_multi_segment(
+        self, label: str, segments: list[tuple[str, int, str]], width: int = 30
+    ) -> None:
         """Display a multi-segment progress bar with labels."""
         total = sum(v for _, v, _ in segments)
         colors_map = {
-            "green": _GREEN, "yellow": _YELLOW, "red": _RED,
-            "cyan": _CYAN, "magenta": "\033[35m", "blue": "\033[34m",
+            "green": _GREEN,
+            "yellow": _YELLOW,
+            "red": _RED,
+            "cyan": _CYAN,
+            "magenta": "\033[35m",
+            "blue": "\033[34m",
         }
         bar = ""
         for _name, val, color in segments:
@@ -5787,8 +6234,22 @@ class InteractivePrompt:
         self._spinner_bounce_raw(message, duration)
 
     def _spinner_bounce_raw(self, message: str, duration: float) -> None:
-        frames = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588",
-                   "\u2587", "\u2586", "\u2585", "\u2584", "\u2583", "\u2582"]
+        frames = [
+            "\u2581",
+            "\u2582",
+            "\u2583",
+            "\u2584",
+            "\u2585",
+            "\u2586",
+            "\u2587",
+            "\u2588",
+            "\u2587",
+            "\u2586",
+            "\u2585",
+            "\u2584",
+            "\u2583",
+            "\u2582",
+        ]
         start = time.time()
         i = 0
         while time.time() - start < duration:
@@ -5806,15 +6267,13 @@ class InteractivePrompt:
 
     # ── Select with confirm ────────────────────────────────────────────
 
-    def select_with_confirm(self, message: str, options: list[str],
-                            default: str = "") -> str:
+    def select_with_confirm(self, message: str, options: list[str], default: str = "") -> str:
         """Select an option and confirm with y/n."""
         if not self._is_tty:
             return self._select_fallback(message, options)
         return self._select_with_confirm_raw(message, options, default)
 
-    def _select_with_confirm_raw(self, message: str, options: list[str],
-                                 default: str) -> str:
+    def _select_with_confirm_raw(self, message: str, options: list[str], default: str) -> str:
         fd = self._get_fd()
         idx = 0
         if default in options:
@@ -5840,15 +6299,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(options)
                     elif key.kind == _KEY_DOWN:
@@ -5858,16 +6320,17 @@ class InteractivePrompt:
 
     # ── Confirm with preview and timeout ───────────────────────────────
 
-    def confirm_with_preview_and_timeout(self, message: str, preview: str,
-                                         timeout: int = 10,
-                                         default: bool = False) -> bool:
+    def confirm_with_preview_and_timeout(
+        self, message: str, preview: str, timeout: int = 10, default: bool = False
+    ) -> bool:
         """Confirm with preview and auto-confirm countdown."""
         if not self._is_tty:
             return self._confirm_fallback(message, default)
         return self._confirm_with_preview_and_timeout_raw(message, preview, timeout, default)
 
-    def _confirm_with_preview_and_timeout_raw(self, message: str, preview: str,
-                                              timeout: int, default: bool) -> bool:
+    def _confirm_with_preview_and_timeout_raw(
+        self, message: str, preview: str, timeout: int, default: bool
+    ) -> bool:
         fd = self._get_fd()
         selected = not default
         remaining = timeout
@@ -5903,31 +6366,35 @@ class InteractivePrompt:
                     elapsed = int(time.time() - start)
                     remaining = max(0, timeout - elapsed)
                     if remaining == 0:
-                        _clear(); return default
+                        _clear()
+                        return default
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     remaining_time = 1.0 - (time.time() - start) % 1.0
                     key = _read_raw_key(fd, timeout=remaining_time)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return selected
+                        _clear()
+                        return selected
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         selected = not selected
                         start = time.time()
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return True
+                            _clear()
+                            return True
                         if key.char in ("n", "N"):
-                            _clear(); return False
+                            _clear()
+                            return False
                         start = time.time()
         except (termios.error, OSError):
             return default
 
     # ── Progress bar animated ──────────────────────────────────────────
 
-    def progress_bar_animated(self, label: str, current: int, total: int,
-                              width: int = 30) -> None:
+    def progress_bar_animated(self, label: str, current: int, total: int, width: int = 30) -> None:
         """Display an animated shimmer progress bar."""
         frac = current / max(total, 1)
         filled = int(frac * width)
@@ -5965,17 +6432,17 @@ class InteractivePrompt:
 
     # ── Select with preview and confirm ────────────────────────────────
 
-    def select_with_preview_and_confirm(self, message: str, options: list[str],
-                                        preview_fn: Callable[[str], str],
-                                        default: str = "") -> str:
+    def select_with_preview_and_confirm(
+        self, message: str, options: list[str], preview_fn: Callable[[str], str], default: str = ""
+    ) -> str:
         """Select with preview and confirm."""
         if not self._is_tty:
             return self._select_fallback(message, options)
         return self._select_with_preview_and_confirm_raw(message, options, preview_fn, default)
 
-    def _select_with_preview_and_confirm_raw(self, message: str, options: list[str],
-                                             preview_fn: Callable[[str], str],
-                                             default: str) -> str:
+    def _select_with_preview_and_confirm_raw(
+        self, message: str, options: list[str], preview_fn: Callable[[str], str], default: str
+    ) -> str:
         fd = self._get_fd()
         idx = 0
         if default in options:
@@ -6004,15 +6471,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(options)
                     elif key.kind == _KEY_DOWN:
@@ -6022,16 +6492,17 @@ class InteractivePrompt:
 
     # ── Confirm with preview and countdown ─────────────────────────────
 
-    def confirm_with_preview_and_countdown(self, message: str, preview: str,
-                                           timeout: int = 10,
-                                           default: bool = True) -> bool:
+    def confirm_with_preview_and_countdown(
+        self, message: str, preview: str, timeout: int = 10, default: bool = True
+    ) -> bool:
         """Confirm with preview and countdown, auto-confirming on timeout."""
         if not self._is_tty:
             return self._confirm_fallback(message, default)
         return self._confirm_with_preview_and_countdown_raw(message, preview, timeout, default)
 
-    def _confirm_with_preview_and_countdown_raw(self, message: str, preview: str,
-                                                timeout: int, default: bool) -> bool:
+    def _confirm_with_preview_and_countdown_raw(
+        self, message: str, preview: str, timeout: int, default: bool
+    ) -> bool:
         fd = self._get_fd()
         selected = not default
 
@@ -6067,33 +6538,43 @@ class InteractivePrompt:
                     elapsed = int(time.time() - start)
                     remaining = max(0, timeout - elapsed)
                     if remaining == 0:
-                        _clear(); return default
+                        _clear()
+                        return default
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     remaining_time = 1.0 - (time.time() - start) % 1.0
                     key = _read_raw_key(fd, timeout=remaining_time)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return selected
+                        _clear()
+                        return selected
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         selected = not selected
                         start = time.time()
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return True
+                            _clear()
+                            return True
                         if key.char in ("n", "N"):
-                            _clear(); return False
+                            _clear()
+                            return False
                         start = time.time()
         except (termios.error, OSError):
             return default
 
     # ── Progress bar with status and ETA ───────────────────────────────
 
-    def progress_bar_with_status_and_eta(self, label: str, current: int,
-                                         total: int, status: str,
-                                         width: int = 30,
-                                         elapsed: float = 0.0) -> None:
+    def progress_bar_with_status_and_eta(
+        self,
+        label: str,
+        current: int,
+        total: int,
+        status: str,
+        width: int = 30,
+        elapsed: float = 0.0,
+    ) -> None:
         """Display a progress bar with status text and ETA.
 
         Args:
@@ -6118,23 +6599,22 @@ class InteractivePrompt:
                 eta_str = f"{int(eta_sec)}s"
             eta_display = f"  {_DIM}ETA {eta_str}{_RESET}"
         status_display = f"  {_DIM}{status}{_RESET}" if status else ""
-        self._io.write(
-            f"  {_CYAN}{label}{_RESET} {bar} {pct}{status_display}{eta_display}"
-        )
+        self._io.write(f"  {_CYAN}{label}{_RESET} {bar} {pct}{status_display}{eta_display}")
 
     # ── Spinner with messages ──────────────────────────────────────────
 
-    def spinner_with_messages(self, message: str,
-                              messages: list[str],
-                              duration: float = 3.0) -> None:
+    def spinner_with_messages(
+        self, message: str, messages: list[str], duration: float = 3.0
+    ) -> None:
         """Display a spinner that cycles through different messages."""
         if not self._is_tty:
             self._io.write(f"  {message}...")
             return
         self._spinner_with_messages_raw(message, messages, duration)
 
-    def _spinner_with_messages_raw(self, message: str, messages: list[str],
-                                   duration: float) -> None:
+    def _spinner_with_messages_raw(
+        self, message: str, messages: list[str], duration: float
+    ) -> None:
         frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         start = time.time()
         i = 0
@@ -6151,28 +6631,31 @@ class InteractivePrompt:
 
     # ── Select table with preview ──────────────────────────────────────
 
-    def select_table_with_preview(self, headers: list[str],
-                                  rows: list[list[str]],
-                                  preview_fn: Callable[[list[str]], str]) -> list[str]:
+    def select_table_with_preview(
+        self, headers: list[str], rows: list[list[str]], preview_fn: Callable[[list[str]], str]
+    ) -> list[str]:
         """Select a row from a table with live preview."""
         if not self._is_tty:
             return rows[0] if rows else []
         return self._select_table_with_preview_raw(headers, rows, preview_fn)
 
-    def _select_table_with_preview_raw(self, headers: list[str],
-                                       rows: list[list[str]],
-                                       preview_fn: Callable[[list[str]], str]) -> list[str]:
+    def _select_table_with_preview_raw(
+        self, headers: list[str], rows: list[list[str]], preview_fn: Callable[[list[str]], str]
+    ) -> list[str]:
         fd = self._get_fd()
         idx = 0
 
         def _render() -> str:
-            col_widths = [max(len(h), max((len(r[i]) for r in rows), default=0))
-                         for i, h in enumerate(headers)]
+            col_widths = [
+                max(len(h), max((len(r[i]) for r in rows), default=0))
+                for i, h in enumerate(headers)
+            ]
             preview_text = preview_fn(rows[idx]) if rows else ""
             preview_lines = preview_text.split("\n")[:5]
             preview_str = "\n".join(f"  {_DIM}{line}{_RESET}" for line in preview_lines)
-            header = "  " + "  ".join(f"{_BOLD}{h:<{col_widths[i]}}{_RESET}"
-                                      for i, h in enumerate(headers))
+            header = "  " + "  ".join(
+                f"{_BOLD}{h:<{col_widths[i]}}{_RESET}" for i, h in enumerate(headers)
+            )
             lines = [header]
             for i, row in enumerate(rows):
                 prefix = ">>" if i == idx else "  "
@@ -6195,15 +6678,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return rows[idx]
+                        _clear()
+                        return rows[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return rows[idx]
+                        _clear()
+                        return rows[idx]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(rows)
                     elif key.kind == _KEY_DOWN:
@@ -6213,22 +6699,24 @@ class InteractivePrompt:
 
     # ── Confirm with preview, edit, and timeout ────────────────────────
 
-    def confirm_with_preview_and_edit_with_timeout(self, message: str,
-                                                   preview: str,
-                                                   edit_prompt: str = "Edit:",
-                                                   timeout: int = 10,
-                                                   default: bool = True) -> tuple[bool, str]:
+    def confirm_with_preview_and_edit_with_timeout(
+        self,
+        message: str,
+        preview: str,
+        edit_prompt: str = "Edit:",
+        timeout: int = 10,
+        default: bool = True,
+    ) -> tuple[bool, str]:
         """Confirm with preview, optional edit, and timeout."""
         if not self._is_tty:
             return (self._confirm_fallback(message, default), preview)
         return self._confirm_with_preview_and_edit_with_timeout_raw(
-            message, preview, edit_prompt, timeout, default)
+            message, preview, edit_prompt, timeout, default
+        )
 
-    def _confirm_with_preview_and_edit_with_timeout_raw(self, message: str,
-                                                       preview: str,
-                                                       edit_prompt: str,
-                                                       timeout: int,
-                                                       default: bool) -> tuple[bool, str]:
+    def _confirm_with_preview_and_edit_with_timeout_raw(
+        self, message: str, preview: str, edit_prompt: str, timeout: int, default: bool
+    ) -> tuple[bool, str]:
         fd = self._get_fd()
         selected = not default
         text = preview
@@ -6267,26 +6755,34 @@ class InteractivePrompt:
                     elapsed = int(time.time() - start)
                     remaining = max(0, timeout - elapsed)
                     if remaining == 0:
-                        _clear(); return (default, text)
+                        _clear()
+                        return (default, text)
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     remaining_time = 1.0 - (time.time() - start) % 1.0
                     key = _read_raw_key(fd, timeout=remaining_time)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return (default, text)
+                        _clear()
+                        return (default, text)
                     if key.kind == _KEY_ENTER:
-                        _clear(); return (selected, text)
+                        _clear()
+                        return (selected, text)
                     if key.kind == _KEY_LEFT:
-                        selected = True; start = time.time()
+                        selected = True
+                        start = time.time()
                     elif key.kind == _KEY_RIGHT:
-                        selected = False; start = time.time()
+                        selected = False
+                        start = time.time()
                     elif key.kind == _KEY_TAB:
-                        selected = not selected; start = time.time()
+                        selected = not selected
+                        start = time.time()
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return (True, text)
+                            _clear()
+                            return (True, text)
                         if key.char in ("n", "N"):
-                            _clear(); return (False, text)
+                            _clear()
+                            return (False, text)
                         if key.char in ("e", "E"):
                             _clear()
                             edited = self._ask_fallback(edit_prompt, text)
@@ -6297,10 +6793,15 @@ class InteractivePrompt:
 
     # ── Progress bar with ETA and status ───────────────────────────────
 
-    def progress_bar_with_eta_and_status(self, label: str, current: int,
-                                         total: int, status: str,
-                                         elapsed: float = 0.0,
-                                         width: int = 30) -> None:
+    def progress_bar_with_eta_and_status(
+        self,
+        label: str,
+        current: int,
+        total: int,
+        status: str,
+        elapsed: float = 0.0,
+        width: int = 30,
+    ) -> None:
         """Display a progress bar with ETA and status text."""
         frac = current / max(total, 1)
         filled = int(frac * width)
@@ -6318,22 +6819,20 @@ class InteractivePrompt:
                 eta_str = f"{int(eta_sec)}s"
             eta_display = f"  {_DIM}ETA {eta_str}{_RESET}"
         status_display = f"  {_YELLOW}{status}{_RESET}" if status else ""
-        self._io.write(
-            f"  {_CYAN}{label}{_RESET} {bar} {pct}{status_display}{eta_display}"
-        )
+        self._io.write(f"  {_CYAN}{label}{_RESET} {bar} {pct}{status_display}{eta_display}")
 
     # ── Spinner with dots and status ───────────────────────────────────
 
-    def spinner_with_dots_and_status(self, message: str, status: str,
-                                     duration: float = 2.0) -> None:
+    def spinner_with_dots_and_status(
+        self, message: str, status: str, duration: float = 2.0
+    ) -> None:
         """Display a spinner with dots and status text."""
         if not self._is_tty:
             self._io.write(f"  {message}...")
             return
         self._spinner_with_dots_and_status_raw(message, status, duration)
 
-    def _spinner_with_dots_and_status_raw(self, message: str, status: str,
-                                          duration: float) -> None:
+    def _spinner_with_dots_and_status_raw(self, message: str, status: str, duration: float) -> None:
         dot_sets = [
             ("\u25f4", "\u25f5", "\u25f6", "\u25f7"),
             (".", "..", "...", "...."),
@@ -6354,22 +6853,29 @@ class InteractivePrompt:
 
     # ── Select with preview and countdown ──────────────────────────────
 
-    def select_with_preview_and_countdown(self, message: str,
-                                          options: list[str],
-                                          preview_fn: Callable[[str], str],
-                                          timeout: int = 10,
-                                          default: str = "") -> str:
+    def select_with_preview_and_countdown(
+        self,
+        message: str,
+        options: list[str],
+        preview_fn: Callable[[str], str],
+        timeout: int = 10,
+        default: str = "",
+    ) -> str:
         """Select with preview and auto-confirm countdown."""
         if not self._is_tty:
             return self._select_fallback(message, options)
         return self._select_with_preview_and_countdown_raw(
-            message, options, preview_fn, timeout, default)
+            message, options, preview_fn, timeout, default
+        )
 
-    def _select_with_preview_and_countdown_raw(self, message: str,
-                                               options: list[str],
-                                               preview_fn: Callable[[str], str],
-                                               timeout: int,
-                                               default: str) -> str:
+    def _select_with_preview_and_countdown_raw(
+        self,
+        message: str,
+        options: list[str],
+        preview_fn: Callable[[str], str],
+        timeout: int,
+        default: str,
+    ) -> str:
         fd = self._get_fd()
         idx = 0
         if default in options:
@@ -6398,21 +6904,25 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 start = time.time()
                 while True:
                     elapsed = int(time.time() - start)
                     remaining = max(0, timeout - elapsed)
                     if remaining == 0:
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     remaining_time = 1.0 - (time.time() - start) % 1.0
                     key = _read_raw_key(fd, timeout=remaining_time)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return options[idx]
+                        _clear()
+                        return options[idx]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % len(options)
                         start = time.time()
@@ -6424,15 +6934,17 @@ class InteractivePrompt:
 
     # ── Multi-select with filter ───────────────────────────────────────
 
-    def multi_select_with_filter(self, message: str, options: list[str],
-                                 default: list[str] | None = None) -> list[str]:
+    def multi_select_with_filter(
+        self, message: str, options: list[str], default: list[str] | None = None
+    ) -> list[str]:
         """Multi-select with type-to-filter."""
         if not self._is_tty:
             return (default or [])[:1]
         return self._multi_select_with_filter_raw(message, options, default or [])
 
-    def _multi_select_with_filter_raw(self, message: str, options: list[str],
-                                      default: list[str]) -> list[str]:
+    def _multi_select_with_filter_raw(
+        self, message: str, options: list[str], default: list[str]
+    ) -> list[str]:
         fd = self._get_fd()
         query = ""
         idx = 0
@@ -6455,11 +6967,16 @@ class InteractivePrompt:
             if not lines:
                 lines = [f"  {_DIM}(no matches){_RESET}"]
             count = f"  {_DIM}{len(selected)}/{len(options)} selected{_RESET}"
-            query_display = f"  {_BOLD}Filter:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to filter{_RESET}"
+            query_display = (
+                f"  {_BOLD}Filter:{_RESET} {query}{_CYAN}\u2502{_RESET}"
+                if query
+                else f"  {_DIM}Type to filter{_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows=move, space=toggle, enter=confirm){_RESET}\n"
                 + query_display
-                + "\n" + "\n".join(lines)
+                + "\n"
+                + "\n".join(lines)
                 + f"\n{count}{_HIDE_CURSOR}"
             )
 
@@ -6471,16 +6988,19 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     flt = _filtered()
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return sorted(selected)
+                        _clear()
+                        return sorted(selected)
                     if key.kind == _KEY_ENTER:
-                        _clear(); return sorted(selected)
+                        _clear()
+                        return sorted(selected)
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % max(len(flt), 1)
                     elif key.kind == _KEY_DOWN:
@@ -6504,19 +7024,17 @@ class InteractivePrompt:
 
     # ── Confirm with countdown and preview ─────────────────────────────
 
-    def confirm_with_countdown_and_preview(self, message: str,
-                                           preview: str,
-                                           timeout: int = 10,
-                                           default: bool = True) -> bool:
+    def confirm_with_countdown_and_preview(
+        self, message: str, preview: str, timeout: int = 10, default: bool = True
+    ) -> bool:
         """Confirm with preview and countdown, auto-confirming on timeout."""
         if not self._is_tty:
             return self._confirm_fallback(message, default)
         return self._confirm_with_countdown_and_preview_raw(message, preview, timeout, default)
 
-    def _confirm_with_countdown_and_preview_raw(self, message: str,
-                                                preview: str,
-                                                timeout: int,
-                                                default: bool) -> bool:
+    def _confirm_with_countdown_and_preview_raw(
+        self, message: str, preview: str, timeout: int, default: bool
+    ) -> bool:
         fd = self._get_fd()
         selected = not default
 
@@ -6552,31 +7070,37 @@ class InteractivePrompt:
                     elapsed = int(time.time() - start)
                     remaining = max(0, timeout - elapsed)
                     if remaining == 0:
-                        _clear(); return default
+                        _clear()
+                        return default
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     remaining_time = 1.0 - (time.time() - start) % 1.0
                     key = _read_raw_key(fd, timeout=remaining_time)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return default
+                        _clear()
+                        return default
                     if key.kind == _KEY_ENTER:
-                        _clear(); return selected
+                        _clear()
+                        return selected
                     if key.kind in (_KEY_LEFT, _KEY_RIGHT):
                         selected = not selected
                         start = time.time()
                     if key.kind == _KEY_CHAR:
                         if key.char in ("y", "Y"):
-                            _clear(); return True
+                            _clear()
+                            return True
                         if key.char in ("n", "N"):
-                            _clear(); return False
+                            _clear()
+                            return False
                         start = time.time()
         except (termios.error, OSError):
             return default
 
     # ── Progress bar with steps ────────────────────────────────────────
 
-    def progress_bar_with_steps(self, label: str, steps: list[str],
-                                current_step: int, width: int = 30) -> None:
+    def progress_bar_with_steps(
+        self, label: str, steps: list[str], current_step: int, width: int = 30
+    ) -> None:
         """Display a multi-step progress bar."""
         total = len(steps)
         frac = (current_step + 1) / max(total, 1)
@@ -6590,16 +7114,14 @@ class InteractivePrompt:
 
     # ── Spinner with ETA message ───────────────────────────────────────
 
-    def spinner_with_eta_message(self, message: str, total: int,
-                                 duration: float = 3.0) -> None:
+    def spinner_with_eta_message(self, message: str, total: int, duration: float = 3.0) -> None:
         """Display a spinner with ETA message."""
         if not self._is_tty:
             self._io.write(f"  {message}...")
             return
         self._spinner_with_eta_message_raw(message, total, duration)
 
-    def _spinner_with_eta_message_raw(self, message: str, total: int,
-                                      duration: float) -> None:
+    def _spinner_with_eta_message_raw(self, message: str, total: int, duration: float) -> None:
         frames = ["\u25f4", "\u25f5", "\u25f6", "\u25f7"]
         start = time.time()
         i = 0
@@ -6625,17 +7147,17 @@ class InteractivePrompt:
 
     # ── Table with search and preview ──────────────────────────────────
 
-    def table_with_search_and_preview(self, headers: list[str],
-                                      rows: list[list[str]],
-                                      preview_fn: Callable[[list[str]], str]) -> list[str]:
+    def table_with_search_and_preview(
+        self, headers: list[str], rows: list[list[str]], preview_fn: Callable[[list[str]], str]
+    ) -> list[str]:
         """Searchable table with live preview."""
         if not self._is_tty:
             return rows[0] if rows else []
         return self._table_with_search_and_preview_raw(headers, rows, preview_fn)
 
-    def _table_with_search_and_preview_raw(self, headers: list[str],
-                                           rows: list[list[str]],
-                                           preview_fn: Callable[[list[str]], str]) -> list[str]:
+    def _table_with_search_and_preview_raw(
+        self, headers: list[str], rows: list[list[str]], preview_fn: Callable[[list[str]], str]
+    ) -> list[str]:
         fd = self._get_fd()
         query = ""
         idx = 0
@@ -6648,13 +7170,15 @@ class InteractivePrompt:
 
         def _render() -> str:
             flt = _filtered()
-            col_widths = [max(len(h), max((len(r[i]) for r in flt), default=0))
-                         for i, h in enumerate(headers)]
+            col_widths = [
+                max(len(h), max((len(r[i]) for r in flt), default=0)) for i, h in enumerate(headers)
+            ]
             preview_text = preview_fn(flt[idx]) if flt else ""
             preview_lines = preview_text.split("\n")[:4]
             preview_str = "\n".join(f"  {_DIM}{line}{_RESET}" for line in preview_lines)
-            header = "  " + "  ".join(f"{_BOLD}{h:<{col_widths[i]}}{_RESET}"
-                                      for i, h in enumerate(headers))
+            header = "  " + "  ".join(
+                f"{_BOLD}{h:<{col_widths[i]}}{_RESET}" for i, h in enumerate(headers)
+            )
             lines = [header]
             for i, row in enumerate(flt):
                 prefix = ">>" if i == idx else "  "
@@ -6665,11 +7189,16 @@ class InteractivePrompt:
                     lines.append(f"  {prefix} {cells}")
             if not flt:
                 lines.append(f"  {_DIM}(no matches){_RESET}")
-            query_display = f"  {_BOLD}Search:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to search{_RESET}"
+            query_display = (
+                f"  {_BOLD}Search:{_RESET} {query}{_CYAN}\u2502{_RESET}"
+                if query
+                else f"  {_DIM}Type to search{_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}Table{_RESET}  {_DIM}(arrows, type=search){_RESET}\n"
                 + query_display
-                + "\n" + "\n".join(lines)
+                + "\n"
+                + "\n".join(lines)
                 + f"\n{preview_str}{_HIDE_CURSOR}"
             )
 
@@ -6681,16 +7210,19 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     flt = _filtered()
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return flt[idx] if flt else rows[0]
+                        _clear()
+                        return flt[idx] if flt else rows[0]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return flt[idx] if flt else rows[0]
+                        _clear()
+                        return flt[idx] if flt else rows[0]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % max(len(flt), 1)
                     elif key.kind == _KEY_DOWN:
@@ -6710,17 +7242,17 @@ class InteractivePrompt:
 
     # ── Select with filter and confirm ─────────────────────────────────
 
-    def select_with_filter_and_confirm(self, message: str,
-                                       options: list[str],
-                                       default: str = "") -> str:
+    def select_with_filter_and_confirm(
+        self, message: str, options: list[str], default: str = ""
+    ) -> str:
         """Select with type-to-filter and confirm."""
         if not self._is_tty:
             return self._select_fallback(message, options)
         return self._select_with_filter_and_confirm_raw(message, options, default)
 
-    def _select_with_filter_and_confirm_raw(self, message: str,
-                                            options: list[str],
-                                            default: str) -> str:
+    def _select_with_filter_and_confirm_raw(
+        self, message: str, options: list[str], default: str
+    ) -> str:
         fd = self._get_fd()
         query = ""
         idx = 0
@@ -6742,11 +7274,16 @@ class InteractivePrompt:
                 lines.append(f"  {prefix}{color}{opt}{_RESET}")
             if not lines:
                 lines = [f"  {_DIM}(no matches){_RESET}"]
-            query_display = f"  {_BOLD}Filter:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to filter{_RESET}"
+            query_display = (
+                f"  {_BOLD}Filter:{_RESET} {query}{_CYAN}\u2502{_RESET}"
+                if query
+                else f"  {_DIM}Type to filter{_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows, type=filter, enter=confirm){_RESET}\n"
                 + query_display
-                + "\n" + "\n".join(lines)
+                + "\n"
+                + "\n".join(lines)
                 + f"{_HIDE_CURSOR}"
             )
 
@@ -6758,16 +7295,19 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     flt = _filtered()
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return flt[idx] if flt else options[0]
+                        _clear()
+                        return flt[idx] if flt else options[0]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return flt[idx] if flt else options[0]
+                        _clear()
+                        return flt[idx] if flt else options[0]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % max(len(flt), 1)
                     elif key.kind == _KEY_DOWN:
@@ -6787,17 +7327,17 @@ class InteractivePrompt:
 
     # ── Select with filter and preview ─────────────────────────────────
 
-    def select_with_filter_and_preview(self, message: str,
-                                       options: list[str],
-                                       preview_fn: Callable[[str], str]) -> str:
+    def select_with_filter_and_preview(
+        self, message: str, options: list[str], preview_fn: Callable[[str], str]
+    ) -> str:
         """Select from options with type-to-filter and live preview."""
         if not self._is_tty:
             return self._select_fallback(message, options)
         return self._select_with_filter_and_preview_raw(message, options, preview_fn)
 
-    def _select_with_filter_and_preview_raw(self, message: str,
-                                            options: list[str],
-                                            preview_fn: Callable[[str], str]) -> str:
+    def _select_with_filter_and_preview_raw(
+        self, message: str, options: list[str], preview_fn: Callable[[str], str]
+    ) -> str:
         fd = self._get_fd()
         query = ""
         idx = 0
@@ -6820,11 +7360,16 @@ class InteractivePrompt:
                 lines.append(f"  {prefix}{color}{opt}{_RESET}")
             if not lines:
                 lines = [f"  {_DIM}(no matches){_RESET}"]
-            query_display = f"  {_BOLD}Filter:{_RESET} {query}{_CYAN}\u2502{_RESET}" if query else f"  {_DIM}Type to filter{_RESET}"
+            query_display = (
+                f"  {_BOLD}Filter:{_RESET} {query}{_CYAN}\u2502{_RESET}"
+                if query
+                else f"  {_DIM}Type to filter{_RESET}"
+            )
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows, type=filter){_RESET}\n"
                 + query_display
-                + "\n" + "\n".join(lines)
+                + "\n"
+                + "\n".join(lines)
                 + f"\n{preview_str}{_HIDE_CURSOR}"
             )
 
@@ -6836,16 +7381,19 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     flt = _filtered()
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return flt[idx] if flt else options[0]
+                        _clear()
+                        return flt[idx] if flt else options[0]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return flt[idx] if flt else options[0]
+                        _clear()
+                        return flt[idx] if flt else options[0]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % max(len(flt), 1)
                     elif key.kind == _KEY_DOWN:
@@ -6865,8 +7413,7 @@ class InteractivePrompt:
 
     # ── Select with tags ───────────────────────────────────────────────
 
-    def select_with_tags(self, message: str, options: list[str],
-                         tags: dict[str, list[str]]) -> str:
+    def select_with_tags(self, message: str, options: list[str], tags: dict[str, list[str]]) -> str:
         """Select from options filtered by tags.
 
         Args:
@@ -6881,8 +7428,9 @@ class InteractivePrompt:
             return self._select_fallback(message, options)
         return self._select_with_tags_raw(message, options, tags)
 
-    def _select_with_tags_raw(self, message: str, options: list[str],
-                              tags: dict[str, list[str]]) -> str:
+    def _select_with_tags_raw(
+        self, message: str, options: list[str], tags: dict[str, list[str]]
+    ) -> str:
         fd = self._get_fd()
         idx = 0
         active_tag: str | None = None
@@ -6920,9 +7468,7 @@ class InteractivePrompt:
             tag_str = f"  {_DIM}tags: {tag_line}{_RESET}" if all_tags else ""
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows, tab=next tag){_RESET}\n"
-                f"{tag_str}\n"
-                + "\n".join(vis)
-                + f"{_HIDE_CURSOR}"
+                f"{tag_str}\n" + "\n".join(vis) + f"{_HIDE_CURSOR}"
             )
 
         def _clear() -> None:
@@ -6933,16 +7479,19 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     filtered = _filtered()
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return filtered[idx % len(filtered)] if filtered else options[0]
+                        _clear()
+                        return filtered[idx % len(filtered)] if filtered else options[0]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return filtered[idx % len(filtered)] if filtered else options[0]
+                        _clear()
+                        return filtered[idx % len(filtered)] if filtered else options[0]
                     if key.kind == _KEY_UP:
                         idx = (idx - 1) % max(len(filtered), 1)
                     elif key.kind == _KEY_DOWN:
@@ -6962,18 +7511,18 @@ class InteractivePrompt:
 
     # ── Select with preview and grouping ───────────────────────────────
 
-    def select_with_preview_and_grouping(self, message: str,
-                                         groups: dict[str, list[str]],
-                                         preview_fn: Callable[[str], str]) -> str:
+    def select_with_preview_and_grouping(
+        self, message: str, groups: dict[str, list[str]], preview_fn: Callable[[str], str]
+    ) -> str:
         """Select from categorized options with group headers and live preview."""
         if not self._is_tty:
             all_options = [o for opts in groups.values() for o in opts]
             return self._select_fallback(message, all_options)
         return self._select_with_preview_and_grouping_raw(message, groups, preview_fn)
 
-    def _select_with_preview_and_grouping_raw(self, message: str,
-                                              groups: dict[str, list[str]],
-                                              preview_fn: Callable[[str], str]) -> str:
+    def _select_with_preview_and_grouping_raw(
+        self, message: str, groups: dict[str, list[str]], preview_fn: Callable[[str], str]
+    ) -> str:
         fd = self._get_fd()
         flat: list[tuple[str | None, str]] = []
         for group_name, items in groups.items():
@@ -7009,15 +7558,18 @@ class InteractivePrompt:
 
         try:
             with _RawTerminal(fd):
-                sys.stdout.write(_HIDE_CURSOR); sys.stdout.flush()
+                sys.stdout.write(_HIDE_CURSOR)
+                sys.stdout.flush()
                 while True:
                     sys.stdout.write(f"\r{_ERASE_LINE}\r{_render()}")
                     sys.stdout.flush()
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(); return flat[idx][1]
+                        _clear()
+                        return flat[idx][1]
                     if key.kind == _KEY_ENTER:
-                        _clear(); return flat[idx][1]
+                        _clear()
+                        return flat[idx][1]
                     if key.kind == _KEY_UP:
                         pos = selectable.index(idx) if idx in selectable else 0
                         idx = selectable[(pos - 1) % len(selectable)]
@@ -7029,8 +7581,9 @@ class InteractivePrompt:
 
     # ── Table sort ─────────────────────────────────────────────────────
 
-    def table_sort(self, headers: list[str], rows: list[list[str]],
-                   title: str = "Sort table") -> list[list[str]]:
+    def table_sort(
+        self, headers: list[str], rows: list[list[str]], title: str = "Sort table"
+    ) -> list[list[str]]:
         """Interactive table with column sorting via arrow keys.
 
         Args:
@@ -7047,8 +7600,9 @@ class InteractivePrompt:
             return rows
         return self._table_sort_raw(headers, rows, title)
 
-    def _table_sort_raw(self, headers: list[str], rows: list[list[str]],
-                        title: str) -> list[list[str]]:
+    def _table_sort_raw(
+        self, headers: list[str], rows: list[list[str]], title: str
+    ) -> list[list[str]]:
         fd = self._get_fd()
         sort_col = 0
         sort_asc = True
@@ -7059,27 +7613,37 @@ class InteractivePrompt:
         widths = [len(h) for h in headers]
         for row in sorted_rows:
             for i, cell in enumerate(row):
-                if i < len(widths): widths[i] = max(widths[i], len(str(cell)))
+                if i < len(widths):
+                    widths[i] = max(widths[i], len(str(cell)))
 
         def _do_sort() -> None:
             nonlocal sorted_rows, cursor, scroll
+
             def _key(row):
                 val = row[sort_col] if sort_col < len(row) else ""
                 try:
                     return (0, float(val))
                 except ValueError:
                     return (1, val.lower())
+
             sorted_rows.sort(key=_key, reverse=not sort_asc)
-            cursor = 0; scroll = 0
+            cursor = 0
+            scroll = 0
 
         _do_sort()
 
         def _render() -> list[str]:
             lines: list[str] = []
-            lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}(Tab: column  Space: asc/desc  Enter: confirm){_RESET}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}(Tab: column  Space: asc/desc  Enter: confirm){_RESET}"
+            )
             hdr_parts = []
             for i, (h, w) in enumerate(zip(headers, widths, strict=False)):
-                arrow = " \u25b2" if sort_asc and i == sort_col else (" \u25bc" if not sort_asc and i == sort_col else "")
+                arrow = (
+                    " \u25b2"
+                    if sort_asc and i == sort_col
+                    else (" \u25bc" if not sort_asc and i == sort_col else "")
+                )
                 if i == sort_col:
                     hdr_parts.append(f"{_BOLD}{_CYAN}{h.ljust(w)}{arrow}{_RESET}")
                 else:
@@ -7088,8 +7652,12 @@ class InteractivePrompt:
             lines.append(f"{_ERASE_LINE}\r  {_DIM}{_dash_row(widths)}{_RESET}")
             for i in range(min(max_visible, len(sorted_rows))):
                 idx = scroll + i
-                if idx >= len(sorted_rows): break
-                cells = "  ".join(str(sorted_rows[idx][j]).ljust(widths[j]) for j in range(min(len(widths), len(sorted_rows[idx]))))
+                if idx >= len(sorted_rows):
+                    break
+                cells = "  ".join(
+                    str(sorted_rows[idx][j]).ljust(widths[j])
+                    for j in range(min(len(widths), len(sorted_rows[idx])))
+                )
                 if idx == cursor:
                     lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {cells}{_RESET_REVERSE}{_RESET}")
                 else:
@@ -7099,12 +7667,15 @@ class InteractivePrompt:
 
         def _write_lines(lines: list[str]) -> None:
             sys.stdout.write(_HIDE_CURSOR)
-            for line in lines: sys.stdout.write(f"{line}\n")
+            for line in lines:
+                sys.stdout.write(f"{line}\n")
             sys.stdout.flush()
 
         def _clear(line_count: int) -> None:
-            for _ in range(line_count): sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
-            sys.stdout.write(_SHOW_CURSOR); sys.stdout.flush()
+            for _ in range(line_count):
+                sys.stdout.write(f"{_CURSOR_UP}{_ERASE_LINE}")
+            sys.stdout.write(_SHOW_CURSOR)
+            sys.stdout.flush()
 
         try:
             with _RawTerminal(fd):
@@ -7116,9 +7687,11 @@ class InteractivePrompt:
                     prev_count = len(lines)
                     key = _read_raw_key(fd)
                     if key.kind in (_KEY_CTRL_C, _KEY_ESC):
-                        _clear(prev_count); return sorted_rows
+                        _clear(prev_count)
+                        return sorted_rows
                     if key.kind == _KEY_ENTER:
-                        _clear(prev_count); return sorted_rows
+                        _clear(prev_count)
+                        return sorted_rows
                     if key.kind == _KEY_TAB:
                         sort_col = (sort_col + 1) % len(headers)
                         _do_sort()
@@ -7127,10 +7700,12 @@ class InteractivePrompt:
                         _do_sort()
                     elif key.kind == _KEY_UP:
                         cursor = max(0, cursor - 1)
-                        if cursor < scroll: scroll = cursor
+                        if cursor < scroll:
+                            scroll = cursor
                     elif key.kind == _KEY_DOWN:
                         cursor = min(len(sorted_rows) - 1, cursor + 1)
-                        if cursor >= scroll + max_visible: scroll = cursor - max_visible + 1
+                        if cursor >= scroll + max_visible:
+                            scroll = cursor - max_visible + 1
         except (termios.error, OSError):
             return sorted_rows
 
@@ -7166,8 +7741,7 @@ class InteractivePrompt:
             pct = f"{frac * 100:5.1f}%"
             self._io.write(f"  {_CYAN}{label}{_RESET} {_DIM}{bar}{_RESET} {pct}")
 
-    def table(self, headers: list[str], rows: list[list[str]],
-              title: str = "") -> None:
+    def table(self, headers: list[str], rows: list[list[str]], title: str = "") -> None:
         """Display data in a formatted table with aligned columns.
 
         Args:
@@ -7197,7 +7771,9 @@ class InteractivePrompt:
         if title:
             lines.append(f"  {_BOLD}{_CYAN}{title}{_RESET}")
 
-        header_str = "  ".join(f"{_BOLD}{h.ljust(w)}{_RESET}" for h, w in zip(headers, widths, strict=False))
+        header_str = "  ".join(
+            f"{_BOLD}{h.ljust(w)}{_RESET}" for h, w in zip(headers, widths, strict=False)
+        )
         lines.append(f"  {_BOLD}{header_str}{_RESET}")
         lines.append(f"  {_DIM}{_dash_row(widths)}{_RESET}")
 
@@ -7210,9 +7786,14 @@ class InteractivePrompt:
 
     # ── Diff display ──────────────────────────────────────────────────
 
-    def diff(self, left_label: str, left_lines: list[str],
-             right_label: str, right_lines: list[str],
-             title: str = "") -> None:
+    def diff(
+        self,
+        left_label: str,
+        left_lines: list[str],
+        right_label: str,
+        right_lines: list[str],
+        title: str = "",
+    ) -> None:
         """Show a side-by-side diff with colored additions/removals.
 
         Args:
@@ -7227,13 +7808,15 @@ class InteractivePrompt:
 
         def _trunc(s: str, w: int) -> str:
             if len(s) > w:
-                return s[:w - 1] + "\u2026"
+                return s[: w - 1] + "\u2026"
             return s
 
         if title:
             self._io.write(f"  {_BOLD}{_CYAN}{title}{_RESET}")
 
-        header = f"  {_DIM}{left_label:^{col_w}}{_RESET}  \u2502  {_DIM}{right_label:^{col_w}}{_RESET}"
+        header = (
+            f"  {_DIM}{left_label:^{col_w}}{_RESET}  \u2502  {_DIM}{right_label:^{col_w}}{_RESET}"
+        )
         self._io.write(header)
         left = "  \u2500" * col_w
         right = "\u2500  " * col_w
@@ -7260,8 +7843,9 @@ class InteractivePrompt:
 
             self._io.write(f"  {l_display:<{col_w + 10}}  \u2502  {r_display}")
 
-    def _edit_raw(self, message: str, default: str,
-                  validator: Callable[[str], str | None] | None) -> str:
+    def _edit_raw(
+        self, message: str, default: str, validator: Callable[[str], str | None] | None
+    ) -> str:
         """Interactive edit using raw terminal input."""
         fd = self._get_fd()
         suffix = f" [{_DIM}{default}{_RESET}]" if default else ""
@@ -7373,8 +7957,7 @@ class InteractivePrompt:
 
     # ── Select with details ────────────────────────────────────────────
 
-    def select_with_details(self, title: str, options: list[str],
-                            details: list[str]) -> str:
+    def select_with_details(self, title: str, options: list[str], details: list[str]) -> str:
         """Show an interactive selector with a detail pane below the list.
 
         Args:
@@ -7393,8 +7976,7 @@ class InteractivePrompt:
             return self._select_fallback(title, options)
         return self._select_with_details_raw(title, options, details)
 
-    def _select_with_details_raw(self, title: str, options: list[str],
-                                 details: list[str]) -> str:
+    def _select_with_details_raw(self, title: str, options: list[str], details: list[str]) -> str:
         """Interactive select with details pane using raw terminal input."""
         fd = self._get_fd()
         query = ""
@@ -7427,7 +8009,9 @@ class InteractivePrompt:
                     orig_idx, text = filtered[idx]
                     display = _truncate(text, width - 5)
                     if idx == cursor:
-                        lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {display}{_RESET_REVERSE}{_RESET}")
+                        lines.append(
+                            f"{_ERASE_LINE}\r{_REVERSE} > {display}{_RESET_REVERSE}{_RESET}"
+                        )
                     else:
                         lines.append(f"{_ERASE_LINE}\r   {display}")
 
@@ -7440,9 +8024,13 @@ class InteractivePrompt:
                         lines.append(f"{_ERASE_LINE}\r  {_DIM}{detail}{_RESET}")
 
             if len(filtered) > max_visible:
-                lines.append(f"{_ERASE_LINE}\r   {_DIM}({len(filtered)} items, {cursor + 1}/{len(filtered)}){_RESET}")
+                lines.append(
+                    f"{_ERASE_LINE}\r   {_DIM}({len(filtered)} items, {cursor + 1}/{len(filtered)}){_RESET}"
+                )
 
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
@@ -7505,8 +8093,9 @@ class InteractivePrompt:
 
     # ── Select with preview ────────────────────────────────────────────
 
-    def select_with_preview(self, title: str, options: list[str],
-                            preview_fn: Callable[[str], str]) -> str:
+    def select_with_preview(
+        self, title: str, options: list[str], preview_fn: Callable[[str], str]
+    ) -> str:
         """Show an interactive selector with a live preview panel.
 
         Args:
@@ -7525,8 +8114,9 @@ class InteractivePrompt:
             return self._select_fallback(title, options)
         return self._select_with_preview_raw(title, options, preview_fn)
 
-    def _select_with_preview_raw(self, title: str, options: list[str],
-                                 preview_fn: Callable[[str], str]) -> str:
+    def _select_with_preview_raw(
+        self, title: str, options: list[str], preview_fn: Callable[[str], str]
+    ) -> str:
         """Interactive select with live preview using raw terminal input."""
         fd = self._get_fd()
         query = ""
@@ -7569,7 +8159,7 @@ class InteractivePrompt:
                         preview_text = preview_fn(filtered[cursor])
                     except Exception:
                         preview_text = "(preview unavailable)"
-                    for i, pline in enumerate(preview_text.split("\n")[:max_visible + 2]):
+                    for i, pline in enumerate(preview_text.split("\n")[: max_visible + 2]):
                         t = _truncate(pline, preview_w)
                         if i < len(lines):
                             lines[i] = f"{lines[i]}{_DIM}\u2502{_RESET} {t}"
@@ -7577,9 +8167,13 @@ class InteractivePrompt:
                             lines.append(f"{' ' * (list_w + 2)}{_DIM}\u2502{_RESET} {t}")
 
             if len(filtered) > max_visible:
-                lines.append(f"{_ERASE_LINE}\r   {_DIM}({len(filtered)} items, {cursor + 1}/{len(filtered)}){_RESET}")
+                lines.append(
+                    f"{_ERASE_LINE}\r   {_DIM}({len(filtered)} items, {cursor + 1}/{len(filtered)}){_RESET}"
+                )
 
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_DIM}Enter: select  Esc: cancel  Type to filter{_RESET}{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
@@ -7640,8 +8234,7 @@ class InteractivePrompt:
         except (termios.error, OSError):
             return self._select_fallback(title, options)
 
-    def confirm_multi(self, title: str, items: list[str],
-                      default: bool = True) -> list[str]:
+    def confirm_multi(self, title: str, items: list[str], default: bool = True) -> list[str]:
         """Show a multi-confirm prompt: list items and ask y/N for each.
 
         Args:
@@ -7658,8 +8251,7 @@ class InteractivePrompt:
             return self._confirm_multi_fallback(title, items, default)
         return self._confirm_multi_raw(title, items, default)
 
-    def _confirm_multi_raw(self, title: str, items: list[str],
-                           default: bool) -> list[str]:
+    def _confirm_multi_raw(self, title: str, items: list[str], default: bool) -> list[str]:
         """Interactive multi-confirm using raw terminal input."""
         fd = self._get_fd()
         cursor = 0
@@ -7682,14 +8274,18 @@ class InteractivePrompt:
 
                 display = _truncate(item, width - 8)
                 if i == cursor:
-                    lines.append(f"{_ERASE_LINE}\r{_REVERSE} > {check} {display}{_RESET_REVERSE}{_RESET}")
+                    lines.append(
+                        f"{_ERASE_LINE}\r{_REVERSE} > {check} {display}{_RESET_REVERSE}{_RESET}"
+                    )
                 else:
                     lines.append(f"{_ERASE_LINE}\r   {check} {display}")
 
             n_yes = sum(1 for v in answers.values() if v)
             n_no = sum(1 for v in answers.values() if not v)
             lines.append(f"{_ERASE_LINE}\r")
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}y: yes  n: no  a: yes all  Esc: finish ({n_yes} yes, {n_no} no){_RESET}{_HIDE_CURSOR}")
+            lines.append(
+                f"{_ERASE_LINE}\r  {_DIM}y: yes  n: no  a: yes all  Esc: finish ({n_yes} yes, {n_no} no){_RESET}{_HIDE_CURSOR}"
+            )
             return lines
 
         def _write_lines(lines: list[str]) -> None:
@@ -7749,8 +8345,7 @@ class InteractivePrompt:
 
         return [items[i] for i in sorted(answers) if answers[i]]
 
-    def _confirm_multi_fallback(self, title: str, items: list[str],
-                                default: bool) -> list[str]:
+    def _confirm_multi_fallback(self, title: str, items: list[str], default: bool) -> list[str]:
         """Line-mode fallback for non-TTY."""
         self._io.write(f"  {title}")
         for i, item in enumerate(items, 1):
@@ -7767,8 +8362,7 @@ class InteractivePrompt:
 
     # ── Progress bar ───────────────────────────────────────────────────
 
-    def progress(self, label: str, current: int, total: int,
-                 bar_width: int = 20) -> None:
+    def progress(self, label: str, current: int, total: int, bar_width: int = 20) -> None:
         """Show a progress bar. Overwrites the current line.
 
         Args:
@@ -7806,7 +8400,18 @@ class InteractivePrompt:
 class _InteractiveSpinner:
     """Context manager that drives a spinner animation for InteractivePrompt."""
 
-    _FRAMES = ["\u280b", "\u2819", "\u2839", "\u2838", "\u283c", "\u2834", "\u2826", "\u2827", "\u2807", "\u280f"]
+    _FRAMES = [
+        "\u280b",
+        "\u2819",
+        "\u2839",
+        "\u2838",
+        "\u283c",
+        "\u2834",
+        "\u2826",
+        "\u2827",
+        "\u2807",
+        "\u280f",
+    ]
 
     def __init__(self, prompt: InteractivePrompt, message: str, rate: float) -> None:
         self._prompt = prompt
@@ -7817,6 +8422,7 @@ class _InteractiveSpinner:
 
     def __enter__(self) -> _InteractiveSpinner:
         import threading
+
         self._stop = False
 
         def _spin() -> None:

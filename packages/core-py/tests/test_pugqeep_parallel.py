@@ -1,6 +1,5 @@
 """Tests for parallel batch operations in pugqeep."""
 
-
 import numpy as np
 
 from domain.infrastructure._internal.pugqeep.facade import PGQ

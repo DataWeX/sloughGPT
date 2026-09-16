@@ -1,6 +1,5 @@
 """Tests for multimodal/text_encoder.py — TextEncoder encode_tokens, encode_text, parameters."""
 
-
 import numpy as np
 import pytest
 

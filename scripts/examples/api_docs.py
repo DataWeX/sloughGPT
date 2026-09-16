@@ -8,7 +8,6 @@ import sys
 sys.path.insert(0, "..")
 
 
-
 def main():
     print("=" * 70)
     print("SloughGPT API Documentation")

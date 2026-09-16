@@ -222,7 +222,13 @@ class TestSTFT:
 
 
 def make_engine(**kw):
-    defaults = {"vocab_size": 40, "embed_dim": 16, "hidden_dim": 24, "n_mels": 20, "sample_rate": 8000}
+    defaults = {
+        "vocab_size": 40,
+        "embed_dim": 16,
+        "hidden_dim": 24,
+        "n_mels": 20,
+        "sample_rate": 8000,
+    }
     defaults.update(kw)
     return TTSEngine(**defaults)
 

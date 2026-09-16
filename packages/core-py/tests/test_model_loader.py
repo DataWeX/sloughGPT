@@ -94,6 +94,7 @@ class TestModelLoader:
     def test_init_default(self):
         loader = ModelLoader()
         from domain.infrastructure._internal.model_loader import _REPO_ROOT
+
         assert loader.models_dir == _REPO_ROOT / "models"
 
     def test_init_custom_dir(self, tmp_path):
@@ -185,7 +186,9 @@ class TestModelLoaderSlncLoad:
         def _raise(model_id):
             raise OSError("boom")
 
-        monkeypatch.setattr("domain.infrastructure._internal.safetensors_loader._get_model_dir", _raise)
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.safetensors_loader._get_model_dir", _raise
+        )
         loader = ModelLoader(models_dir=tmp_path)
         result = loader.load("gpt2")
         assert not result.success
@@ -242,9 +245,7 @@ class TestModelLoaderSlncLoad:
             lambda *a, **k: fake_provider,
         )
         loader = ModelLoader(models_dir=tmp_path)
-        monkeypatch.setattr(
-            loader, "_try_convert_to_slnc", lambda cache_dir, model_id: converted
-        )
+        monkeypatch.setattr(loader, "_try_convert_to_slnc", lambda cache_dir, model_id: converted)
         result = loader._try_load_slnc("gpt2", "cpu", True, 8, "symmetric")
         assert result is not None
         assert result.success

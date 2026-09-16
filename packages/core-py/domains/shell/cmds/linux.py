@@ -137,12 +137,14 @@ class LinuxCommandsMixin:
                 if not show_hidden:
                     entries = [e for e in entries if not e.startswith(".")]
                 if sort_by_size:
+
                     def _size_key(e):
                         p2 = os.path.join(target, e) if target != "." else e
                         try:
                             return os.path.getsize(os.path.expanduser(p2))
                         except OSError:
                             return 0
+
                     entries.sort(key=_size_key, reverse=True)
                 elif long_format:
                     pass
@@ -166,7 +168,9 @@ class LinuxCommandsMixin:
                                 size = os.path.getsize(os.path.expanduser(path))
                             except OSError:
                                 pass
-                        self._print(f"  {prefix}rwxr-xr-x  1 user  user  {size:>8}  {e}{'/' if is_dir else ''}")
+                        self._print(
+                            f"  {prefix}rwxr-xr-x  1 user  user  {size:>8}  {e}{'/' if is_dir else ''}"
+                        )
                 elif one_per_line:
                     for e in entries:
                         self._print(f"  {e}")
@@ -276,7 +280,9 @@ class LinuxCommandsMixin:
                         self._print(f"  mkdir: permission denied: {target}")
                         self._last_exit_code = 1
                 else:
-                    self._print(f"  mkdir: cannot create directory '{target}': No such file or directory")
+                    self._print(
+                        f"  mkdir: cannot create directory '{target}': No such file or directory"
+                    )
                     self._last_exit_code = 1
 
     def _cmd_rm(self, args: str = "") -> None:
@@ -299,6 +305,7 @@ class LinuxCommandsMixin:
             try:
                 if os.path.isdir(target) and recursive:
                     import shutil as _shutil
+
                     _shutil.rmtree(target)
                 elif os.path.isdir(target):
                     self._print(f"  rm: cannot remove '{p}': Is a directory")
@@ -393,6 +400,7 @@ class LinuxCommandsMixin:
         src, dst = os.path.expanduser(paths[0]), os.path.expanduser(paths[1])
         try:
             import shutil as _shutil
+
             if os.path.isdir(src):
                 _shutil.copytree(src, dst, dirs_exist_ok=True)
             else:
@@ -489,6 +497,7 @@ class LinuxCommandsMixin:
     def _cmd_ln(self, args: str = "") -> None:
         """Create links: ln [-s] <target> <link_name>"""
         import shlex as _shlex
+
         argv = _shlex.split(args)
         symlink = False
         target = None
@@ -585,13 +594,20 @@ class LinuxCommandsMixin:
             st = os.stat(target)
             import stat as _stat
             import time as _time
+
             if fmt:
                 type_map = {
                     "directory": "directory",
                     "file": "regular file",
                     "other": "other",
                 }
-                kind = "directory" if os.path.isdir(target) else "file" if os.path.isfile(target) else "other"
+                kind = (
+                    "directory"
+                    if os.path.isdir(target)
+                    else "file"
+                    if os.path.isfile(target)
+                    else "other"
+                )
                 mtime = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(st.st_mtime))
                 atime = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(st.st_atime))
                 replacements = {
@@ -615,9 +631,17 @@ class LinuxCommandsMixin:
                 size = st.st_size
                 mtime = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(st.st_mtime))
                 atime = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(st.st_atime))
-                kind = "directory" if os.path.isdir(target) else "file" if os.path.isfile(target) else "other"
+                kind = (
+                    "directory"
+                    if os.path.isdir(target)
+                    else "file"
+                    if os.path.isfile(target)
+                    else "other"
+                )
                 self._print(f"  File: {target}")
-                self._print(f"  Size: {size:,} bytes  {self._format_size(size, human=True).strip()}")
+                self._print(
+                    f"  Size: {size:,} bytes  {self._format_size(size, human=True).strip()}"
+                )
                 self._print(f"  Type: {kind}")
                 self._print(f"  Mode: {mode_str} ({oct(_stat.S_IMODE(st.st_mode))})")
                 self._print(f"  Modified: {mtime}")
@@ -805,12 +829,14 @@ class LinuxCommandsMixin:
                 targets.append(p)
         if not show_lines and not show_words and not show_chars and not show_maxlen:
             show_lines = show_words = show_chars = True
+
         def _count(content):
             lines = len(content.splitlines())
             words = len(content.split())
             chars = len(content)
             maxlen = max((len(l) for l in content.splitlines()), default=0)
             return lines, words, chars, maxlen
+
         if not targets:
             if self._piped_input:
                 lines, words, chars, maxlen = _count(self._piped_input)
@@ -900,6 +926,7 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import re as _re
+
         parts = args.strip().split()
 
         # Parse -e patterns (collected separately)
@@ -970,7 +997,11 @@ class LinuxCommandsMixin:
 
         # Combine -e patterns with positional pattern
         pattern = "|".join(e_patterns) if e_patterns else (non_flags[0] if non_flags else "")
-        targets = non_flags[1:] if len(e_patterns) == 0 and len(non_flags) > 1 else (non_flags if e_patterns and len(non_flags) > 0 else [])
+        targets = (
+            non_flags[1:]
+            if len(e_patterns) == 0 and len(non_flags) > 1
+            else (non_flags if e_patterns and len(non_flags) > 0 else [])
+        )
         if not e_patterns:
             targets = non_flags[1:] if len(non_flags) > 1 else []
         recursive = any(f in ("-r", "-R") for f in flags)
@@ -986,7 +1017,11 @@ class LinuxCommandsMixin:
             if extended_regex:
                 pat = _re.compile(pattern, _re.VERBOSE | (_re.IGNORECASE if ignore_case else 0))
             elif word_boundary:
-                pat = _re.compile(r"\b" + pattern + r"\b", **kwargs) if kwargs else _re.compile(r"\b" + pattern + r"\b")
+                pat = (
+                    _re.compile(r"\b" + pattern + r"\b", **kwargs)
+                    if kwargs
+                    else _re.compile(r"\b" + pattern + r"\b")
+                )
             else:
                 pat = _re.compile(pattern, **kwargs) if kwargs else _re.compile(pattern)
         except _re.error as e:
@@ -1027,24 +1062,55 @@ class LinuxCommandsMixin:
                         file_pairs.append((t, content))
                 for label, content in file_pairs:
                     lines = content.splitlines()
-                    found = self._grep_search(lines, pat, invert, count_only, files_only,
-                                              line_numbers, after_context, before_context, label,
-                                              only_matching=only_matching, max_count=max_count)
+                    found = self._grep_search(
+                        lines,
+                        pat,
+                        invert,
+                        count_only,
+                        files_only,
+                        line_numbers,
+                        after_context,
+                        before_context,
+                        label,
+                        only_matching=only_matching,
+                        max_count=max_count,
+                    )
                     if found:
                         matched_any = True
             else:
                 lines = self._piped_input.splitlines()
-                matched_any = self._grep_search(lines, pat, invert, count_only, files_only,
-                                                line_numbers, after_context, before_context, None,
-                                                only_matching=only_matching, max_count=max_count)
+                matched_any = self._grep_search(
+                    lines,
+                    pat,
+                    invert,
+                    count_only,
+                    files_only,
+                    line_numbers,
+                    after_context,
+                    before_context,
+                    None,
+                    only_matching=only_matching,
+                    max_count=max_count,
+                )
             self._last_exit_code = 0 if matched_any else 1
         except FileNotFoundError:
             self._print(f"  grep: {targets[0]}: No such file or directory")
             self._last_exit_code = 1
 
-    def _grep_search(self, lines, pat, invert, count_only, files_only,
-                     line_numbers, after_context, before_context, label,
-                     only_matching=False, max_count=0):
+    def _grep_search(
+        self,
+        lines,
+        pat,
+        invert,
+        count_only,
+        files_only,
+        line_numbers,
+        after_context,
+        before_context,
+        label,
+        only_matching=False,
+        max_count=0,
+    ):
         """Core grep logic on a list of lines. Returns True if any match."""
         matched_indices = set()
         match_count = 0
@@ -1186,6 +1252,7 @@ class LinuxCommandsMixin:
 
         if random_shuffle:
             import random as _random
+
             _random.shuffle(lines)
         else:
             lines.sort(key=_sort_key, reverse=reverse)
@@ -1267,6 +1334,7 @@ class LinuxCommandsMixin:
             self._print("  Usage: uniq [-c] [-i] [-d] [-u] [-f N] [-s N] [file]")
             self._last_exit_code = 1
             return
+
         def _key(line):
             k = line
             if skip_fields > 0:
@@ -1277,6 +1345,7 @@ class LinuxCommandsMixin:
             if ignore_case:
                 k = k.lower()
             return k
+
         out = []
         groups = []
         if lines:
@@ -1329,13 +1398,17 @@ class LinuxCommandsMixin:
             p = parts[i]
             if p in ("-name", "-iname") and i + 1 < len(parts):
                 import fnmatch as _fnmatch
+
                 pat_val = parts[i + 1]
                 if p == "-iname":
+
                     def _match_fn(name, _p=pat_val.lower()):
                         return _fnmatch.fnmatch(name.lower(), _p)
                 else:
+
                     def _match_fn(name, _p=pat_val):
                         return _fnmatch.fnmatch(name, _p)
+
                 pattern = pat_val
                 i += 2
             elif p == "-type" and i + 1 < len(parts):
@@ -1422,7 +1495,7 @@ class LinuxCommandsMixin:
             "upper": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
             "space": " \t\n\r\f\v",
             "blank": " \t",
-            "punct": '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~',
+            "punct": "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
             "xdigit": "0123456789abcdefABCDEF",
         }
         return classes.get(cls, s)
@@ -1430,7 +1503,9 @@ class LinuxCommandsMixin:
     def _cmd_cut(self, args: str = "") -> None:
         """Cut fields, characters, or bytes from lines of text (file or piped input)."""
         if not args and not self._piped_input:
-            self._print("  Usage: cut -f<N>[,...] [-d<delim>] [-s] [file]  or  cut -c<N>[,...] [file]  or  cut -b<N>[,...] [file]")
+            self._print(
+                "  Usage: cut -f<N>[,...] [-d<delim>] [-s] [file]  or  cut -c<N>[,...] [file]  or  cut -b<N>[,...] [file]"
+            )
             self._last_exit_code = 1
             return
         parts = args.strip().split() if args else []
@@ -1500,7 +1575,7 @@ class LinuxCommandsMixin:
                 for lo, hi in byte_ranges:
                     for i in range(lo, hi + 1):
                         if i <= len(raw):
-                            chosen.append(raw[i - 1:i])
+                            chosen.append(raw[i - 1 : i])
                 out_lines.append(b"".join(chosen).decode("utf-8", errors="replace"))
             elif char_ranges:
                 chars = list(line)
@@ -1543,6 +1618,7 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import shlex as _shlex
+
         parts = _shlex.split(args) if args else []
         delete = False
         squeeze = False
@@ -1571,15 +1647,17 @@ class LinuxCommandsMixin:
             i = 0
             while i < len(s):
                 # POSIX character classes: [:alpha:], [:digit:], etc.
-                if s[i:i+2] == "[:" and ":]" in s[i:]:
+                if s[i : i + 2] == "[:" and ":]" in s[i:]:
                     end = s.index(":]", i)
-                    cls = s[i+2:end]
+                    cls = s[i + 2 : end]
                     if cls == "alpha":
                         result.extend("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
                     elif cls == "digit":
                         result.extend("0123456789")
                     elif cls == "alnum":
-                        result.extend("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+                        result.extend(
+                            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+                        )
                     elif cls == "lower":
                         result.extend("abcdefghijklmnopqrstuvwxyz")
                     elif cls == "upper":
@@ -1589,7 +1667,7 @@ class LinuxCommandsMixin:
                     elif cls == "blank":
                         result.extend(" \t")
                     elif cls == "punct":
-                        result.extend('!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~')
+                        result.extend("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
                     elif cls == "cntrl":
                         result.extend(chr(c) for c in range(32))
                     elif cls == "graph":
@@ -1600,7 +1678,7 @@ class LinuxCommandsMixin:
                         result.extend("0123456789abcdefABCDEF")
                     else:
                         # Unknown class: treat as literal
-                        result.extend(s[i:end+2])
+                        result.extend(s[i : end + 2])
                     i = end + 2
                 elif i + 2 < len(s) and s[i + 1] == "-" and ord(s[i]) < ord(s[i + 2]):
                     result.extend(chr(c) for c in range(ord(s[i]), ord(s[i + 2]) + 1))
@@ -1619,6 +1697,7 @@ class LinuxCommandsMixin:
             result = self._piped_input.translate(str.maketrans("", "", expanded1))
         elif squeeze:
             import re as _re
+
             if delete:
                 result = self._piped_input.translate(str.maketrans("", "", expanded1))
                 pattern = "|".join(_re.escape(c) for c in expanded1) if expanded1 else None
@@ -1631,7 +1710,12 @@ class LinuxCommandsMixin:
                 else:
                     result = self._piped_input
         else:
-            trans = str.maketrans(expanded1, expanded2[:len(expanded1)].ljust(len(expanded1), expanded2[-1] if expanded2 else ""))
+            trans = str.maketrans(
+                expanded1,
+                expanded2[: len(expanded1)].ljust(
+                    len(expanded1), expanded2[-1] if expanded2 else ""
+                ),
+            )
             result = self._piped_input.translate(trans)
         self._print(result.rstrip("\n"))
         self._last_exit_code = 0
@@ -1758,7 +1842,7 @@ class LinuxCommandsMixin:
         for line in content.splitlines():
             if not break_spaces:
                 for i in range(0, len(line), width):
-                    out_lines.append(line[i:i + width])
+                    out_lines.append(line[i : i + width])
             else:
                 while len(line) > width:
                     bp = line.rfind(" ", 0, width + 1)
@@ -1805,6 +1889,7 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import random as _random
+
         lines = content.splitlines()
         _random.shuffle(lines)
         self._print("\n".join(lines))
@@ -1877,6 +1962,7 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import itertools as _itertools
+
         if serialize:
             for reader in readers:
                 if delims:
@@ -2222,17 +2308,23 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import difflib as _difflib
+
         if ignore_ws:
+
             def norm(s):
                 return " ".join(s.split())
+
             lines1 = [norm(l) for l in lines1]
             lines2 = [norm(l) for l in lines2]
         if unified:
             diff_gen = _difflib.unified_diff(
-                lines1, lines2,
-                fromfile=targets[0], tofile=targets[1],
+                lines1,
+                lines2,
+                fromfile=targets[0],
+                tofile=targets[1],
             )
             from ..repl import _C_DIM, _C_GREEN, _C_RED, _C_RESET
+
             has_output = False
             for l in diff_gen:
                 has_output = True
@@ -2265,6 +2357,7 @@ class LinuxCommandsMixin:
                 self._last_exit_code = 1
                 return
             from ..repl import _C_DIM, _C_GREEN, _C_RED, _C_RESET
+
             for l in diffs:
                 if l.startswith("+ "):
                     self._print(f"  {_C_GREEN}{l}{_C_RESET}")
@@ -2303,7 +2396,9 @@ class LinuxCommandsMixin:
             try:
                 a, b = int(parts[0]), int(parts[2])
             except ValueError:
-                self.console.print(f"  test: integer expression expected: {parts[0] if not parts[0].lstrip('-').isdigit() else parts[2]}")
+                self.console.print(
+                    f"  test: integer expression expected: {parts[0] if not parts[0].lstrip('-').isdigit() else parts[2]}"
+                )
                 self._last_exit_code = 2
                 return
             if parts[1] == "-eq":
@@ -2373,21 +2468,27 @@ class LinuxCommandsMixin:
         if placeholder:
             for item in items:
                 substituted = [part.replace(placeholder, item) for part in cmd_parts]
-                if self._check_permission(substituted[0], " ".join(substituted[1:]) if len(substituted) > 1 else ""):
+                if self._check_permission(
+                    substituted[0], " ".join(substituted[1:]) if len(substituted) > 1 else ""
+                ):
                     result = self._execute_single(" ".join(substituted))
                     if result:
                         self._print(result.rstrip("\n"))
         elif n:
-            chunks = [items[i:i + n] for i in range(0, len(items), n)]
+            chunks = [items[i : i + n] for i in range(0, len(items), n)]
             for chunk in chunks:
                 full_cmd = cmd_parts + chunk
-                if self._check_permission(full_cmd[0], " ".join(full_cmd[1:]) if len(full_cmd) > 1 else ""):
+                if self._check_permission(
+                    full_cmd[0], " ".join(full_cmd[1:]) if len(full_cmd) > 1 else ""
+                ):
                     result = self._execute_single(" ".join(full_cmd))
                     if result:
                         self._print(result.rstrip("\n"))
         else:
             full_cmd = cmd_parts + items
-            if self._check_permission(full_cmd[0], " ".join(full_cmd[1:]) if len(full_cmd) > 1 else ""):
+            if self._check_permission(
+                full_cmd[0], " ".join(full_cmd[1:]) if len(full_cmd) > 1 else ""
+            ):
                 result = self._execute_single(" ".join(full_cmd))
                 if result:
                     self._print(result.rstrip("\n"))
@@ -2402,6 +2503,7 @@ class LinuxCommandsMixin:
         import time as _time
 
         from ..repl import _C_DIM, _C_RESET
+
         start = _time.perf_counter()
         self._execute_single(args)
         elapsed = _time.perf_counter() - start
@@ -2474,25 +2576,28 @@ class LinuxCommandsMixin:
         parts = args.strip().split(None, 1)
         name = os.path.basename(os.path.expanduser(parts[0]))
         if len(parts) > 1 and name.endswith(parts[1]):
-            name = name[:-len(parts[1])]
+            name = name[: -len(parts[1])]
         self._print(name)
         self._last_exit_code = 0
 
     def _cmd_nproc(self, args: str = "") -> None:
         """Print number of CPUs."""
         import os as _os
+
         self._print(str(_os.cpu_count() or 1))
         self._last_exit_code = 0
 
     def _cmd_hostname(self, args: str = "") -> None:
         """Print system hostname."""
         import socket as _socket
+
         self._print(_socket.gethostname())
         self._last_exit_code = 0
 
     def _cmd_uname(self, args: str = "") -> None:
         """Print system information."""
         import platform as _platform
+
         flags = args.strip().split() if args else []
         if not flags or "-a" in flags:
             self._print(f"  {_platform.system()} {_platform.release()} {_platform.machine()}")
@@ -2512,6 +2617,7 @@ class LinuxCommandsMixin:
         """Print user identity."""
         import getpass as _gp
         import os as _os
+
         user = _gp.getuser()
         uid = _os.getuid() if hasattr(_os, "getuid") else "?"
         gid = _os.getgid() if hasattr(_os, "getgid") else "?"
@@ -2521,12 +2627,14 @@ class LinuxCommandsMixin:
     def _cmd_logname(self, args: str = "") -> None:
         """Print login name."""
         import getpass as _gp
+
         self._print(_gp.getuser())
         self._last_exit_code = 0
 
     def _cmd_mktemp(self, args: str = "") -> None:
         """Create a temporary file or directory."""
         import tempfile as _tf
+
         parts = args.strip().split()
         is_dir = any(p == "-d" for p in parts)
         try:
@@ -2544,6 +2652,7 @@ class LinuxCommandsMixin:
         """Show who is logged on."""
         import getpass as _gp
         import time as _time
+
         user = _gp.getuser()
         self._print(f"  {user}    console  {_time.strftime('%Y-%m-%d %H:%M')}")
         self._last_exit_code = 0
@@ -2631,7 +2740,7 @@ class LinuxCommandsMixin:
             prev_chunk = None
             skip_next = False
             for i in range(0, len(data), 16):
-                chunk = data[i:i + 16]
+                chunk = data[i : i + 16]
                 if chunk == prev_chunk:
                     if not skip_next:
                         collapsed.append(("*", None))
@@ -2642,7 +2751,7 @@ class LinuxCommandsMixin:
                 prev_chunk = chunk
             items = collapsed
         else:
-            items = [(i, data[i:i + 16]) for i in range(0, len(data), 16)]
+            items = [(i, data[i : i + 16]) for i in range(0, len(data), 16)]
         for addr_or_star, chunk in items:
             if chunk is None:
                 self._print("  *")
@@ -2660,7 +2769,9 @@ class LinuxCommandsMixin:
             elif data_type == "d":
                 vals = " ".join(f"{b:3d}" for b in chunk)
             elif data_type == "c":
-                vals = " ".join(f"{b:3o} " + (chr(b) if 32 <= b < 127 else f"\\{b:03o}") for b in chunk)
+                vals = " ".join(
+                    f"{b:3o} " + (chr(b) if 32 <= b < 127 else f"\\{b:03o}") for b in chunk
+                )
             elif data_type == "u":
                 vals = " ".join(f"{b:3d}" for b in chunk)
             else:
@@ -2735,13 +2846,16 @@ class LinuxCommandsMixin:
             self._print(f"  join: {e.filename}: No such file or directory")
             self._last_exit_code = 1
             return
+
         def _split(line):
             if sep:
                 return line.split(sep)
             return line.split()
+
         def _get_field(parts, f):
             idx = f - 1
             return parts[idx] if 0 <= idx < len(parts) else ""
+
         d1 = {}
         for line in raw1:
             fields = _split(line)
@@ -2790,6 +2904,7 @@ class LinuxCommandsMixin:
         Suffixes: s (seconds, default), m (minutes), h (hours), d (days)
         """
         import time as _time
+
         parts = args.strip().split() if args else []
         if not parts:
             return
@@ -2819,6 +2934,7 @@ class LinuxCommandsMixin:
     def _cmd_date(self, args: str = "") -> None:
         """Show current date and time: date [-u] [+format]"""
         from datetime import datetime as _dt
+
         argv = args.split()
         utc = False
         fmt = "%a %b %d %H:%M:%S %Z %Y"
@@ -2841,6 +2957,7 @@ class LinuxCommandsMixin:
         from datetime import datetime as _dt
 
         from ..repl import _C_BOLD, _C_RESET
+
         argv = args.split()
         now = _dt.now()
         if len(argv) == 0:
@@ -2870,6 +2987,7 @@ class LinuxCommandsMixin:
     def _cmd_sed(self, args: str = "") -> None:
         """Stream editor: sed 's/pattern/replacement/[g]', '/pattern/d', 'd', 'Np', 'N,Mp', 'N,Md'."""
         import re as _re
+
         if not args:
             self._print("  Usage: sed [-n] 's/pattern/replacement/[g]' [file]")
             self._print("         sed [-n] '/pattern/d' [file]")
@@ -2901,7 +3019,7 @@ class LinuxCommandsMixin:
                 # Count unescaped delimiters
                 depth = 0
                 for ci, ch in enumerate(script):
-                    if ch == sep and (ci == 0 or script[ci-1] != '\\'):
+                    if ch == sep and (ci == 0 or script[ci - 1] != "\\"):
                         depth += 1
                 if depth >= 3:
                     # Full s/// with flags — trim trailing non-script tokens
@@ -2913,22 +3031,22 @@ class LinuxCommandsMixin:
             elif p.startswith("/") and p.endswith("/p"):
                 script = p
                 i += 1
-            elif _re.match(r'^\d+,?\d*p$', p):
+            elif _re.match(r"^\d+,?\d*p$", p):
                 script = p
                 i += 1
-            elif _re.match(r'^\d+,?\d*d$', p):
+            elif _re.match(r"^\d+,?\d*d$", p):
                 script = p
                 i += 1
             elif p.strip() == "d":
                 script = p
                 i += 1
-            elif _re.match(r'^\d+[aic]\\', p) or _re.match(r'^\d+[aic]\\\\', p):
+            elif _re.match(r"^\d+[aic]\\", p) or _re.match(r"^\d+[aic]\\\\", p):
                 # a\, i\, c\ commands: text after backslash can contain spaces
                 # Reconstruct from original args to preserve spaces
-                script = args.strip()[args.strip().index(p):]
+                script = args.strip()[args.strip().index(p) :]
                 i = len(raw_parts)
-            elif p.startswith("/") and (_re.search(r'/[aic]\\', p) or _re.search(r'/[aic]\\\\', p)):
-                script = args.strip()[args.strip().index(p):]
+            elif p.startswith("/") and (_re.search(r"/[aic]\\", p) or _re.search(r"/[aic]\\\\", p)):
+                script = args.strip()[args.strip().index(p) :]
                 i = len(raw_parts)
             elif not p.startswith("-") and not script:
                 script = p
@@ -2972,11 +3090,13 @@ class LinuxCommandsMixin:
                         self._print(f"  sed: invalid regex '{pat}'")
                         self._last_exit_code = 1
                         return
+
                     def _unescape(s):
                         s = s.replace("\\t", "\t")
                         s = s.replace("\\n", "\n")
                         s = s.replace("\\\\", "\\")
                         return s
+
                     new_line = compiled.sub(_unescape(repl), line, count=0 if "g" in flags else 1)
                     if quiet:
                         if new_line != line:
@@ -3008,22 +3128,22 @@ class LinuxCommandsMixin:
                     out_lines.append(line)
             elif script.strip() == "d":
                 continue
-            elif _re.match(r'^\d+,\d+d$', script):
-                m = _re.match(r'^(\d+),(\d+)d$', script)
+            elif _re.match(r"^\d+,\d+d$", script):
+                m = _re.match(r"^(\d+),(\d+)d$", script)
                 start = int(m.group(1))
                 end = int(m.group(2))
                 if start <= NR <= end:
                     continue
                 else:
                     out_lines.append(line)
-            elif _re.match(r'^(\d+)(,(\d+))?p$', script):
-                m = _re.match(r'^(\d+)(?:,(\d+))?p$', script)
+            elif _re.match(r"^(\d+)(,(\d+))?p$", script):
+                m = _re.match(r"^(\d+)(?:,(\d+))?p$", script)
                 start = int(m.group(1))
                 end = int(m.group(2)) if m.group(2) else start
                 if start <= NR <= end:
                     out_lines.append(line)
-            elif _re.match(r'^(\d+)([aic])\\(.*)$', script):
-                m = _re.match(r'^(\d+)([aic])\\(.*)$', script)
+            elif _re.match(r"^(\d+)([aic])\\(.*)$", script):
+                m = _re.match(r"^(\d+)([aic])\\(.*)$", script)
                 line_num = int(m.group(1))
                 cmd_type = m.group(2)
                 text = m.group(3)
@@ -3035,8 +3155,8 @@ class LinuxCommandsMixin:
                         out_lines.append(text + "\n")
                     elif cmd_type == "i" and NR == line_num:
                         out_lines.insert(-1, text + "\n")
-            elif _re.match(r'^/([^/]+)/([aic])\\(.*)$', script):
-                m = _re.match(r'^/([^/]+)/([aic])\\(.*)$', script)
+            elif _re.match(r"^/([^/]+)/([aic])\\(.*)$", script):
+                m = _re.match(r"^/([^/]+)/([aic])\\(.*)$", script)
                 pat = m.group(1)
                 cmd_type = m.group(2)
                 text = m.group(3)
@@ -3086,13 +3206,21 @@ class LinuxCommandsMixin:
                     i += 2
                 else:
                     i += 1
-            elif p.startswith("{") or (p.startswith("'{") and not script) or (p.startswith('"{') and not script):
+            elif (
+                p.startswith("{")
+                or (p.startswith("'{") and not script)
+                or (p.startswith('"{') and not script)
+            ):
                 # Collect tokens until one ends with } or '} or "}
                 script_tokens = []
                 start_p = p.lstrip("'\"")
-                first_end = start_p.endswith("}") or start_p.endswith("}'") or start_p.endswith('"}')
+                first_end = (
+                    start_p.endswith("}") or start_p.endswith("}'") or start_p.endswith('"}')
+                )
                 script_tokens.append(start_p[1:] if first_end else start_p)
-                while i < len(parts) and not (parts[i].endswith("}") or parts[i].endswith("}'") or parts[i].endswith('"}')):
+                while i < len(parts) and not (
+                    parts[i].endswith("}") or parts[i].endswith("}'") or parts[i].endswith('"}')
+                ):
                     i += 1
                     if i < len(parts):
                         end_p = parts[i]
@@ -3149,20 +3277,23 @@ class LinuxCommandsMixin:
     def _awk_resolve(self, expr, line, fields, NF, NR):
         """Resolve an awk expression against a line's fields."""
         import re as _re
+
         result = expr
         tokens = {}
         token_idx = [0]
+
         def _save_field(m):
             key = f"\x00T{token_idx[0]}\x00"
             token_idx[0] += 1
             idx = int(m.group(1))
             tokens[key] = fields[idx - 1] if 1 <= idx <= NF else ""
             return key
+
         # Protect $0 from digit matching
         result = result.replace("$0", "\x00DOLLAR0\x00")
-        result = _re.sub(r'\$(\d+)', _save_field, result)
+        result = _re.sub(r"\$(\d+)", _save_field, result)
         result = result.replace("\x00DOLLAR0\x00", line)
-        result = _re.sub(r'\$NF', fields[-1] if fields else "", result)
+        result = _re.sub(r"\$NF", fields[-1] if fields else "", result)
         for key, val in tokens.items():
             result = result.replace(key, val)
         result = result.replace("NR", str(NR))
@@ -3174,7 +3305,9 @@ class LinuxCommandsMixin:
             if len(parts) > 1:
                 quoted = []
                 for p in parts:
-                    if (p.startswith('"') and p.endswith('"')) or (p.startswith("'") and p.endswith("'")):
+                    if (p.startswith('"') and p.endswith('"')) or (
+                        p.startswith("'") and p.endswith("'")
+                    ):
                         quoted.append(p[1:-1])
                     else:
                         quoted.append(p)
@@ -3272,7 +3405,8 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import re as _re
-        strings_found = _re.findall(rb'[\x20-\x7e]{%d,}' % min_len, data)
+
+        strings_found = _re.findall(rb"[\x20-\x7e]{%d,}" % min_len, data)
         if strings_found:
             self._print("\n".join(s.decode("ascii", errors="replace") for s in strings_found))
         self._last_exit_code = 0
@@ -3297,7 +3431,11 @@ class LinuxCommandsMixin:
             if target:
                 data = Path(os.path.expanduser(target)).read_bytes()
             elif self._piped_input:
-                data = self._piped_input.encode("utf-8") if not decode else self._piped_input.encode("utf-8")
+                data = (
+                    self._piped_input.encode("utf-8")
+                    if not decode
+                    else self._piped_input.encode("utf-8")
+                )
             else:
                 self._print("  Usage: base64 [-d] [file]")
                 self._last_exit_code = 1
@@ -3307,6 +3445,7 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import base64 as _b64
+
         if decode:
             try:
                 decoded = _b64.b64decode(data)
@@ -3434,7 +3573,11 @@ class LinuxCommandsMixin:
             while raw_bytes:
                 chunk = raw_bytes[:byte_count]
                 raw_bytes = raw_bytes[byte_count:]
-                suffix = f"{idx:02d}" if numeric else chr(ord("a") + idx % 26) + chr(ord("a") + idx // 26 % 26)
+                suffix = (
+                    f"{idx:02d}"
+                    if numeric
+                    else chr(ord("a") + idx % 26) + chr(ord("a") + idx // 26 % 26)
+                )
                 fname = f"{prefix}{suffix}"
                 try:
                     Path(fname).write_bytes(chunk)
@@ -3449,7 +3592,11 @@ class LinuxCommandsMixin:
             while lines:
                 chunk = lines[:line_count]
                 lines = lines[line_count:]
-                suffix = f"{idx:02d}" if numeric else chr(ord("a") + idx % 26) + chr(ord("a") + idx // 26 % 26)
+                suffix = (
+                    f"{idx:02d}"
+                    if numeric
+                    else chr(ord("a") + idx % 26) + chr(ord("a") + idx // 26 % 26)
+                )
                 fname = f"{prefix}{suffix}"
                 try:
                     Path(fname).write_text("".join(chunk))
@@ -3513,7 +3660,9 @@ class LinuxCommandsMixin:
                     avail = st.f_bavail * st.f_frsize
                     used = total - free
                     pct = int(used / total * 100) if total else 0
-                    self._print(f"virtual-fs    {_fmt(total)}  {_fmt(used)}  {_fmt(avail)}  {pct:>2}% {target}")
+                    self._print(
+                        f"virtual-fs    {_fmt(total)}  {_fmt(used)}  {_fmt(avail)}  {pct:>2}% {target}"
+                    )
                 except (OSError, FileNotFoundError):
                     self._print(f"df: {path}: No such file or directory")
                     self._last_exit_code = 1
@@ -3527,7 +3676,9 @@ class LinuxCommandsMixin:
                 avail = st.f_bavail * st.f_frsize
                 used = total - free
                 pct = int(used / total * 100) if total else 0
-                self._print(f"virtual-fs    {_fmt(total)}  {_fmt(used)}  {_fmt(avail)}  {pct:>2}% {cwd}")
+                self._print(
+                    f"virtual-fs    {_fmt(total)}  {_fmt(used)}  {_fmt(avail)}  {pct:>2}% {cwd}"
+                )
             except OSError:
                 self._print(f"df: {cwd}: No such file or directory")
                 self._last_exit_code = 1
@@ -3633,6 +3784,7 @@ class LinuxCommandsMixin:
                 elif content.strip().startswith("{") or content.strip().startswith("["):
                     try:
                         import json as _json
+
                         _json.loads(content)
                         desc = "JSON data, ASCII text"
                         mime = "application/json"
@@ -3710,6 +3862,7 @@ class LinuxCommandsMixin:
         cmd_str = " ".join(cmd_parts)
         import signal as _signal
         import subprocess as _sp
+
         try:
             proc = _sp.Popen(cmd_str, shell=True, stdout=_sp.PIPE, stderr=_sp.PIPE)
             try:
@@ -3788,6 +3941,7 @@ class LinuxCommandsMixin:
         cmd_str = " ".join(cmd_parts)
         import subprocess as _sp
         import time as _time
+
         iterations = 0
         max_iterations = 5
         try:
@@ -3795,6 +3949,7 @@ class LinuxCommandsMixin:
                 if clear:
                     self._print("\033[2J\033[H", end="")
                 from datetime import datetime as _dt
+
                 now = _dt.now().strftime("%H:%M:%S")
                 self._print(f"Every {interval}s: {cmd_str}  {now}")
                 self._print("─" * 60)
@@ -3839,7 +3994,7 @@ class LinuxCommandsMixin:
         """Push directory onto stack: pushd [DIR]"""
         parts = args.strip().split() if args else []
         target = parts[0] if parts else None
-        if not hasattr(self, '_dir_stack'):
+        if not hasattr(self, "_dir_stack"):
             self._dir_stack = []
         old_cwd = os.getcwd()
         if target:
@@ -3861,7 +4016,7 @@ class LinuxCommandsMixin:
 
     def _cmd_popd(self, args: str = "") -> None:
         """Pop directory from stack: popd"""
-        if not hasattr(self, '_dir_stack') or not self._dir_stack:
+        if not hasattr(self, "_dir_stack") or not self._dir_stack:
             self._print("  popd: directory stack empty")
             self._last_exit_code = 1
             return
@@ -3877,7 +4032,7 @@ class LinuxCommandsMixin:
 
     def _cmd_dirs(self, args: str = "") -> None:
         """Display directory stack: dirs [-v]"""
-        if not hasattr(self, '_dir_stack'):
+        if not hasattr(self, "_dir_stack"):
             self._dir_stack = []
         stack = self._dir_stack[::-1] + [os.getcwd()]
         if "-v" in args:
@@ -3901,6 +4056,7 @@ class LinuxCommandsMixin:
           -z    gzip compression
         """
         import tarfile as _tarfile
+
         parts = args.strip().split() if args else []
         if not parts:
             self._print("  Usage: tar [-ctxvf] [file] [path ...]")
@@ -3934,7 +4090,7 @@ class LinuxCommandsMixin:
                         i += 2
                     else:
                         idx = flags.index("f")
-                        rest = flags[idx + 1:]
+                        rest = flags[idx + 1 :]
                         if rest:
                             archive_file = rest
                             i += 1
@@ -4002,6 +4158,7 @@ class LinuxCommandsMixin:
           -v    Verbose
         """
         import gzip as _gzip
+
         parts = args.strip().split() if args else []
         keep = "-k" in parts
         decompress = "-d" in parts
@@ -4058,6 +4215,7 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         import shutil as _shutil
+
         for cmd in parts:
             if hasattr(self, f"_cmd_{cmd}"):
                 self._print(f"  {cmd}: shell built-in")
@@ -4079,6 +4237,7 @@ class LinuxCommandsMixin:
         Supports: +, -, *, /, %, length, substr, index, match
         """
         import re as _re
+
         expr = args.strip()
         if not expr:
             self._print("  Usage: expr EXPRESSION")
@@ -4096,7 +4255,7 @@ class LinuxCommandsMixin:
                 self._print(str(len(m.group(1))))
                 self._last_exit_code = 0
                 return
-            m = _re.match(r'^length\s+(\S+)$', expr)
+            m = _re.match(r"^length\s+(\S+)$", expr)
             if m:
                 self._print(str(len(m.group(1))))
                 self._last_exit_code = 0
@@ -4105,7 +4264,7 @@ class LinuxCommandsMixin:
             m = _re.match(r'^substr\s+"(.*)"\s+(\d+)\s+(\d+)$', expr)
             if m:
                 s, pos, length = m.group(1), int(m.group(2)), int(m.group(3))
-                self._print(s[pos - 1:pos - 1 + length])
+                self._print(s[pos - 1 : pos - 1 + length])
                 self._last_exit_code = 0
                 return
             # Handle index: index STRING CHARS
@@ -4161,7 +4320,7 @@ class LinuxCommandsMixin:
 
     def _cmd_wait(self, args: str = "") -> None:
         """Wait for background processes: wait [PID]"""
-        if not hasattr(self, '_bg_threads'):
+        if not hasattr(self, "_bg_threads"):
             self._bg_threads = {}
         if not self._bg_threads:
             self._last_exit_code = 0
@@ -4184,7 +4343,7 @@ class LinuxCommandsMixin:
                 self._print("  trap -- listing signal handlers")
             self._last_exit_code = 0
             return
-        if not hasattr(self, '_trap_handlers'):
+        if not hasattr(self, "_trap_handlers"):
             self._trap_handlers = {}
         command = parts[0]
         for sig in parts[1:]:
@@ -4224,6 +4383,7 @@ class LinuxCommandsMixin:
     def _cmd_test(self, args: str = "") -> None:
         """Evaluate a conditional expression: test EXPRESSION"""
         import os as _os
+
         expr = args.strip()
         if not expr:
             self._last_exit_code = 1
@@ -4244,13 +4404,21 @@ class LinuxCommandsMixin:
             elif op == "-d":
                 self._last_exit_code = 0 if _os.path.isdir(arg) else 1
             elif op == "-r":
-                self._last_exit_code = 0 if _os.path.exists(arg) and _os.access(arg, _os.R_OK) else 1
+                self._last_exit_code = (
+                    0 if _os.path.exists(arg) and _os.access(arg, _os.R_OK) else 1
+                )
             elif op == "-w":
-                self._last_exit_code = 0 if _os.path.exists(arg) and _os.access(arg, _os.W_OK) else 1
+                self._last_exit_code = (
+                    0 if _os.path.exists(arg) and _os.access(arg, _os.W_OK) else 1
+                )
             elif op == "-x":
-                self._last_exit_code = 0 if _os.path.exists(arg) and _os.access(arg, _os.X_OK) else 1
+                self._last_exit_code = (
+                    0 if _os.path.exists(arg) and _os.access(arg, _os.X_OK) else 1
+                )
             elif op == "-s":
-                self._last_exit_code = 0 if _os.path.exists(arg) and _os.path.getsize(arg) > 0 else 1
+                self._last_exit_code = (
+                    0 if _os.path.exists(arg) and _os.path.getsize(arg) > 0 else 1
+                )
             elif op == "-z":
                 self._last_exit_code = 0 if len(arg) == 0 else 1
             elif op == "-n":

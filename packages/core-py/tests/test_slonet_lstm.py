@@ -457,7 +457,8 @@ def test_different_seeds_different_weights():
     lstm1 = _make_lstm(num_layers=1)
     lstm2 = _make_lstm(num_layers=1)
     all(
-        np.array_equal(p1.data, p2.data) for p1, p2 in zip(lstm1.parameters(), lstm2.parameters(), strict=False)
+        np.array_equal(p1.data, p2.data)
+        for p1, p2 in zip(lstm1.parameters(), lstm2.parameters(), strict=False)
     )
     # With random init, weights should almost certainly differ
     # (could theoretically match but probability is ~0)

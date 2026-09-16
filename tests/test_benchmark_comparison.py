@@ -286,10 +286,13 @@ class TestBenchmarkCompare:
         lstm = net.layers[1]
         stoi = {c: i + 1 for i, c in enumerate("abcdefghij")}
         itos = {i + 1: c for i, c in enumerate("abcdefghij")}
+
         def encode(t):
             return np.array([stoi.get(c, 0) for c in t], dtype=np.int64)
+
         def decode(ids):
             return "".join(itos.get(int(i), "?") for i in ids if i > 0)
+
         resp, lat, tokens = run_native_inference(
             net, lstm, encode, decode, "abc", max_new_tokens=10
         )
@@ -305,10 +308,13 @@ class TestBenchmarkCompare:
         net = SloTransformer(vocab_size=32, n_embed=32, n_layer=1, n_head=2, block_size=16)
         stoi = {c: i + 1 for i, c in enumerate("abcdefghijklmnopqrstuvwxyz012345")}
         itos = {i + 1: c for i, c in enumerate("abcdefghijklmnopqrstuvwxyz012345")}
+
         def encode(t):
             return np.array([stoi.get(c, 0) for c in t], dtype=np.int64).reshape(1, -1)
+
         def decode(ids):
             return "".join(itos.get(int(i), "?") for i in ids.flatten() if int(i) in itos)
+
         resp, lat, tokens = run_native_inference(
             net, None, encode, decode, "abc", max_new_tokens=10
         )

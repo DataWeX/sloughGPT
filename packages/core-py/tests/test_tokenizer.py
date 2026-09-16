@@ -1,6 +1,5 @@
 """Tests for tokenizer.py — pure logic, no mocks."""
 
-
 import pytest
 
 from domain.training._internal.tokenizer import (

@@ -38,7 +38,6 @@ def draw_shape(name: str, color: tuple[int, int, int], draw_func):
 def main():
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
-
     entries = []
 
     for stem, caption in SHAPES:

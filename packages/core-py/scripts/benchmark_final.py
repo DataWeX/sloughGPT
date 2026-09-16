@@ -114,10 +114,11 @@ for B, H, N, E in [(4, 4, 32, 16), (8, 8, 128, 64)]:
     sc = 1.0 / math.sqrt(E)
     if HAS_TORCH:
         tq, tk, tv = torch.from_numpy(q), torch.from_numpy(k), torch.from_numpy(v)
+
         def th_fn():
             return (
-                    torch.softmax(torch.einsum("bhnk,bhsk->bhns", tq, tk) * sc, dim=-1) @ tv
-                ).numpy()
+                torch.softmax(torch.einsum("bhnk,bhsk->bhns", tq, tk) * sc, dim=-1) @ tv
+            ).numpy()
     else:
         th_fn = None
     bench(f"attention {B}x{H}x{N}x{E}", lambda: cpu.scaled_dot_attention(q, k, v), th_fn)

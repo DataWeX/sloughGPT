@@ -274,8 +274,10 @@ class TestNeuralEngineDevice:
 
     def test_read_returns_models(self):
         dev = NeuralEngineDevice()
+
         def model(x):
             return x
+
         dev.load_model("m", model)
         assert dev.read() == {"m": model}
 

@@ -48,9 +48,11 @@ DEFAULT_HF_HOME = Path.home() / ".cache" / "huggingface" / "hub"
 # Hub REST API
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class HFFile:
     """A single file in a HuggingFace model repo."""
+
     path: str
     size: int
     checksum: str
@@ -68,6 +70,7 @@ def _matches_ignore(filename: str) -> bool:
     (alternative-format variants that aren't needed for core inference).
     """
     import fnmatch
+
     if any(fnmatch.fnmatch(filename, p) for p in IGNORED_PATTERNS):
         return True
     if filename.startswith("onnx/") or filename.startswith("tf/"):
@@ -135,10 +138,12 @@ def fetch_dataset_search(query: str, limit: int = 10) -> list[dict]:
     for ds in data:
         if not isinstance(ds, dict):
             continue
-        results.append({
-            "id": ds.get("id", ""),
-            "downloads": ds.get("downloads") or 0,
-        })
+        results.append(
+            {
+                "id": ds.get("id", ""),
+                "downloads": ds.get("downloads") or 0,
+            }
+        )
     return results
 
 
@@ -157,7 +162,7 @@ def list_model_files(model_id: str) -> list[HFFile]:
     if not info:
         return files
 
-    for sibling in (info.get("siblings") or []):
+    for sibling in info.get("siblings") or []:
         if not isinstance(sibling, dict):
             continue
         rfilename = sibling.get("rfilename", "")
@@ -171,8 +176,7 @@ def list_model_files(model_id: str) -> list[HFFile]:
             size=sibling.get("size") or 0,
             checksum=lfs.get("sha256", "") if isinstance(lfs, dict) else "",
             download_url=(
-                f"{_hf_endpoint()}/{model_id}/resolve/main/{rfilename}"
-                if not ignored else ""
+                f"{_hf_endpoint()}/{model_id}/resolve/main/{rfilename}" if not ignored else ""
             ),
             is_ignored=ignored,
         )
@@ -185,6 +189,7 @@ def list_model_files(model_id: str) -> list[HFFile]:
 # Cache layout
 # ---------------------------------------------------------------------------
 
+
 def get_cache_dir(model_id: str, hf_home: str | None = None) -> Path:
     """Get the HF cache directory path for a model.
 
@@ -193,8 +198,10 @@ def get_cache_dir(model_id: str, hf_home: str | None = None) -> Path:
     :func:`find_cached_model_dir`, which also locates the project-local
     mirror.
     """
-    base = Path(hf_home) if hf_home else (
-        Path(os.environ.get("HF_HOME", str(DEFAULT_HF_HOME.parent))) / "hub"
+    base = (
+        Path(hf_home)
+        if hf_home
+        else (Path(os.environ.get("HF_HOME", str(DEFAULT_HF_HOME.parent))) / "hub")
     )
     return base / f"models--{model_id.replace('/', '--')}"
 
@@ -323,7 +330,7 @@ def _deep_check(model_id: str, target_dir: Path) -> bool:
         info = fetch_model_info(model_id)
         if not info:
             return True
-        for sibling in (info.get("siblings") or []):
+        for sibling in info.get("siblings") or []:
             if not isinstance(sibling, dict):
                 continue
             rfilename = sibling.get("rfilename", "")
@@ -334,7 +341,7 @@ def _deep_check(model_id: str, target_dir: Path) -> bool:
             local = target_dir / rfilename
             if not local.exists():
                 return False
-            expected_size = (sibling.get("size") or 0)
+            expected_size = sibling.get("size") or 0
             if expected_size > 0:
                 try:
                     if local.stat().st_size != expected_size:
@@ -413,7 +420,10 @@ def is_download_complete(
             continue
         snapshot = _snapshot_dir(cache_dir)
         if snapshot is not None and _is_snapshot_complete(
-            cache_dir, snapshot, model_id, deep_check,
+            cache_dir,
+            snapshot,
+            model_id,
+            deep_check,
         ):
             return True
         if _is_flat_model_complete(cache_dir, model_id, deep_check):
@@ -453,6 +463,7 @@ def resolve_cached_path(
 # ---------------------------------------------------------------------------
 # Model download (composed from downcraft's generic downloader + state)
 # ---------------------------------------------------------------------------
+
 
 def download_hf_model(
     model_id: str,
@@ -517,7 +528,7 @@ def download_hf_model(
         "Resolved %d files for %s (%.2f GB total)",
         len(weight_files),
         model_id,
-        sum(f.size for f in weight_files) / (1024 ** 3),
+        sum(f.size for f in weight_files) / (1024**3),
     )
 
     st_state = st.create(model_id, cache_dir)
@@ -532,9 +543,13 @@ def download_hf_model(
         # size is complete even if ~/.downcraft/state.json was lost.
         if hf_file.size > 0 and dest.is_file() and dest.stat().st_size == hf_file.size:
             st.update_file_progress(
-                model_id, rel_path, hf_file.download_url,
-                hf_file.size, hf_file.size,
-                checksum=hf_file.checksum, complete=True,
+                model_id,
+                rel_path,
+                hf_file.download_url,
+                hf_file.size,
+                hf_file.size,
+                checksum=hf_file.checksum,
+                complete=True,
             )
             continue
 
@@ -550,9 +565,15 @@ def download_hf_model(
             os.replace(str(incomplete), str(sgpart))
 
         chunk_cb = _make_hf_chunk_cb(
-            st, model_id, rel_path,
-            hf_file.download_url, hf_file.size,
-            hf_file.checksum, start, total_all, on_progress,
+            st,
+            model_id,
+            rel_path,
+            hf_file.download_url,
+            hf_file.size,
+            hf_file.checksum,
+            start,
+            total_all,
+            on_progress,
         )
 
         try:
@@ -563,14 +584,17 @@ def download_hf_model(
                 checksum=hf_file.checksum,
                 on_chunk=chunk_cb,
                 on_complete=lambda p: (
-                    on_file_complete(model_id, rel_path)
-                    if on_file_complete else None
+                    on_file_complete(model_id, rel_path) if on_file_complete else None
                 ),
             )
             st.update_file_progress(
-                model_id, rel_path, hf_file.download_url,
-                hf_file.size, hf_file.size,
-                checksum=hf_file.checksum, complete=True,
+                model_id,
+                rel_path,
+                hf_file.download_url,
+                hf_file.size,
+                hf_file.size,
+                checksum=hf_file.checksum,
+                complete=True,
             )
         except DownloadError:
             st.set_status(model_id, "failed", error=f"Failed on {rel_path}")
@@ -587,7 +611,8 @@ def download_hf_model(
     elapsed = time.time() - start
     logger.info(
         "Downloaded %s in %.1fs (%.2f MB/s)",
-        model_id, elapsed,
+        model_id,
+        elapsed,
         (total_all / elapsed / 1e6) if elapsed > 0 else 0,
     )
 
@@ -629,14 +654,21 @@ def _make_hf_chunk_cb(
     def _cb(bytes_done: int, _total: int):
         pct = int(bytes_done / file_size * 100) if file_size else 0
         if pct != prev_pct[0] and pct % 25 == 0:
-            logger.info("  %s: %dMB/%dMB (%d%%)", rel_path,
-                         bytes_done // (1024*1024),
-                         file_size // (1024*1024) if file_size else 0, pct)
+            logger.info(
+                "  %s: %dMB/%dMB (%d%%)",
+                rel_path,
+                bytes_done // (1024 * 1024),
+                file_size // (1024 * 1024) if file_size else 0,
+                pct,
+            )
             prev_pct[0] = pct
 
         st_obj.update_file_progress(
-            model_id, rel_path, download_url,
-            bytes_done, file_size,
+            model_id,
+            rel_path,
+            download_url,
+            bytes_done,
+            file_size,
             checksum=checksum,
             complete=(bytes_done >= file_size and file_size > 0),
         )
@@ -711,7 +743,7 @@ def _derive_model_id(path: str | Path) -> str | None:
     for _ in range(MAX_WALK):
         name = current.name
         if name.startswith("models--"):
-            return name[len("models--"):].replace("--", "/")
+            return name[len("models--") :].replace("--", "/")
         if current.parent == current:
             break
         current = current.parent
@@ -793,8 +825,7 @@ def inspect_incomplete(
         model_id = _derive_model_id(partial)
         if model_id is None:
             raise ValueError(
-                "model_id is required when the path is not under a "
-                "models--<id> cache directory"
+                "model_id is required when the path is not under a models--<id> cache directory"
             )
 
     if files is None:
@@ -804,9 +835,7 @@ def inspect_incomplete(
     final_name = _strip_incomplete_suffix(partial.name)
     match = _match_repo_file(final_name, repo_files)
     if match is None:
-        raise ValueError(
-            f"{partial.name!r} does not match any file of model {model_id}"
-        )
+        raise ValueError(f"{partial.name!r} does not match any file of model {model_id}")
 
     offset = partial.stat().st_size
     complete = bool(match.size > 0 and offset >= match.size)
@@ -860,7 +889,10 @@ def resume_plan(
             if not partial.is_file():
                 continue
             info = inspect_incomplete(
-                partial, model_id=model_id, hf_home=hf_home, files=files,
+                partial,
+                model_id=model_id,
+                hf_home=hf_home,
+                files=files,
             )
             infos[info.repo_path] = info
 
@@ -920,7 +952,10 @@ def resume_download(
         DownloadError: If the resume download fails permanently.
     """
     info = inspect_incomplete(
-        partial_path, model_id=model_id, hf_home=hf_home, files=files,
+        partial_path,
+        model_id=model_id,
+        hf_home=hf_home,
+        files=files,
     )
 
     # Already fully present at the final name — drop the stale partial.
@@ -988,9 +1023,9 @@ def resume_model(
             model_id=model_id,
             hf_home=hf_home,
             on_complete=(
-                (lambda p, rp=info.repo_path: (
+                lambda p, rp=info.repo_path: (
                     on_file_complete(model_id, rp) if on_file_complete else None
-                ))
+                )
             ),
         )
         resumed.append(info.repo_path)
@@ -1009,6 +1044,7 @@ def resume_model(
 # ---------------------------------------------------------------------------
 # Verification (SHA-256 primitives live in downcraft.verify)
 # ---------------------------------------------------------------------------
+
 
 def _find_snapshot_dir(
     model_id: str,
@@ -1233,11 +1269,14 @@ class HFDownloadBackend(DownloadBackend):
         if not cache_dir.exists():
             return False
         logger.warning(
-            "Removing incomplete cache for %s: %s", resource_id, cache_dir,
+            "Removing incomplete cache for %s: %s",
+            resource_id,
+            cache_dir,
             extra={"op": "download.start", "download": {"resource": resource_id}},
         )
         shutil.rmtree(str(cache_dir), ignore_errors=True)
         from downcraft import state as dc_state
+
         dc_state.get_state().remove(resource_id)
         return True
 
@@ -1249,7 +1288,7 @@ class HFDownloadBackend(DownloadBackend):
         for entry in sorted(base.iterdir()):
             if not entry.name.startswith("models--") or not entry.is_dir():
                 continue
-            mid = entry.name[len("models--"):].replace("--", "/")
+            mid = entry.name[len("models--") :].replace("--", "/")
             if _has_incomplete_downloads(entry):
                 result.append(mid)
             elif not _has_complete_snapshot(entry) and _has_weight_files(entry):
@@ -1260,9 +1299,7 @@ class HFDownloadBackend(DownloadBackend):
         cache_dir = Path(get_cache_dir(resource_id))
         if not cache_dir.exists():
             return
-        incomplete = list(cache_dir.rglob("*.incomplete")) + list(
-            cache_dir.rglob("*.lock")
-        )
+        incomplete = list(cache_dir.rglob("*.incomplete")) + list(cache_dir.rglob("*.lock"))
         for f in incomplete:
             try:
                 f.unlink()

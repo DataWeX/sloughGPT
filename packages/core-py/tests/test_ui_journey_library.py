@@ -6,7 +6,6 @@ Usage:
 """
 
 
-
 class TestJourneyCore:
     """Tests for the core Journey class."""
 

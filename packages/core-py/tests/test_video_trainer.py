@@ -83,9 +83,16 @@ class TestTrainerInit:
 
     def test_custom_params(self):
         trainer = VideoCaptionTrainer(
-            embed_dim=128, hidden_dim=256, n_vision_layers=2,
-            n_temporal_layers=1, n_decoder_layers=2, n_heads=2,
-            vocab_size=256, max_seq_len=64, max_frames=4, lr=1e-3,
+            embed_dim=128,
+            hidden_dim=256,
+            n_vision_layers=2,
+            n_temporal_layers=1,
+            n_decoder_layers=2,
+            n_heads=2,
+            vocab_size=256,
+            max_seq_len=64,
+            max_frames=4,
+            lr=1e-3,
         )
         assert trainer.embed_dim == 128
         assert trainer.hidden_dim == 256
@@ -122,9 +129,15 @@ class TestTrainerInit:
 
     def test_minimal_model(self):
         trainer = VideoCaptionTrainer(
-            embed_dim=32, hidden_dim=64, n_vision_layers=1,
-            n_temporal_layers=1, n_decoder_layers=1, n_heads=2,
-            vocab_size=32, max_seq_len=16, max_frames=2,
+            embed_dim=32,
+            hidden_dim=64,
+            n_vision_layers=1,
+            n_temporal_layers=1,
+            n_decoder_layers=1,
+            n_heads=2,
+            vocab_size=32,
+            max_seq_len=16,
+            max_frames=2,
         )
         assert trainer.embed_dim == 32
         assert trainer.decoder is not None

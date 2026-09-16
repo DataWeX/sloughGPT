@@ -1,6 +1,5 @@
 """Meaningful tests for CharTokenizer and BPETokenizer — vocab building, encode/decode, save/load."""
 
-
 import pytest
 
 from domain.multimodal._internal.bpe_tokenizer import BPETokenizer

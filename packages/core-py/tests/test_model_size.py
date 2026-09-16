@@ -1,6 +1,5 @@
 """Tests for the shared model size calculator."""
 
-
 import pytest
 
 from domain.infrastructure._internal import model_size as ms

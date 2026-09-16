@@ -124,15 +124,19 @@ class TestSanitizer:
 class TestRequestInterceptor:
     def test_add_returns_self_and_appends(self):
         interceptor = RequestInterceptor()
+
         def fn(ctx):
             return ctx
+
         assert interceptor.add(fn) is interceptor
         assert len(interceptor._interceptors) == 1
 
     def test_remove_existing_returns_true(self):
         interceptor = RequestInterceptor()
+
         def fn(ctx):
             return ctx
+
         interceptor.add(fn)
         assert interceptor.remove(fn) is True
         assert interceptor._interceptors == []

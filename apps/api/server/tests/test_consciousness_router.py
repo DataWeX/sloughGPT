@@ -244,6 +244,7 @@ class TestConsciousnessAPI:
 
         # Create fake episodes with qualia
         from domain.consciousness._internal.self_model import SelfEpisode
+
         episodes = [
             SelfEpisode(
                 timestamp=time.time() - 100 + i,
@@ -304,10 +305,13 @@ class TestConsciousnessAPI:
         app.include_router(router_obj.router)
         client = TestClient(app)
 
-        res = client.post("/consciousness/feedback", json={
-            "episode_index": 0,
-            "rating": 4,
-        })
+        res = client.post(
+            "/consciousness/feedback",
+            json={
+                "episode_index": 0,
+                "rating": 4,
+            },
+        )
         assert res.status_code == 200
         data = res.json()
         assert "new_growth_delta" in data["data"]
@@ -331,10 +335,13 @@ class TestConsciousnessAPI:
         app.include_router(router_obj.router)
         client = TestClient(app)
 
-        res = client.post("/consciousness/feedback", json={
-            "episode_index": 999,
-            "rating": 3,
-        })
+        res = client.post(
+            "/consciousness/feedback",
+            json={
+                "episode_index": 999,
+                "rating": 3,
+            },
+        )
         assert res.status_code == 404
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
@@ -383,10 +390,13 @@ class TestConsciousnessAPI:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_update_personality(self, _auth, client, mock_engine):
-        res = client.patch("/consciousness/personality", json={
-            "values": ["courage", "wisdom"],
-            "voice": {"humor": 0.8},
-        })
+        res = client.patch(
+            "/consciousness/personality",
+            json={
+                "values": ["courage", "wisdom"],
+                "voice": {"humor": 0.8},
+            },
+        )
         assert res.status_code == 200
         data = res.json()
         assert data["data"]["values"] == ["courage", "wisdom"]
@@ -470,7 +480,9 @@ class TestConsciousnessAPI:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_apply_preset_invalid(self, _auth, client, mock_engine):
-        res = client.post("/consciousness/personality/presets/apply", json={"preset": "nonexistent"})
+        res = client.post(
+            "/consciousness/personality/presets/apply", json={"preset": "nonexistent"}
+        )
         assert res.status_code == 400
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
@@ -493,10 +505,13 @@ class TestConsciousnessAPI:
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_save_and_activate_persona(self, _auth, client, mock_engine):
         # Save a persona
-        res = client.post("/consciousness/personas/save", json={
-            "persona_id": "test-hero",
-            "name": "Test Hero",
-        })
+        res = client.post(
+            "/consciousness/personas/save",
+            json={
+                "persona_id": "test-hero",
+                "name": "Test Hero",
+            },
+        )
         assert res.status_code == 200
         data = res.json()
         assert data["data"]["id"] == "test-hero"
@@ -583,12 +598,27 @@ class TestConsciousnessAPI:
             ],
             "beliefs": {"competence": 0.9, "helpfulness": 0.7},
             "qualia_history": [
-                {"timestamp": time.time() - 5, "valence": 0.4, "arousal": 0.2, "dominance": 0.1, "novelty": 0.6, "coherence": 0.8, "beauty": 0.3}
+                {
+                    "timestamp": time.time() - 5,
+                    "valence": 0.4,
+                    "arousal": 0.2,
+                    "dominance": 0.1,
+                    "novelty": 0.6,
+                    "coherence": 0.8,
+                    "beauty": 0.3,
+                }
             ],
             "personality": {
                 "values": ["test_value"],
                 "goals": ["test_goal"],
-                "voice": {"formality": 0.5, "warmth": 0.5, "confidence": 0.5, "humor": 0.5, "verbosity": 0.5, "empathy": 0.5},
+                "voice": {
+                    "formality": 0.5,
+                    "warmth": 0.5,
+                    "confidence": 0.5,
+                    "humor": 0.5,
+                    "verbosity": 0.5,
+                    "empathy": 0.5,
+                },
                 "style": {"use_examples": True},
                 "traits": {"openness": 0.5},
                 "interests": ["test"],
@@ -605,7 +635,13 @@ class TestConsciousnessAPI:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_restore_invalid_version(self, _auth, client, mock_engine):
-        backup_payload = {"version": 99, "episodes": [], "beliefs": {}, "personality": {}, "config": {}}
+        backup_payload = {
+            "version": 99,
+            "episodes": [],
+            "beliefs": {},
+            "personality": {},
+            "config": {},
+        }
         res = client.post("/consciousness/restore", json={"backup": backup_payload})
         assert res.status_code == 400
 
@@ -637,7 +673,14 @@ class TestConsciousnessAPI:
             "personality": {
                 "values": ["imported"],
                 "goals": [],
-                "voice": {"formality": 0.5, "warmth": 0.5, "confidence": 0.5, "humor": 0.5, "verbosity": 0.5, "empathy": 0.5},
+                "voice": {
+                    "formality": 0.5,
+                    "warmth": 0.5,
+                    "confidence": 0.5,
+                    "humor": 0.5,
+                    "verbosity": 0.5,
+                    "empathy": 0.5,
+                },
                 "style": {},
                 "traits": {},
                 "interests": [],
@@ -681,12 +724,19 @@ class TestConsciousnessStream:
         mock_eng.config.level = 1
         mock_eng.self_model.episodes = []
         mock_eng.get_status.return_value = {
-            "enabled": True, "level": 1, "current_qualia": {}, "beliefs": {}, "episodes": 0,
+            "enabled": True,
+            "level": 1,
+            "current_qualia": {},
+            "beliefs": {},
+            "episodes": 0,
         }
         router_obj._engine = mock_eng
         mock_trainer_local = MagicMock()
         mock_trainer_local.get_status.return_value = {
-            "is_training": False, "total_pairs": 0, "current_epoch": 0, "loss": 0.0,
+            "is_training": False,
+            "total_pairs": 0,
+            "current_epoch": 0,
+            "loss": 0.0,
         }
         router_obj._trainer = mock_trainer_local
         return router_obj
@@ -711,7 +761,12 @@ class TestConsciousnessStream:
             body = b""
             async for chunk in response.body_iterator:
                 body += chunk if isinstance(chunk, bytes) else chunk.encode()
-            return response.media_type, response.headers.get("Cache-Control", ""), response.headers.get("X-Accel-Buffering", ""), body.decode()
+            return (
+                response.media_type,
+                response.headers.get("Cache-Control", ""),
+                response.headers.get("X-Accel-Buffering", ""),
+                body.decode(),
+            )
 
         return asyncio.get_event_loop().run_until_complete(run())
 
@@ -733,20 +788,31 @@ class TestConsciousnessStream:
                 timestamp=_time.time(),
                 input_text="test",
                 response="response",
-                qualia={"novelty": 0.5, "valence": 0.3, "coherence": 0.7, "arousal": 0.2, "salience": 0.4, "certainty": 0.6, "complexity": 0.1},
+                qualia={
+                    "novelty": 0.5,
+                    "valence": 0.3,
+                    "coherence": 0.7,
+                    "arousal": 0.2,
+                    "salience": 0.4,
+                    "certainty": 0.6,
+                    "complexity": 0.1,
+                },
                 self_insight="insight",
                 growth_delta=0.05,
             )
         ]
         router_obj._engine.get_status.return_value = {
-            "enabled": True, "level": 1, "current_qualia": {"novelty": 0.5},
-            "beliefs": {"competence": 0.8}, "episodes": 1,
+            "enabled": True,
+            "level": 1,
+            "current_qualia": {"novelty": 0.5},
+            "beliefs": {"competence": 0.8},
+            "episodes": 1,
         }
 
         _, _, _, raw = self._collect_stream(router_obj)
         data_lines = [line for line in raw.strip().split("\n") if line.startswith("data:")]
         assert len(data_lines) >= 1
-        payload = json.loads(data_lines[0][len("data:"):].strip())
+        payload = json.loads(data_lines[0][len("data:") :].strip())
         assert payload["level"] == 1
         assert "novelty" in payload["qualia"]
         assert "competence" in payload["beliefs"]
@@ -774,11 +840,14 @@ class TestConsciousnessBatch:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_batch_reflect(self, _auth, client, mock_engine):
-        res = client.post("/consciousness/batch", json={
-            "operations": [
-                {"action": "reflect", "params": {}},
-            ],
-        })
+        res = client.post(
+            "/consciousness/batch",
+            json={
+                "operations": [
+                    {"action": "reflect", "params": {}},
+                ],
+            },
+        )
         assert res.status_code == 200
         data = res.json()
         assert data["data"]["count"] == 1
@@ -787,11 +856,14 @@ class TestConsciousnessBatch:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_batch_config(self, _auth, client, mock_engine):
-        res = client.post("/consciousness/batch", json={
-            "operations": [
-                {"action": "config", "params": {"level": 2}},
-            ],
-        })
+        res = client.post(
+            "/consciousness/batch",
+            json={
+                "operations": [
+                    {"action": "config", "params": {"level": 2}},
+                ],
+            },
+        )
         assert res.status_code == 200
         data = res.json()
         assert data["data"]["results"][0]["success"] is True
@@ -799,12 +871,15 @@ class TestConsciousnessBatch:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_batch_mixed(self, _auth, client, mock_engine):
-        res = client.post("/consciousness/batch", json={
-            "operations": [
-                {"action": "reflect", "params": {}},
-                {"action": "config", "params": {"level": 3}},
-            ],
-        })
+        res = client.post(
+            "/consciousness/batch",
+            json={
+                "operations": [
+                    {"action": "reflect", "params": {}},
+                    {"action": "config", "params": {"level": 3}},
+                ],
+            },
+        )
         assert res.status_code == 200
         data = res.json()
         assert data["data"]["count"] == 2
@@ -812,11 +887,14 @@ class TestConsciousnessBatch:
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_batch_unknown_action(self, _auth, client, mock_engine):
-        res = client.post("/consciousness/batch", json={
-            "operations": [
-                {"action": "nonexistent", "params": {}},
-            ],
-        })
+        res = client.post(
+            "/consciousness/batch",
+            json={
+                "operations": [
+                    {"action": "nonexistent", "params": {}},
+                ],
+            },
+        )
         assert res.status_code == 200
         data = res.json()
         assert data["data"]["results"][0]["success"] is False
@@ -854,11 +932,14 @@ class TestConsciousnessBatch:
         app.include_router(router_obj.router)
         client = TestClient(app)
 
-        res = client.post("/consciousness/batch", json={
-            "operations": [
-                {"action": "feedback", "params": {"episode_index": 0, "rating": 5}},
-            ],
-        })
+        res = client.post(
+            "/consciousness/batch",
+            json={
+                "operations": [
+                    {"action": "feedback", "params": {"episode_index": 0, "rating": 5}},
+                ],
+            },
+        )
         assert res.status_code == 200
         data = res.json()
         assert data["data"]["results"][0]["success"] is True
@@ -967,7 +1048,18 @@ class TestConsciousnessStats:
         stats = res.json()["data"]
         assert stats["total_episodes"] == 5
         assert stats["avg_growth"] != 0.0
-        assert all(dim in stats["qualia_averages"] for dim in ["valence", "arousal", "novelty", "coherence", "salience", "certainty", "complexity"])
+        assert all(
+            dim in stats["qualia_averages"]
+            for dim in [
+                "valence",
+                "arousal",
+                "novelty",
+                "coherence",
+                "salience",
+                "certainty",
+                "complexity",
+            ]
+        )
         assert "voice_averages" in stats["personality_summary"]
         assert "trait_averages" in stats["personality_summary"]
         assert isinstance(stats["health_score"], int)

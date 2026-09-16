@@ -41,8 +41,10 @@ class TestPluginHook:
 
     def test_unregister(self):
         hook = PluginHook("test_hook")
+
         def handler():
             return None
+
         hook.register(handler)
         hook.unregister(handler)
         assert len(hook._handlers) == 0

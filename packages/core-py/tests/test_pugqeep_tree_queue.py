@@ -1,6 +1,5 @@
 """Tests for domains/infrastructure/pugqeep/model_tree.py and queue.py."""
 
-
 import numpy as np
 import pytest
 

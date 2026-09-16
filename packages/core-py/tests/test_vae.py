@@ -562,7 +562,9 @@ class TestSloVAEExtended:
         vae.train_step(images)
         params_after = [p.data for p in vae.parameters()]
         # At least one parameter should have changed
-        changed = any(not np.allclose(a, b) for a, b in zip(params_before, params_after, strict=False))
+        changed = any(
+            not np.allclose(a, b) for a, b in zip(params_before, params_after, strict=False)
+        )
         assert changed
 
     def test_encode_decode_different_shapes(self):

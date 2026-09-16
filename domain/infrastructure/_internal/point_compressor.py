@@ -19,8 +19,12 @@ from .pugqeep import (
 
 # Backward compat aliases
 PointLib = PGQ
+
+
 def save_library(lib, path):
     return lib.save(path)
+
+
 load_library = PGQ.load
 
 __all__ = [

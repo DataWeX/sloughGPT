@@ -13,7 +13,6 @@ from domain.multimodal._internal.video import TemporalEncoder, VideoProcessor
 
 
 class TestTemporalEncoder:
-
     def test_init_defaults(self):
         enc = TemporalEncoder()
         assert enc.embed_dim == 256
@@ -47,7 +46,6 @@ class TestTemporalEncoder:
 
 
 class TestVideoProcessor:
-
     def test_init_defaults(self):
         vp = VideoProcessor()
         assert vp.embed_dim == 256
@@ -81,7 +79,6 @@ class TestVideoProcessor:
 
 
 class TestExtractFrames:
-
     def test_import_error(self):
         vp = VideoProcessor(max_frames=4)
         with patch.dict("sys.modules", {"cv2": None}):
@@ -95,6 +92,7 @@ class TestExtractFrames:
 
         with patch.dict("sys.modules", {"cv2": MagicMock()}):
             import cv2
+
             cv2.VideoCapture.return_value = mock_cap
             with pytest.raises(RuntimeError, match="Cannot open"):
                 vp.extract_frames("nonexistent.mp4")
@@ -107,6 +105,7 @@ class TestExtractFrames:
 
         with patch.dict("sys.modules", {"cv2": MagicMock()}):
             import cv2
+
             cv2.VideoCapture.return_value = mock_cap
             with pytest.raises(RuntimeError, match="no frames"):
                 vp.extract_frames("empty.mp4")

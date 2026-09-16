@@ -560,9 +560,7 @@ class Agent:
     reasoning to plan tool usage. Falls back to keyword matching otherwise.
     """
 
-    def __init__(
-        self, config: AgentConfig | None = None, inference_fn: Callable | None = None
-    ):
+    def __init__(self, config: AgentConfig | None = None, inference_fn: Callable | None = None):
         self.config = config or AgentConfig()
         security = SecurityBoundary(self.config.security)
         self._runner = ToolRunner(security)

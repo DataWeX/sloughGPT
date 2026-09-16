@@ -99,7 +99,9 @@ def _render(data: dict, compact: bool = False, io=None) -> None:
 
     _w(f"\n  \033[1mSloughGPT\033[0m  {_format_ts(time.time())}")
     _w(f"  {'─' * 56}")
-    _w(f"  \033[1mSERVER\033[0m {status_str}  \033[36m{model_str}\033[0m  up {_format_uptime(uptime)}")
+    _w(
+        f"  \033[1mSERVER\033[0m {status_str}  \033[36m{model_str}\033[0m  up {_format_uptime(uptime)}"
+    )
 
     # MODEL line — device, params, quantization
     if loaded:
@@ -187,10 +189,18 @@ def _render(data: dict, compact: bool = False, io=None) -> None:
             _w("  \033[2m  (no events yet)\033[0m")
         else:
             cat_colors = {
-                "TRAIN": "\033[32m", "MODEL": "\033[36m", "INFERENCE": "\033[35m",
-                "SYSTEM": "\033[90m", "ERROR": "\033[31m", "INFRA": "\033[90m",
-                "CHAT": "\033[36m", "SOUL": "\033[33m", "START": "\033[90m",
-                "IDLE": "\033[90m", "DOWNLOAD": "\033[36m", "SLOW": "\033[33m",
+                "TRAIN": "\033[32m",
+                "MODEL": "\033[36m",
+                "INFERENCE": "\033[35m",
+                "SYSTEM": "\033[90m",
+                "ERROR": "\033[31m",
+                "INFRA": "\033[90m",
+                "CHAT": "\033[36m",
+                "SOUL": "\033[33m",
+                "START": "\033[90m",
+                "IDLE": "\033[90m",
+                "DOWNLOAD": "\033[36m",
+                "SLOW": "\033[33m",
                 "WORKFLOW": "\033[90m",
             }
             for ev in events[:8]:
@@ -201,7 +211,7 @@ def _render(data: dict, compact: bool = False, io=None) -> None:
                 cat_str = f"{color}{cat.ljust(10)}\033[0m"
                 max_msg = 40
                 if len(msg) > max_msg:
-                    msg = msg[:max_msg - 1] + "\u2026"
+                    msg = msg[: max_msg - 1] + "\u2026"
                 _w(f"  {ts_str} {cat_str} {msg}")
 
         if errors:
@@ -221,8 +231,7 @@ def _render(data: dict, compact: bool = False, io=None) -> None:
         sys.stdout.flush()
 
 
-def run(argv: list[str], out: Console, api: ShellCommands,
-        env: dict[str, str]) -> int:
+def run(argv: list[str], out: Console, api: ShellCommands, env: dict[str, str]) -> int:
     compact = "--compact" in argv or "-c" in argv
     watch = "--watch" in argv or "-w" in argv
     interval = 2.0

@@ -180,32 +180,54 @@ class TestInferHealth:
         assert resp.json()["status"] == "no_model"
 
     def test_model_loaded_status(self, client):
-        mock_info = type("Info", (), {
-            "model_id": "gpt2",
-            "model_type": "hf",
-            "has_streaming": True,
-            "has_embedding": False,
-        })()
-        mock_model = type("MockModel", (), {
-            "info": lambda self: mock_info,
-            "embed": None,
-        })()
-        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+        mock_info = type(
+            "Info",
+            (),
+            {
+                "model_id": "gpt2",
+                "model_type": "hf",
+                "has_streaming": True,
+                "has_embedding": False,
+            },
+        )()
+        mock_model = type(
+            "MockModel",
+            (),
+            {
+                "info": lambda self: mock_info,
+                "embed": None,
+            },
+        )()
+        with patch(
+            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            return_value=mock_model,
+        ):
             resp = client.get("/infer/health")
             assert resp.json()["model_loaded"] is True
 
     def test_model_loaded_has_streaming(self, client):
-        mock_info = type("Info", (), {
-            "model_id": "gpt2",
-            "model_type": "hf",
-            "has_streaming": True,
-            "has_embedding": False,
-        })()
-        mock_model = type("MockModel", (), {
-            "info": lambda self: mock_info,
-            "embed": None,
-        })()
-        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+        mock_info = type(
+            "Info",
+            (),
+            {
+                "model_id": "gpt2",
+                "model_type": "hf",
+                "has_streaming": True,
+                "has_embedding": False,
+            },
+        )()
+        mock_model = type(
+            "MockModel",
+            (),
+            {
+                "info": lambda self: mock_info,
+                "embed": None,
+            },
+        )()
+        with patch(
+            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            return_value=mock_model,
+        ):
             resp = client.get("/infer/health")
             assert resp.json()["has_streaming"] is True
 
@@ -216,22 +238,33 @@ class TestInferInfo:
         assert resp.status_code == 503
 
     def test_returns_model_info(self, client):
-        mock_info = type("Info", (), {
-            "model_id": "gpt2",
-            "model_type": "hf",
-            "num_parameters": 124000000,
-            "vocab_size": 50257,
-            "max_context": 1024,
-            "num_layers": 12,
-            "has_tokenizer": True,
-            "has_streaming": True,
-            "has_embedding": False,
-            "extra": {},
-        })()
-        mock_model = type("MockModel", (), {
-            "info": lambda self: mock_info,
-        })()
-        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+        mock_info = type(
+            "Info",
+            (),
+            {
+                "model_id": "gpt2",
+                "model_type": "hf",
+                "num_parameters": 124000000,
+                "vocab_size": 50257,
+                "max_context": 1024,
+                "num_layers": 12,
+                "has_tokenizer": True,
+                "has_streaming": True,
+                "has_embedding": False,
+                "extra": {},
+            },
+        )()
+        mock_model = type(
+            "MockModel",
+            (),
+            {
+                "info": lambda self: mock_info,
+            },
+        )()
+        with patch(
+            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            return_value=mock_model,
+        ):
             resp = client.get("/infer/info")
             assert resp.status_code == 200
             assert resp.json()["model_id"] == "gpt2"
@@ -274,31 +307,52 @@ class TestInferEmbed:
         assert resp.status_code == 422
 
     def test_model_embed_ndarray(self, client):
-        mock_model = type("M", (), {
-            "embed": lambda self, t: __import__("numpy").array([0.1, 0.2, 0.3]),
-            "model_id": "gpt2",
-        })()
-        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+        mock_model = type(
+            "M",
+            (),
+            {
+                "embed": lambda self, t: __import__("numpy").array([0.1, 0.2, 0.3]),
+                "model_id": "gpt2",
+            },
+        )()
+        with patch(
+            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            return_value=mock_model,
+        ):
             resp = client.post("/infer/embed", json={"text": "hi"})
         body = resp.json()
         assert body["dimensions"] == 3
         assert body["model"] == "gpt2"
 
     def test_model_embed_list(self, client):
-        mock_model = type("M", (), {
-            "embed": lambda self, t: [0.5, 0.5],
-            "model_id": "m1",
-        })()
-        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+        mock_model = type(
+            "M",
+            (),
+            {
+                "embed": lambda self, t: [0.5, 0.5],
+                "model_id": "m1",
+            },
+        )()
+        with patch(
+            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            return_value=mock_model,
+        ):
             resp = client.post("/infer/embed", json={"text": "hi"})
         assert resp.json()["dimensions"] == 2
 
     def test_model_embed_not_implemented_falls_back(self, client):
-        mock_model = type("M", (), {
-            "embed": lambda self, t: (_ for _ in ()).throw(NotImplementedError()),
-            "model_id": "m1",
-        })()
-        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+        mock_model = type(
+            "M",
+            (),
+            {
+                "embed": lambda self, t: (_ for _ in ()).throw(NotImplementedError()),
+                "model_id": "m1",
+            },
+        )()
+        with patch(
+            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            return_value=mock_model,
+        ):
             resp = client.post("/infer/embed", json={"text": "hi"})
         assert resp.status_code == 200
         assert resp.json()["model"] == "ngram-tfidf"
@@ -308,12 +362,19 @@ class TestInferModelTokenize:
     """Model-tokenizer path for /infer/tokenize and /infer/detokenize."""
 
     def test_tokenize_uses_model_tokenizer(self, client):
-        tokenizer = type("Tok", (), {
-            "encode": lambda self, t: [10, 20, 30],
-            "itos": {10: "a", 20: "b", 30: "c"},
-        })()
+        tokenizer = type(
+            "Tok",
+            (),
+            {
+                "encode": lambda self, t: [10, 20, 30],
+                "itos": {10: "a", 20: "b", 30: "c"},
+            },
+        )()
         mock_model = type("M", (), {"_tokenizer": tokenizer})()
-        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+        with patch(
+            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            return_value=mock_model,
+        ):
             resp = client.post("/infer/tokenize", json={"text": "abc"})
         body = resp.json()
         assert body["ids"] == [10, 20, 30]
@@ -323,7 +384,10 @@ class TestInferModelTokenize:
     def test_detokenize_uses_model_tokenizer(self, client):
         tokenizer = type("Tok", (), {"decode": lambda self, ids: "decoded"})()
         mock_model = type("M", (), {"_tokenizer": tokenizer})()
-        with patch("apps.api.server.routers.infer.InferRouter._get_model_interface", return_value=mock_model):
+        with patch(
+            "apps.api.server.routers.infer.InferRouter._get_model_interface",
+            return_value=mock_model,
+        ):
             resp = client.post("/infer/detokenize", json={"ids": [1, 2, 3]})
         assert resp.json()["text"] == "decoded"
         assert resp.json()["count"] == 3

@@ -298,8 +298,10 @@ class TestForwardGpt2:
         full = forward(W, arch, tokens)
 
         kv = KVCache(arch.n_layers)
+
         def get(n):
             return W[n]
+
         forward_cached(get, arch, [tokens[0]], kv_cache=kv)
         last = None
         for i in range(1, len(tokens)):
@@ -374,8 +376,10 @@ class TestForwardLlama:
         tokens = [0, 1, 2, 3, 4]
         full = forward(W, arch, tokens)
         kv = KVCache(arch.n_layers)
+
         def get(n):
             return W[n]
+
         forward_cached(get, arch, [tokens[0]], kv_cache=kv)
         last = None
         for i in range(1, len(tokens)):

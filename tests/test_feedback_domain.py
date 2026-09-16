@@ -105,9 +105,7 @@ class TestFeedbackDB:
             db = FeedbackDB(db_path=str(Path(tmp) / "test.db"))
             conv_id = db.create_conversation()
             db.add_message(conv_id, "user", "hello world", embedding=np.array([1.0, 0.0, 0.0]))
-            db.add_message(
-                conv_id, "user", "goodbye world", embedding=np.array([0.9, 0.1, 0.0])
-            )
+            db.add_message(conv_id, "user", "goodbye world", embedding=np.array([0.9, 0.1, 0.0]))
             results = db.find_similar_messages(
                 query_embedding=np.array([1.0, 0.0, 0.0]), k=5, min_similarity=0.5
             )

@@ -34,9 +34,7 @@ from .constants import DEFAULT_GENERATE_TIMEOUT, DEFAULT_STALL_TIMEOUT
 from .model_worker import WorkerStreamStalledError
 
 
-def resolve_memory_limit_mb(
-    slnc_path: str | None, configured: float | None = None
-) -> float | None:
+def resolve_memory_limit_mb(slnc_path: str | None, configured: float | None = None) -> float | None:
     """Resolve a guard worker memory limit from an explicit value or the model size.
 
     When ``configured`` is set and > 0 it wins (operator override). Otherwise the

@@ -23,8 +23,12 @@ from domain.training._internal.hf_lora_finetune import HFLoraConfig, _LoRADatase
 class TestImportResultFields:
     def test_success_fields(self):
         ir = ImportResult(
-            success=True, name="test", source="url",
-            files_imported=5, total_chars=1000, output_path="/tmp/out",
+            success=True,
+            name="test",
+            source="url",
+            files_imported=5,
+            total_chars=1000,
+            output_path="/tmp/out",
         )
         assert ir.success is True
         assert ir.files_imported == 5
@@ -32,94 +36,148 @@ class TestImportResultFields:
 
     def test_error_fields(self):
         ir = ImportResult(
-            success=False, name="test", source="url",
-            files_imported=0, total_chars=0, output_path="", error="timeout",
+            success=False,
+            name="test",
+            source="url",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
+            error="timeout",
         )
         assert ir.success is False
         assert ir.error == "timeout"
 
     def test_name_field(self):
         ir = ImportResult(
-            success=True, name="my_data", source="s",
-            files_imported=0, total_chars=0, output_path="",
+            success=True,
+            name="my_data",
+            source="s",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
         )
         assert ir.name == "my_data"
 
     def test_source_field(self):
         ir = ImportResult(
-            success=True, name="n", source="https://example.com",
-            files_imported=0, total_chars=0, output_path="",
+            success=True,
+            name="n",
+            source="https://example.com",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
         )
         assert ir.source == "https://example.com"
 
     def test_output_path_field(self):
         ir = ImportResult(
-            success=True, name="n", source="s",
-            files_imported=0, total_chars=0, output_path="/data/out.jsonl",
+            success=True,
+            name="n",
+            source="s",
+            files_imported=0,
+            total_chars=0,
+            output_path="/data/out.jsonl",
         )
         assert ir.output_path == "/data/out.jsonl"
 
     def test_total_chars_field(self):
         ir = ImportResult(
-            success=True, name="n", source="s",
-            files_imported=0, total_chars=9999, output_path="",
+            success=True,
+            name="n",
+            source="s",
+            files_imported=0,
+            total_chars=9999,
+            output_path="",
         )
         assert ir.total_chars == 9999
 
     def test_error_default_none(self):
         ir = ImportResult(
-            success=True, name="n", source="s",
-            files_imported=0, total_chars=0, output_path="",
+            success=True,
+            name="n",
+            source="s",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
         )
         assert ir.error is None
 
     def test_zero_files(self):
         ir = ImportResult(
-            success=True, name="n", source="s",
-            files_imported=0, total_chars=0, output_path="",
+            success=True,
+            name="n",
+            source="s",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
         )
         assert ir.files_imported == 0
 
     def test_large_files_imported(self):
         ir = ImportResult(
-            success=True, name="n", source="s",
-            files_imported=10000, total_chars=0, output_path="",
+            success=True,
+            name="n",
+            source="s",
+            files_imported=10000,
+            total_chars=0,
+            output_path="",
         )
         assert ir.files_imported == 10000
 
     def test_negative_chars(self):
         ir = ImportResult(
-            success=True, name="n", source="s",
-            files_imported=0, total_chars=-1, output_path="",
+            success=True,
+            name="n",
+            source="s",
+            files_imported=0,
+            total_chars=-1,
+            output_path="",
         )
         assert ir.total_chars == -1
 
     def test_empty_name(self):
         ir = ImportResult(
-            success=True, name="", source="s",
-            files_imported=0, total_chars=0, output_path="",
+            success=True,
+            name="",
+            source="s",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
         )
         assert ir.name == ""
 
     def test_empty_source(self):
         ir = ImportResult(
-            success=True, name="n", source="",
-            files_imported=0, total_chars=0, output_path="",
+            success=True,
+            name="n",
+            source="",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
         )
         assert ir.source == ""
 
     def test_error_long_message(self):
         long_err = "x" * 10000
         ir = ImportResult(
-            success=False, name="n", source="s",
-            files_imported=0, total_chars=0, output_path="", error=long_err,
+            success=False,
+            name="n",
+            source="s",
+            files_imported=0,
+            total_chars=0,
+            output_path="",
+            error=long_err,
         )
         assert len(ir.error) == 10000
 
     def test_success_with_error_set(self):
         ir = ImportResult(
-            success=True, name="n", source="s",
-            files_imported=5, total_chars=100, output_path="/out",
+            success=True,
+            name="n",
+            source="s",
+            files_imported=5,
+            total_chars=100,
+            output_path="/out",
             error="ignored",
         )
         assert ir.success is True
@@ -219,15 +277,17 @@ class TestRepoImporterInit:
 class TestRepoImporterBranchValidation:
     def test_valid_branch_names(self, tmp_path):
         import re
+
         RepoImporter(cache_dir=str(tmp_path / "c"))
-        assert re.match(r'^[a-zA-Z0-9_\-/.]+$', "main")
-        assert re.match(r'^[a-zA-Z0-9_\-/.]+$', "feature/x")
-        assert re.match(r'^[a-zA-Z0-9_\-/.]+$', "release/1.0")
+        assert re.match(r"^[a-zA-Z0-9_\-/.]+$", "main")
+        assert re.match(r"^[a-zA-Z0-9_\-/.]+$", "feature/x")
+        assert re.match(r"^[a-zA-Z0-9_\-/.]+$", "release/1.0")
 
     def test_invalid_branch_chars(self):
         import re
-        assert not re.match(r'^[a-zA-Z0-9_\-/.]+$', "branch with space")
-        assert not re.match(r'^[a-zA-Z0-9_\-/.]+$', "branch;rm -rf /")
+
+        assert not re.match(r"^[a-zA-Z0-9_\-/.]+$", "branch with space")
+        assert not re.match(r"^[a-zA-Z0-9_\-/.]+$", "branch;rm -rf /")
 
 
 # ---------------------------------------------------------------------------
@@ -416,19 +476,29 @@ class TestRepoImporterDetectLanguage:
         assert self._detect("notes.org") == "org"
 
     def test_content_python(self):
-        result = self._detect("unknown", "def main():\n    pass\nimport os\nprint('hi')\nclass Foo:\n    pass\nif __name__")
+        result = self._detect(
+            "unknown",
+            "def main():\n    pass\nimport os\nprint('hi')\nclass Foo:\n    pass\nif __name__",
+        )
         assert result == "python"
 
     def test_content_javascript(self):
-        result = self._detect("unknown", "function main() {\n  const x = 1;\n  let y = 2;\n  var z = 3;\n}\nexport default")
+        result = self._detect(
+            "unknown",
+            "function main() {\n  const x = 1;\n  let y = 2;\n  var z = 3;\n}\nexport default",
+        )
         assert result == "javascript"
 
     def test_content_typescript(self):
-        result = self._detect("unknown", "interface Foo {\n  x: string;\n  y: number;\n  z: boolean;\n}")
+        result = self._detect(
+            "unknown", "interface Foo {\n  x: string;\n  y: number;\n  z: boolean;\n}"
+        )
         assert result == "typescript"
 
     def test_content_html(self):
-        result = self._detect("unknown", "<!DOCTYPE html>\n<html>\n<head></head>\n<body></body>\n</html>")
+        result = self._detect(
+            "unknown", "<!DOCTYPE html>\n<html>\n<head></head>\n<body></body>\n</html>"
+        )
         assert result == "html"
 
     def test_content_css(self):
@@ -452,27 +522,34 @@ class TestRepoImporterDetectLanguage:
         assert result == "sql"
 
     def test_content_go(self):
-        result = self._detect("unknown", "package main\nimport (\n    \"fmt\"\n)\nfunc main()")
+        result = self._detect("unknown", 'package main\nimport (\n    "fmt"\n)\nfunc main()')
         assert result == "go"
 
     def test_content_rust(self):
-        result = self._detect("unknown", "fn main() {\n    let mut x = 5;\n    impl Foo {\n        pub fn new()")
+        result = self._detect(
+            "unknown", "fn main() {\n    let mut x = 5;\n    impl Foo {\n        pub fn new()"
+        )
         assert result == "rust"
 
     def test_content_java(self):
-        result = self._detect("unknown", "public class Main {\n    private int x;\n    public static void main(String[] args)")
+        result = self._detect(
+            "unknown",
+            "public class Main {\n    private int x;\n    public static void main(String[] args)",
+        )
         assert result == "java"
 
     def test_content_cpp(self):
-        result = self._detect("unknown", "#include <iostream>\nstd::cout << \"hi\"\ncin >> x")
+        result = self._detect("unknown", '#include <iostream>\nstd::cout << "hi"\ncin >> x')
         assert result == "cpp"
 
     def test_content_c(self):
-        result = self._detect("unknown", "#include <stdio.h>\nint main()\nprintf(\"hi\")")
+        result = self._detect("unknown", '#include <stdio.h>\nint main()\nprintf("hi")')
         assert result == "c"
 
     def test_content_markdown(self):
-        result = self._detect("unknown", "# Title\n## Sub\n- item\n* item\n```code\n[link](url)\n**bold**")
+        result = self._detect(
+            "unknown", "# Title\n## Sub\n- item\n* item\n```code\n[link](url)\n**bold**"
+        )
         assert result == "markdown"
 
     def test_content_fallback_text(self):
@@ -964,7 +1041,14 @@ class TestImportResultSerialisation:
         assert d["error"] is None
 
     def test_from_dict_reconstruction(self):
-        d = {"success": True, "name": "x", "source": "y", "files_imported": 1,
-             "total_chars": 50, "output_path": "/o", "error": None}
+        d = {
+            "success": True,
+            "name": "x",
+            "source": "y",
+            "files_imported": 1,
+            "total_chars": 50,
+            "output_path": "/o",
+            "error": None,
+        }
         ir = ImportResult(**d)
         assert ir.name == "x"

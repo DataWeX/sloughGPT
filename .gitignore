@@ -222,8 +222,13 @@ data/
 *.soul
 *.gguf
 *.bin
+*.img
 *.db
 *.sqlite
+boot.img
+serveo_ecdsa
+serveo_ecdsa.pub
+t.png
 
 # Compiled C extensions (build artifacts)
 *.so

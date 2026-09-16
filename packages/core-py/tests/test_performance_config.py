@@ -391,6 +391,7 @@ class TestCUDAGraphManager:
     def test_capture_returns_false(self):
         def model(x):
             return x
+
         config = InferenceOptimizations()
         mgr = CUDAGraphManager(model, config)
         assert mgr.capture(1, 128, 256) is False
@@ -398,6 +399,7 @@ class TestCUDAGraphManager:
     def test_replay_calls_model(self):
         def model(x):
             return np.zeros((1, 10))
+
         config = InferenceOptimizations()
         mgr = CUDAGraphManager(model, config)
         result = mgr.replay(np.array([[1, 2, 3]]))

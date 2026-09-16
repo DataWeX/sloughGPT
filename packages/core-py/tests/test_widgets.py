@@ -595,8 +595,10 @@ def test_event_bus_subscribe_publish():
 def test_event_bus_unsubscribe():
     bus = EventBus()
     received = []
+
     def cb(e):
         return received.append(e)
+
     bus.subscribe(KeyEvent, cb)
     bus.unsubscribe(KeyEvent, cb)
     bus.publish(KeyEvent(key="x"))

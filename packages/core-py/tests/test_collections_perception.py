@@ -42,6 +42,7 @@ class _FixedSource:
 # PerceptionConfig
 # ---------------------------------------------------------------------------
 
+
 class TestPerceptionConfig:
     def test_defaults(self):
         cfg = PerceptionConfig()
@@ -69,12 +70,17 @@ class TestPerceptionConfig:
 # PerceptionEvent
 # ---------------------------------------------------------------------------
 
+
 class TestPerceptionEvent:
     def test_creation(self):
         r = Record(content="hello")
         event = PerceptionEvent(
-            record=r, grid_pos=(1, 2, 3), material_type=1,
-            energy=0.5, timestamp=0.0, metadata={"k": "v"},
+            record=r,
+            grid_pos=(1, 2, 3),
+            material_type=1,
+            energy=0.5,
+            timestamp=0.0,
+            metadata={"k": "v"},
         )
         assert event.record is r
         assert event.grid_pos == (1, 2, 3)
@@ -85,8 +91,11 @@ class TestPerceptionEvent:
     def test_default_metadata(self):
         r = Record(content="x")
         event = PerceptionEvent(
-            record=r, grid_pos=(0, 0, 0), material_type=1,
-            energy=0.0, timestamp=0.0,
+            record=r,
+            grid_pos=(0, 0, 0),
+            material_type=1,
+            energy=0.0,
+            timestamp=0.0,
         )
         assert event.metadata == {}
 
@@ -94,6 +103,7 @@ class TestPerceptionEvent:
 # ---------------------------------------------------------------------------
 # RecordToMaterial
 # ---------------------------------------------------------------------------
+
 
 class TestRecordToMaterial:
     def setup_method(self):
@@ -194,6 +204,7 @@ class TestRecordToMaterial:
 # ---------------------------------------------------------------------------
 # WorldPerception
 # ---------------------------------------------------------------------------
+
 
 class TestWorldPerception:
     def setup_method(self):
@@ -345,6 +356,7 @@ class TestWorldPerception:
 # PerceptionFeed
 # ---------------------------------------------------------------------------
 
+
 class TestPerceptionFeed:
     def test_run(self):
         records = [Record(content="alpha"), Record(content="beta")]
@@ -376,6 +388,7 @@ class TestPerceptionFeed:
 # ---------------------------------------------------------------------------
 # PerceptionScheduler
 # ---------------------------------------------------------------------------
+
 
 class TestPerceptionScheduler:
     def test_add_feed(self):

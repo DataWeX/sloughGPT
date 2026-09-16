@@ -248,7 +248,10 @@ class BuildingRegistry:
             if structure.structure_type != structure_type:
                 continue
             if center is not None:
-                dist = sum((a - b) ** 2 for a, b in zip(structure.position, center, strict=False)) ** 0.5
+                dist = (
+                    sum((a - b) ** 2 for a, b in zip(structure.position, center, strict=False))
+                    ** 0.5
+                )
                 if dist > radius:
                     continue
             results.append(structure)

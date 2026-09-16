@@ -3080,9 +3080,7 @@ class SloMultiHeadAttention(SloLayer):
         self.soul_traits = {"curiosity": 0.5}
 
     @staticmethod
-    def _attention_4d(
-        Q: Tensor, K: Tensor, V: Tensor, mask: Tensor | None, scale: float
-    ) -> Tensor:
+    def _attention_4d(Q: Tensor, K: Tensor, V: Tensor, mask: Tensor | None, scale: float) -> Tensor:
         """Batched attention with autograd: Q,K,V are 4D ``(B,N,H,E)`` Tensors.
 
         Returns 3D ``(B,N,C)`` Tensor with full gradient flow to Q, K, V.

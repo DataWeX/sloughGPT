@@ -72,10 +72,13 @@ class TestGenerateImage:
     @patch.object(ImagesRouter, "_generate_image", return_value=b"fake_png_bytes")
     @patch.object(ImagesRouter, "_save_image", return_value="/data/gallery/test.png")
     def test_generates_image(self, mock_save, mock_gen, client):
-        resp = client.post("/images/generate", json={
-            "prompt": "a sunset",
-            "style": "realistic",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "a sunset",
+                "style": "realistic",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["style"] == "realistic"
@@ -83,10 +86,13 @@ class TestGenerateImage:
         assert body["image"].startswith("data:image/png;base64,")
 
     def test_validates_style_enum(self, client):
-        resp = client.post("/images/generate", json={
-            "prompt": "test",
-            "style": "invalid_style",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "test",
+                "style": "invalid_style",
+            },
+        )
         assert resp.status_code == 422
 
     def test_requires_prompt(self, client):
@@ -96,36 +102,52 @@ class TestGenerateImage:
     @patch.object(ImagesRouter, "_generate_image", return_value=b"fake_png")
     @patch.object(ImagesRouter, "_save_image", return_value="/data/gallery/abc.png")
     def test_cartoon_style(self, mock_save, mock_gen, client):
-        resp = client.post("/images/generate", json={
-            "prompt": "a cat", "style": "cartoon",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "a cat",
+                "style": "cartoon",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["style"] == "cartoon"
 
     @patch.object(ImagesRouter, "_generate_image", return_value=b"fake_png")
     @patch.object(ImagesRouter, "_save_image", return_value="/data/gallery/abc.png")
     def test_watercolor_style(self, mock_save, mock_gen, client):
-        resp = client.post("/images/generate", json={
-            "prompt": "flowers", "style": "watercolor",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "flowers",
+                "style": "watercolor",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["style"] == "watercolor"
 
     @patch.object(ImagesRouter, "_generate_image", return_value=b"fake_png")
     @patch.object(ImagesRouter, "_save_image", return_value="/data/gallery/abc.png")
     def test_sketch_style(self, mock_save, mock_gen, client):
-        resp = client.post("/images/generate", json={
-            "prompt": "a house", "style": "sketch",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "a house",
+                "style": "sketch",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["style"] == "sketch"
 
     @patch.object(ImagesRouter, "_generate_image", return_value=b"fake_png")
     @patch.object(ImagesRouter, "_save_image", return_value="/data/gallery/abc.png")
     def test_fantasy_style(self, mock_save, mock_gen, client):
-        resp = client.post("/images/generate", json={
-            "prompt": "a dragon", "style": "fantasy",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "a dragon",
+                "style": "fantasy",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["style"] == "fantasy"
 
@@ -160,9 +182,14 @@ class TestGenerateImage:
     @patch.object(ImagesRouter, "_generate_image", return_value=b"fake_png")
     @patch.object(ImagesRouter, "_save_image", return_value="/data/gallery/abc.png")
     def test_extra_fields_ignored(self, mock_save, mock_gen, client):
-        resp = client.post("/images/generate", json={
-            "prompt": "test", "style": "realistic", "unknown_field": "ignored",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "test",
+                "style": "realistic",
+                "unknown_field": "ignored",
+            },
+        )
         assert resp.status_code == 200
 
 
@@ -171,23 +198,28 @@ class TestHexToRgb:
 
     def test_converts_hex(self):
         from apps.api.server.routers.images import hex_to_rgb
+
         assert hex_to_rgb("#ff0000") == (255, 0, 0)
 
     def test_converts_without_hash(self):
         from apps.api.server.routers.images import hex_to_rgb
+
         assert hex_to_rgb("00ff00") == (0, 255, 0)
 
     def test_converts_uppercase(self):
         from apps.api.server.routers.images import hex_to_rgb
+
         assert hex_to_rgb("#AABBCC") == (170, 187, 204)
 
     def test_invalid_length_raises(self):
         from apps.api.server.routers.images import hex_to_rgb
+
         with pytest.raises(ValueError):
             hex_to_rgb("#ff00")
 
     def test_static_method_equivalent(self):
         from apps.api.server.routers.images import ImagesRouter
+
         assert ImagesRouter.hex_to_rgb("#123456") == (18, 52, 86)
 
 
@@ -229,7 +261,11 @@ class TestListGalleryWithFiles:
     @patch("apps.api.server.routers.images.Path")
     def test_lists_images_sorted_newest_first(self, mock_path, client):
         mock_path.return_value = _FakeGalleryPath(
-            files=[_fake_file("generated_aaa", 100), _fake_file("generated_bbb", 300), _fake_file("generated_ccc", 200)],
+            files=[
+                _fake_file("generated_aaa", 100),
+                _fake_file("generated_bbb", 300),
+                _fake_file("generated_ccc", 200),
+            ],
         )
         resp = client.get("/images/gallery")
         assert resp.status_code == 200
@@ -287,6 +323,7 @@ class TestGradientGenerator:
         import io
 
         from PIL import Image
+
         img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
         return img.getpixel((15, 0))
 
@@ -348,7 +385,9 @@ class TestDispatch:
 
     def test_unknown_style_falls_back_to_gradient(self):
         img = ImagesRouter()
-        with patch.object(img, "_generate_gradient_image", return_value=b"gradient_bytes") as mock_g:
+        with patch.object(
+            img, "_generate_gradient_image", return_value=b"gradient_bytes"
+        ) as mock_g:
             out = img._generate_image("x", "bogus_style")
             assert out == b"gradient_bytes"
             mock_g.assert_called_once_with("x")

@@ -1,4 +1,3 @@
-
 _log = open("/tmp/test_execution.log", "w")
 
 

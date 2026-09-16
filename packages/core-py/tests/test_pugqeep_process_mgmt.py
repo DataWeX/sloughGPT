@@ -1827,9 +1827,7 @@ class TestPriorityDispatch:
         engine.spawn(_noop, name="high", priority=0)
         engine.spawn(_noop, name="med", priority=1)
         engine.dispatch()
-        [
-            p.name for p in engine._processes.values() if p.status != ProcessStatus.CREATED
-        ]
+        [p.name for p in engine._processes.values() if p.status != ProcessStatus.CREATED]
         engine.stop()
 
     def test_priority_with_deps(self):

@@ -75,6 +75,7 @@ class TestJobConfig:
     def test_custom_values(self):
         def cb(n, c):
             return None
+
         cfg = JobConfig(
             name="j2",
             interval=5.0,

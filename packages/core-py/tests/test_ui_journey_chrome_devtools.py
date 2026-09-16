@@ -6,7 +6,6 @@ Usage:
 """
 
 
-
 class TestChromeDevToolsBrowser:
     """Tests for ChromeDevToolsBrowser."""
 
