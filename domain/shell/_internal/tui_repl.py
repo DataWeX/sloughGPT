@@ -424,22 +424,69 @@ class TuiRepl:
         except curses.error:
             pass
 
+    def _draw_pane_borders(
+        self,
+        win: curses._CursesWindow,
+        pane: Pane,
+        region: Rect,
+    ) -> None:
+        """Draw border characters for *pane* on its curses window *win*.
+
+        Borders are drawn on the content window itself (not on stdscr) so
+        that ``win.erase()`` + ``_draw_pane_borders`` + content produces a
+        flicker-free frame.
+        """
+        attr = curses.color_pair(_P_BORDER) if curses.has_colors() else 0
+        h, w = win.getmaxyx()
+        if not pane.visible or pane.border.is_empty:
+            return
+        if pane.border.top and h > 0:
+            ch = pane.border.ch or "\u2500"
+            try:
+                win.addnstr(0, 0, ch * w, w, attr)
+            except curses.error:
+                pass
+        if pane.border.bottom and h > 1:
+            ch = pane.border.ch or "\u2500"
+            try:
+                win.addnstr(h - 1, 0, ch * w, w, attr)
+            except curses.error:
+                pass
+        if pane.border.left and w > 0:
+            ch = pane.border.ch or "\u2502"
+            for y in range(h):
+                try:
+                    win.addch(y, 0, ch, attr)
+                except curses.error:
+                    pass
+        if pane.border.right and w > 1:
+            ch = pane.border.ch or "\u2502"
+            for y in range(h):
+                try:
+                    win.addch(y, w - 1, ch, attr)
+                except curses.error:
+                    pass
+
     def _blit(
         self,
         win: curses._CursesWindow,
         lines: list[RenderLine],
         offset_y: int = 0,
         offset_x: int = 0,
+        pane: Pane | None = None,
     ) -> None:
         """Write *lines* into *win*, starting at (offset_y, offset_x).
 
         Offsets are used when the pane has borders or padding so content
         is drawn inside the border/padding area, not on top of it.
+        If *pane* is given, its borders are drawn on *win* after erase.
         """
         try:
             win.erase()
         except curses.error:
             return
+        if pane is not None:
+            self._draw_pane_borders(win, pane, None)
         h, w = win.getmaxyx()
         for y, ln in enumerate(lines):
             wy = offset_y + y
@@ -459,7 +506,9 @@ class TuiRepl:
             pass
 
     def _render_all(self, stdscr, regions, win_console, win_output, win_status, win_input) -> None:
-        self._draw_borders(stdscr, regions)
+        # Draw borders on content windows, not stdscr — this avoids the
+        # flicker caused by win.erase() erasing stdscr's border pixels.
+        _panes = {p.name: p for p in self._layout.panes}
         # Compute content offsets from borders.
         for pane in self._layout.panes:
             if pane.name == "console":
@@ -473,6 +522,7 @@ class TuiRepl:
                     ),
                     oy,
                     ox,
+                    pane=pane,
                 )
             elif pane.name == "output":
                 oy = pane.border_top + pane.pad_top
@@ -485,6 +535,7 @@ class TuiRepl:
                     ),
                     oy,
                     ox,
+                    pane=pane,
                 )
         self._render_status(win_status, regions["status"].cols)
         self._render_input(win_input, regions["input"].cols)
