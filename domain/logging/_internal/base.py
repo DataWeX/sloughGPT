@@ -303,10 +303,10 @@ class Logger(ABC):
         """Log a success.  Override in CLILogger for ANSI formatting."""
         self.info(msg, **ctx)
 
-    def hide_cursor(self) -> None:
+    def hide_cursor(self) -> None:  # noqa: B027
         """Hide the terminal cursor.  Override in CLILogger for ANSI output."""
 
-    def show_cursor(self) -> None:
+    def show_cursor(self) -> None:  # noqa: B027
         """Restore the terminal cursor.  Override in CLILogger for ANSI output."""
 
     # ── Tagged convenience ──────────────────────────────────────────────
