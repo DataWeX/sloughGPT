@@ -319,7 +319,9 @@ def tui(ctx):
 
 @cli.command(help="Launch interactive shell REPL")
 @click.option("--command", "-c", help="Run a single command and exit")
-@click.option("--tui/--no-tui", default=None, help="Curses TUI mode (default when TTY)")
+@click.option(
+    "--tui/--no-tui", default=None, is_flag=True, help="Curses TUI mode (default when TTY)"
+)
 @click.option("--line", is_flag=True, help="Force line-mode REPL (no TUI)")
 @click.pass_context
 def shell(ctx, command, tui, line):
